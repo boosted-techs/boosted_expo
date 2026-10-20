@@ -18,6 +18,11 @@
       ['Confirmed orders','sales-orders.index','sales.orders.view'],
       ['Commercial invoices','commercial-invoices.index','invoices.view'],
       ['Finance & ledger','finance.index','finance.view'],
+      ['Bank reconciliation','finance.bank.index','finance.bank.view'],
+      ['Inventory valuation','finance.inventory.index','finance.inventory.view'],
+      ['Finance reports','finance.reports.index','finance.reports.view'],
+      ['Accounting controls','finance.controls','finance.controls.view'],
+      ['Payroll runs','finance.payroll.index','finance.payroll.view'],
       ['Suppliers','suppliers.index','suppliers.view'],
       ['Purchases','purchases.index','purchases.view'],
       ['Receive produce','receiving.index','receipts.view'],
@@ -65,6 +70,13 @@
         ['Supplier bills, payments and shipment costs','finance.documents','finance.documents.view'],
         ['Approvals and posting queue','finance.reviews','finance.reviews.view'],
         ['Exchange rates','finance.rates','finance.rates.view'],
+        ['Bank reconciliation','finance.bank.index','finance.bank.view'],
+        ['Opening, banks and period controls','finance.controls','finance.controls.view'],
+        ['Payment corrections','finance.transaction-reversals.index','finance.payment.reversal.prepare'],
+        ['Staff payroll','finance.payroll.index','finance.payroll.view'],
+      ],
+      'staff' => [
+        ['Prepare payroll','finance.payroll.index','finance.payroll.view'],
       ],
       'exports' => [
         ['Export shipments','shipments.index','shipments.view'],
@@ -80,7 +92,7 @@
     $workingCards = [
       'sales'=>[0,1,2],'purchasing'=>[0,1,2],
       'operations'=>[0,1,2],'exports'=>[0,1,2],
-      'finance'=>[0,1],'templates'=>[0,1,2],
+      'finance'=>[0,1],'staff'=>[2],'templates'=>[0,1,2],
     ][$section] ?? [];
   @endphp
   @if(count($workingLinks))

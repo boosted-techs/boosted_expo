@@ -19,6 +19,8 @@ class FinanceLedger
         Business $business,string $type,int $sourceId,string $currency,string $rate,
         string $postedOn,string $description,int $postedBy,int $approvedBy,array $lines,
     ):FinanceJournal {
+        Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+        app(FinancePeriodControls::class)->assertWritable($business,$postedOn);
         if(count($lines)<2) throw ValidationException::withMessages([
             'journal'=>'Every journal requires at least two balanced lines.',
         ]);

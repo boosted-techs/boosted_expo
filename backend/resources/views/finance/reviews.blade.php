@@ -2,7 +2,12 @@
 @section('title','Finance Posting Reviews')
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">FINANCIAL APPROVALS</span><h1>Review and post transactions</h1><p>Check source documents, exchange-rate evidence and business-event dates before approving their double-entry journals.</p></div></div>
-<div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.index') }}">Trial balance</a><a class="secondary-button" href="{{ route('finance.documents') }}">Source documents</a><a class="secondary-button" href="{{ route('finance.rates') }}">Approved exchange rates</a></div>
+<div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.index') }}">Trial balance</a><a class="secondary-button" href="{{ route('finance.documents') }}">Source documents</a><a class="secondary-button" href="{{ route('finance.rates') }}">Approved exchange rates</a>
+<a class="secondary-button" href="{{ route('finance.inventory.index') }}">Inventory valuations</a>
+<a class="secondary-button" href="{{ route('finance.credits.index') }}">Credit notes</a>
+<a class="secondary-button" href="{{ route('finance.controls') }}">Opening, concessions & periods</a>
+<a class="secondary-button" href="{{ route('finance.payroll.index') }}">Payroll</a>
+<a class="secondary-button" href="{{ route('finance.transaction-reversals.index') }}">Payment corrections</a></div>
 <div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>The person proposing a posting cannot approve it; the approver cannot post it. Posted journals cannot be edited. An invoice may only be proposed for revenue recognition after shipment dispatch is recorded, and the reviewer must assess the agreed terms and transfer evidence. For foreign currencies, select an approved historical rate effective no later than the posting date.</p></div></div>
 @if($canSubmit)
 <section class="section-card"><h2>Source documents awaiting finance posting</h2>
@@ -12,6 +17,15 @@
  ['type'=>'supplier_bill','name'=>'Supplier bills (accepted produce and payables)','rows'=>$bills],
  ['type'=>'payment','name'=>'Recorded customer and supplier payments','rows'=>$payments],
  ['type'=>'shipment_cost','name'=>'Recorded paid shipment costs','rows'=>$costs],
+ ['type'=>'inventory_relief','name'=>'Dispatched COGS and inventory waste write-offs','rows'=>$reliefs],
+ ['type'=>'credit_note','name'=>'Full credit-note corrections','rows'=>$creditNotes],
+ ['type'=>'opening_balance','name'=>'Company opening balances','rows'=>$openingBalances],
+ ['type'=>'balance_adjustment','name'=>'Partial buyer or supplier price concessions','rows'=>$balanceAdjustments],
+ ['type'=>'payroll_run','name'=>'Staff payroll accruals','rows'=>$payrollRuns],
+ ['type'=>'payroll_settlement','name'=>'Recorded salary payments & deduction remittances','rows'=>$payrollSettlements],
+ ['type'=>'payroll_reversal','name'=>'Corrective payroll reversals (no settled payroll)','rows'=>$payrollReversals],
+ ['type'=>'transaction_reversal','name'=>'Controlled corrections of posted payment journals','rows'=>$transactionReversals],
+ ['type'=>'foreign_bank_opening','name'=>'Historical foreign-currency bank opening journals','rows'=>$foreignBankOpenings],
  ]; @endphp
 @foreach($sourceSections as $section)
 <h3 style="margin-top:24px">{{ $section['name'] }}</h3>
@@ -22,6 +36,12 @@
  $amount=match($section['type']){
   'commercial_invoice'=>$source->grand_total,
   'supplier_bill'=>$source->total,
+  'inventory_relief'=>$source->base_amount,
+  'opening_balance'=>$source->data_snapshot['debits'],
+  'payroll_run'=>$source->gross_total,
+  'payroll_reversal'=>$source->run?->gross_total,
+  'payroll_settlement'=>$source->amount,
+  'foreign_bank_opening'=>$source->foreign_amount,
   default=>$source->amount,
  };
  $eligible=$section['type']!=='commercial_invoice' ||
@@ -35,7 +55,13 @@
 @if($eligible && !in_array($id,$hasPending))
 <form method="POST" action="{{ route('finance.reviews.request',['type'=>$section['type'],'source'=>$source->id]) }}" class="form-stack">@csrf
 <label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ now()->format('Y-m-d') }}" required max="{{ now()->format('Y-m-d') }}"></label>
-@if($currency!==$business->base_currency)
+@if(in_array($section['type'],['credit_note','balance_adjustment','transaction_reversal'],true))
+<p class="form-hint">This correction must preserve the exact original approved exchange rate. A second rate cannot be selected.</p>
+@elseif($section['type']==='foreign_bank_opening')
+<input type="hidden" name="exchange_rate_id" value="{{ $source->exchange_rate_id }}">
+<p class="form-hint">Prepared historical bank rate: 1 {{ $currency }} = {{ $source->rate_to_base }} {{ $business->base_currency }} (approved rate reference #{{ $source->exchange_rate_id }}). This rate is fixed.</p>
+<p class="form-hint">The original approved posting rate is preserved for this correction; no new rate is selected.</p>
+@elseif($currency!==$business->base_currency)
 <label class="field"><span>Approved conversion rate for {{ $currency }} → {{ $business->base_currency }}</span>
 <select name="exchange_rate_id" required><option value="">Choose a locked historical rate</option>
 @foreach($rates as $rate)@if($rate->currency===$currency)

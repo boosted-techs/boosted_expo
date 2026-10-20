@@ -83,10 +83,9 @@ class ShipmentContribution
                         if(!$journal) {
                             $missing[]=$bill->reference.': missing posted supplier-bill journal.';
                         } else {
-                            $foreignCost=$math->amount(
-                                (string)$content->quantity,(string)$purchase->unit_price
-                            );
-                            $baseCost=$math->base($foreignCost,(string)$journal->rate_to_base);
+                            $unit=app(FinanceCostBasis::class)->unitBase($bill,$journal);
+                            $baseCost=$math->money(BigDecimal::of((string)$content->quantity)
+                                ->multipliedBy($unit));
                             $purchaseCosts=$purchaseCosts->plus($baseCost);
                         }
                     }

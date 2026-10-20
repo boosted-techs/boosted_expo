@@ -51,9 +51,18 @@ class FinanceDocuments
 
     public function outstanding(CommercialInvoice|FinanceSupplierBill $source,bool $includePending=true):BigDecimal
     {
+        if($source instanceof CommercialInvoice && $source->posting_status==='credited') {
+            return BigDecimal::zero();
+        }
         $base=BigDecimal::of((string)($source instanceof CommercialInvoice
             ? $source->grand_total : $source->total));
         $relation=$source instanceof CommercialInvoice ? 'commercial_invoice_id' : 'supplier_bill_id';
+        $adjustment=\App\Models\FinanceBalanceAdjustment::query()
+            ->where('business_id',$source->business_id)
+            ->where($relation,$source->id)
+            ->whereIn('posting_status',$includePending?['not_posted','posted']:['posted'])
+            ->first();
+        if($adjustment) $base=$base->minus((string)$adjustment->amount);
         $statuses=$includePending?['pending','posted']:['posted'];
         $allocated=BigDecimal::zero();
         foreach(FinancePayment::query()->where('business_id',$source->business_id)
@@ -81,11 +90,22 @@ class FinanceDocuments
                     ->lockForUpdate()->findOrFail($data['commercial_invoice_id']);
                 abort_unless($document->posting_status==='posted',422,
                     'The commercial invoice must be approved and posted before recording receipts.');
+                abort_unless(!\App\Models\FinanceCreditNote::query()
+                    ->where('business_id',$business->id)
+                    ->where('commercial_invoice_id',$document->id)->exists(),422,
+                    'An invoice credit is under review or already posted. Do not allocate further payments.');
             } else {
                 $document=FinanceSupplierBill::query()->where('business_id',$business->id)
                     ->lockForUpdate()->findOrFail($data['supplier_bill_id']);
                 abort_unless($document->posting_status==='posted',422,
                     'The supplier bill must be approved and posted before making payments.');
+            }
+            if(\App\Models\FinanceBalanceAdjustment::query()
+                ->where('business_id',$business->id)
+                ->where($type==='in'?'commercial_invoice_id':'supplier_bill_id',$document->id)
+                ->where('posting_status','not_posted')->exists()) {
+                throw ValidationException::withMessages(['document'=>
+                    'Finish the pending balance-concession approval before recording a payment for this document.']);
             }
             $remaining=$this->outstanding($document);
             if($amount->isGreaterThan($remaining)) {
@@ -93,8 +113,9 @@ class FinanceDocuments
                     'amount'=>'This payment exceeds the remaining document amount, including pending allocations.',
                 ]);
             }
-            $account=app(FinanceSetup::class)->account($business->id,$data['cash_account_key']);
-            abort_unless(in_array($account->system_key,['cash','bank'],true),422);
+            $account=app(FinanceBankProfiles::class)->account($business,
+                isset($data['bank_profile_id'])?(int)$data['bank_profile_id']:null,
+                $data['cash_account_key'],$document->currency);
             return FinancePayment::create([
                 'business_id'=>$business->id,'reference'=>'PAY-'.Str::upper((string)Str::ulid()),
                 'direction'=>$type,'commercial_invoice_id'=>$type==='in'?$document->id:null,
@@ -117,8 +138,9 @@ class FinanceDocuments
                 'Cancelled shipments cannot accept newly recorded costs.');
             $amount=app(FinanceMath::class)->money($data['amount']);
             abort_unless($amount->isGreaterThan(0),422,'Cost amount must be positive.');
-            $account=app(FinanceSetup::class)->account($business->id,$data['cash_account_key']);
-            abort_unless(in_array($account->system_key,['cash','bank'],true),422);
+            $account=app(FinanceBankProfiles::class)->account($business,
+                isset($data['bank_profile_id'])?(int)$data['bank_profile_id']:null,
+                $data['cash_account_key'],strtoupper($data['currency']));
             return FinanceShipmentCost::create([
                 'business_id'=>$business->id,'reference'=>'COST-'.Str::upper((string)Str::ulid()),
                 'shipment_id'=>$shipment->id,'category'=>$data['category'],

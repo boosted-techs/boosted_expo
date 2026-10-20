@@ -46,6 +46,27 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'finance.view'))
     <a href="{{ route('finance.index') }}" class="{{ request()->routeIs('finance.*')?'active':'' }}"><span class="nav-dot"></span>Finance & Ledger</a>
     @endif
+    @if($access->allows($membership, 'finance.reports.view'))
+    <a href="{{ route('finance.reports.index') }}" class="{{ request()->routeIs('finance.reports.*')?'active':'' }}"><span class="nav-dot"></span>Financial Reports</a>
+    @endif
+    @if($access->allows($membership, 'finance.bank.view'))
+    <a href="{{ route('finance.bank.index') }}" class="{{ request()->routeIs('finance.bank.*')?'active':'' }}"><span class="nav-dot"></span>Bank Reconciliation</a>
+    @endif
+    @if($access->allows($membership, 'finance.inventory.view'))
+    <a href="{{ route('finance.inventory.index') }}" class="{{ request()->routeIs('finance.inventory.*')?'active':'' }}"><span class="nav-dot"></span>Stock Valuation</a>
+    @endif
+    @if($access->allows($membership, 'finance.credits.view'))
+    <a href="{{ route('finance.credits.index') }}" class="{{ request()->routeIs('finance.credits.*')?'active':'' }}"><span class="nav-dot"></span>Credit Notes</a>
+    @endif
+    @if($access->allows($membership, 'finance.controls.view'))
+    <a href="{{ route('finance.controls') }}" class="{{ request()->routeIs('finance.controls*')?'active':'' }}"><span class="nav-dot"></span>Accounting Controls</a>
+    @endif
+    @if($access->allows($membership, 'finance.payroll.view'))
+    <a href="{{ route('finance.payroll.index') }}" class="{{ request()->routeIs('finance.payroll.*')?'active':'' }}"><span class="nav-dot"></span>Staff Payroll</a>
+    @endif
+    @if($access->allows($membership, 'finance.payment.reversal.prepare'))
+    <a href="{{ route('finance.transaction-reversals.index') }}" class="{{ request()->routeIs('finance.transaction-reversals.*')?'active':'' }}"><span class="nav-dot"></span>Payment Corrections</a>
+    @endif
     @if($access->allows($membership, 'finance.handoff.view'))
     <a href="{{ route('invoice-accounting-handoff.index') }}" class="{{ request()->routeIs('invoice-accounting-handoff.*')?'active':'' }}"><span class="nav-dot"></span>Invoice Finance Handoff</a>
     @endif

@@ -44,8 +44,16 @@ class BusinessPermissions
             'finance.view','finance.rates.view','finance.rates.propose',
             'finance.documents.view','finance.documents.create',
             'finance.reviews.view','finance.reviews.request','finance.reviews.post',
+            'finance.bank.view','finance.bank.import','finance.bank.match',
+            'finance.bank.proof.prepare','finance.payment.reversal.prepare',
+            'finance.foreign.opening.prepare',
+            'finance.inventory.view','finance.inventory.prepare',
+            'finance.credits.view','finance.credits.prepare','finance.reports.view',
+            'finance.controls.view','finance.opening.prepare','finance.periods.manage',
+            'finance.adjustments.prepare','finance.payroll.view','finance.payroll.prepare',
+            'finance.payroll.settle','finance.payroll.correct',
         ],
-        'hr' => ['section.overview','section.staff'],
+        'hr' => ['section.overview','section.staff','finance.payroll.view','finance.payroll.prepare'],
         'viewer' => ['section.overview','catalogue.view'],
     ];
 

@@ -7,6 +7,13 @@
 <a class="secondary-button" href="{{ route('finance.documents') }}">Supplier bills, payments & expenses</a>
 <a class="secondary-button" href="{{ route('finance.reviews') }}">Approval & posting queue</a>
 <a class="secondary-button" href="{{ route('finance.rates') }}">Exchange rates</a>
+<a class="secondary-button" href="{{ route('finance.bank.index') }}">Bank reconciliation</a>
+<a class="secondary-button" href="{{ route('finance.inventory.index') }}">Stock valuation & COGS</a>
+<a class="secondary-button" href="{{ route('finance.credits.index') }}">Invoice corrections</a>
+<a class="secondary-button" href="{{ route('finance.reports.index') }}">Profit, position & ledger reports</a>
+<a class="secondary-button" href="{{ route('finance.controls') }}">Opening balances, banks & closing</a>
+<a class="secondary-button" href="{{ route('finance.payroll.index') }}">Payroll accruals</a>
+<a class="secondary-button" href="{{ route('finance.transaction-reversals.index') }}">Reviewed payment corrections</a>
 <a class="secondary-button" href="{{ route('shipments.index') }}">Shipment contribution reports</a>
 </div>
 @if($accounts->isEmpty())
@@ -16,6 +23,12 @@
 @else<p class="form-hint">Ask your business owner or administrator to activate the financial chart.</p>@endif
 </section>
 @else
+@if(count($missingAccounts)>0 && $canSetup)
+<section class="section-card"><h2>Update accounting categories</h2>
+<p class="muted">This company's finance chart needs {{ count($missingAccounts) }} additional standard account(s), including newly supported inventory loss categories. Existing accounts and journal entries are preserved.</p>
+<form method="POST" action="{{ route('finance.setup') }}">@csrf
+<button class="secondary-button">Add missing finance accounts safely</button></form></section>
+@endif
 <div class="stats">
 <article class="stat"><span>Draft/unposted commercial invoices</span><strong>{{ $unposted['invoices'] }}</strong><small>Not automatically recognised</small></article>
 <article class="stat"><span>Unposted supplier bills</span><strong>{{ $unposted['supplier_bills'] }}</strong><small>Inventory and payable pending</small></article>
@@ -32,7 +45,7 @@
 <td>{{ $net->isLessThan(0) ? (string)$net->negated()->toScale(2) : '—' }}</td></tr>
 @endforeach
 </tbody><tfoot><tr><td colspan="2"><strong>Net debit and credit balances</strong></td><td><strong>{{ $totalDebit->toScale(2) }}</strong></td><td><strong>{{ $totalCredit->toScale(2) }}</strong></td></tr></tfoot></table></div>
-<p class="form-hint">A balanced trial balance is not the same as a complete profit-and-loss statement. Inventory consumption, spoilage, payroll and certain overhead allocations still require their own journal workflows.</p>
+<p class="form-hint">A balanced trial balance is not the same as a complete profit-and-loss statement. Inventory consumption and spoilage can be posted after valuation and independent review. Other historical stock costs, opening balances, payroll, fixed assets and overhead allocations may still be incomplete.</p>
 </section>
 @endif
 @endsection

@@ -12,4 +12,5 @@ class CommercialInvoice extends Model {
  public function order():BelongsTo{return $this->belongsTo(SalesOrder::class,'sales_order_id');}
  public function customer():BelongsTo{return $this->belongsTo(Customer::class);}
  public function accountingHandoff():\Illuminate\Database\Eloquent\Relations\HasOne {return $this->hasOne(InvoiceAccountingHandoff::class,'commercial_invoice_id');}
+ public function creditNote():\Illuminate\Database\Eloquent\Relations\HasOne {return $this->hasOne(FinanceCreditNote::class,'commercial_invoice_id');}
 }

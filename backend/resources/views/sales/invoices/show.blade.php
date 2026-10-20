@@ -17,7 +17,10 @@
 <div class="record"><strong>Commercial invoice total</strong><strong>{{ $invoice->currency }} {{ $invoice->grand_total }}</strong></div>
 </section>
 <div class="notice"><span>●</span><div>
-@if($invoice->posting_status==='posted')
+@if($invoice->posting_status==='credited')
+<strong>This invoice has been fully credited by an approved reversing journal</strong>
+<p>The original commercial invoice is retained for the audit trail. This does not mean money was returned or cargo was recovered.</p>
+@elseif($invoice->posting_status==='posted')
 <strong>Commercial invoice recognised by reviewed journal posting</strong>
 <p>The financial recognition workflow has posted an approved journal. This is not evidence of customer payment, bank reconciliation, tax compliance or receipt settlement.</p>
 @else
@@ -25,6 +28,13 @@
 <p>This commercial invoice is not yet recognised in the ledger. Record shipment dispatch and submit the transaction for independent finance approval.</p>
 @endif
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.view'))<p><a class="action-link" href="{{ route('finance.index') }}">Finance and trial balance</a></p>@endif
-<p>Credit notes, corrections, revenue adjustments and statutory review are not yet available.</p>
+@if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.credits.view'))
+@if($invoice->creditNote)
+<p><a class="action-link" href="{{ route('finance.credits.show',$invoice->creditNote->id) }}">View credit correction {{ $invoice->creditNote->reference }}</a></p>
+@elseif($invoice->posting_status==='posted')
+<p><a class="action-link" href="{{ route('finance.credits.index') }}">Review full-credit correction eligibility</a></p>
+@endif
+@endif
+<p>Partial credits, replacement invoices, refunds and statutory corrections are not yet supported.</p>
 </div></div>
 @endsection

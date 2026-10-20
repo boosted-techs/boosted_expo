@@ -30,6 +30,13 @@ use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\CommercialInvoiceController;
 use App\Http\Controllers\InvoiceAccountingHandoffController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\FinanceBankController;
+use App\Http\Controllers\FinanceInventoryController;
+use App\Http\Controllers\FinanceCreditController;
+use App\Http\Controllers\FinanceReportController;
+use App\Http\Controllers\FinanceControlController;
+use App\Http\Controllers\FinancePayrollController;
+use App\Http\Controllers\FinanceTransactionReversalController;
 use App\Support\BusinessPermissions;
 use Illuminate\Support\Facades\Route;
 
@@ -58,6 +65,82 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('business')->group(function () {
+        // Audit-preserving corrections, foreign bank openings and book-balance proof.
+        Route::get('/finance/transaction-corrections', [FinanceTransactionReversalController::class,'index'])
+            ->name('finance.transaction-reversals.index');
+        Route::post('/finance/transaction-corrections/{type}/{id}',
+            [FinanceTransactionReversalController::class,'prepare'])
+            ->whereIn('type',['payment','shipment_cost','payroll_settlement'])
+            ->whereNumber('id')->name('finance.transaction-reversals.prepare');
+        Route::post('/finance/controls/foreign-opening', [FinanceControlController::class,'foreignOpening'])
+            ->name('finance.controls.foreign-opening.store');
+        Route::post('/finance/bank/{statement}/book-proof',
+            [FinanceBankController::class,'proposeLedgerProof'])->whereNumber('statement')
+            ->name('finance.bank.proof.submit');
+        Route::post('/finance/bank/book-proof/{check}/{decision}',
+            [FinanceBankController::class,'reviewLedgerProof'])->whereNumber('check')
+            ->whereIn('decision',['approve','reject'])->name('finance.bank.proof.review');
+        // Opening balances, company banks, period locks, price concessions and payroll.
+        Route::get('/finance/controls', [FinanceControlController::class,'index'])->name('finance.controls');
+        Route::post('/finance/controls/banks', [FinanceControlController::class,'bank'])
+            ->name('finance.controls.banks.store');
+        Route::post('/finance/controls/opening', [FinanceControlController::class,'opening'])
+            ->name('finance.controls.opening.store');
+        Route::post('/finance/controls/periods', [FinanceControlController::class,'period'])
+            ->name('finance.controls.periods.store');
+        Route::post('/finance/controls/periods/{period}/submit', [FinanceControlController::class,'submitPeriod'])
+            ->whereNumber('period')->name('finance.controls.periods.submit');
+        Route::post('/finance/controls/periods/{period}/{action}', [FinanceControlController::class,'reviewPeriod'])
+            ->whereNumber('period')->whereIn('action',['approve','reject'])
+            ->name('finance.controls.periods.review');
+        Route::post('/finance/controls/adjustments/{kind}/{id}', [FinanceControlController::class,'adjustment'])
+            ->whereIn('kind',['customer','supplier'])->whereNumber('id')
+            ->name('finance.controls.adjustments.store');
+        Route::get('/finance/payroll', [FinancePayrollController::class,'index'])->name('finance.payroll.index');
+        Route::post('/finance/payroll', [FinancePayrollController::class,'prepare'])->name('finance.payroll.prepare');
+        Route::get('/finance/payroll/{run}', [FinancePayrollController::class,'show'])
+            ->whereNumber('run')->name('finance.payroll.show');
+        Route::post('/finance/payroll/{run}/settlements', [FinancePayrollController::class,'settlement'])
+            ->whereNumber('run')->name('finance.payroll.settlements.store');
+        Route::post('/finance/payroll/{run}/correction', [FinancePayrollController::class,'correction'])
+            ->whereNumber('run')->name('finance.payroll.correction.store');
+        Route::post('/finance/payroll/{run}/correction/withdraw', [FinancePayrollController::class,'withdrawCorrection'])
+            ->whereNumber('run')->name('finance.payroll.correction.withdraw');
+
+        // Manual bank statements, source inventory relief and controlled full credit notes.
+        Route::get('/finance/bank', [FinanceBankController::class,'index'])->name('finance.bank.index');
+        Route::post('/finance/bank/import', [FinanceBankController::class,'import'])->name('finance.bank.import');
+        Route::get('/finance/bank/{statement}', [FinanceBankController::class,'show'])
+            ->whereNumber('statement')->name('finance.bank.show');
+        Route::post('/finance/bank/{statement}/lines/{line}/match', [FinanceBankController::class,'propose'])
+            ->whereNumber('statement')->whereNumber('line')->name('finance.bank.match');
+        Route::post('/finance/bank/matches/{match}/confirm', [FinanceBankController::class,'confirm'])
+            ->whereNumber('match')->name('finance.bank.confirm');
+        Route::post('/finance/bank/matches/{match}/reject', [FinanceBankController::class,'reject'])
+            ->whereNumber('match')->name('finance.bank.reject');
+        Route::post('/finance/bank/{statement}/complete', [FinanceBankController::class,'complete'])
+            ->whereNumber('statement')->name('finance.bank.complete');
+
+        Route::get('/finance/inventory', [FinanceInventoryController::class,'index'])->name('finance.inventory.index');
+        Route::post('/finance/inventory/{kind}/{id}', [FinanceInventoryController::class,'prepare'])
+            ->whereNumber('id')->name('finance.inventory.prepare');
+        Route::get('/finance/inventory/valuation/{id}', [FinanceInventoryController::class,'show'])
+            ->whereNumber('id')->name('finance.inventory.show');
+
+        Route::get('/finance/credits', [FinanceCreditController::class,'index'])->name('finance.credits.index');
+        Route::post('/finance/credits/{invoice}', [FinanceCreditController::class,'prepare'])
+            ->whereNumber('invoice')->name('finance.credits.prepare');
+        Route::get('/finance/credits/notes/{note}', [FinanceCreditController::class,'show'])
+            ->whereNumber('note')->name('finance.credits.show');
+        Route::get('/finance/credits/notes/{note}/print', [FinanceCreditController::class,'print'])
+            ->whereNumber('note')->name('finance.credits.print');
+        Route::get('/finance/credits/notes/{note}/pdf', [FinanceCreditController::class,'pdf'])
+            ->whereNumber('note')->name('finance.credits.pdf');
+
+        Route::get('/finance/reports', [FinanceReportController::class,'index'])->name('finance.reports.index');
+        Route::get('/finance/reports/account/{account}', [FinanceReportController::class,'ledger'])
+            ->whereNumber('account')->name('finance.reports.ledger');
+
         // Finance requests, independent approval and immutable balanced postings.
         Route::get('/finance', [FinanceController::class,'dashboard'])->name('finance.index');
         Route::post('/finance/setup', [FinanceController::class,'setup'])->name('finance.setup');

@@ -168,7 +168,7 @@ class FinancePostingTest extends TestCase
     public function test_invoice_recognition_is_reviewed_balanced_and_immutable():void
     {
         $ctx=$this->company();
-        $this->assertDatabaseCount('finance_accounts',11);
+        $this->assertDatabaseCount('finance_accounts',16);
         $fx=$this->rate($ctx,'USD','3600.0000000000',2);
         $invoice=$this->invoice($ctx);
         $this->actingAs($ctx['accountant'])->get(route('finance.index'))->assertOk()

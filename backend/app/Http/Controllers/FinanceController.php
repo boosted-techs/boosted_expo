@@ -67,9 +67,13 @@ class FinanceController extends Controller
             ->whereIn('status',['pending','approved'])->count();
         $canSetup=app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'),'finance.setup');
+        $existingKeys=$accounts->pluck('system_key')->all();
+        $missingAccounts=array_values(array_filter(array_map(
+            fn($definition)=>$definition[3],\App\Services\FinanceSetup::ACCOUNTS
+        ),fn($key)=>!in_array($key,$existingKeys,true)));
         return view('finance.dashboard',compact(
             'business','accounts','balances','totalDebit','totalCredit',
-            'unposted','pending','canSetup'
+            'unposted','pending','canSetup','missingAccounts'
         ));
     }
 
@@ -142,13 +146,15 @@ class FinanceController extends Controller
         $finance=app(FinanceDocuments::class);
         $invoiceBalances=$invoices->mapWithKeys(fn($i)=>[$i->id=>(string)$finance->outstanding($i)]);
         $billBalances=$payableBills->mapWithKeys(fn($i)=>[$i->id=>(string)$finance->outstanding($i)]);
+        $bankProfiles=\App\Models\FinanceBankProfile::query()->where('business_id',$business->id)
+            ->where('active',true)->orderBy('label')->get();
         $canCreate=app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'),'finance.documents.create');
         $paymentKey=(string)Str::uuid();
         $supplierPaymentKey=(string)Str::uuid();
         return view('finance.documents',compact(
             'business','bills','purchases','payments','costs','invoices',
-            'payableBills','shipments','invoiceBalances','billBalances','canCreate','paymentKey','supplierPaymentKey'
+            'payableBills','shipments','invoiceBalances','billBalances','canCreate','paymentKey','supplierPaymentKey','bankProfiles'
         ));
     }
 
@@ -175,6 +181,7 @@ class FinanceController extends Controller
             'commercial_invoice_id'=>['required_if:direction,in','nullable','integer'],
             'supplier_bill_id'=>['required_if:direction,out','nullable','integer'],
             'cash_account_key'=>['required',Rule::in(['bank','cash'])],
+            'bank_profile_id'=>['nullable','integer','min:1'],
             'amount'=>['required','numeric','gt:0','decimal:0,2','max:999999999999'],
             'payment_on'=>['required','date','before_or_equal:today'],
             'external_reference'=>['required','string','min:3','max:150'],
@@ -198,6 +205,7 @@ class FinanceController extends Controller
             'currency'=>['required','alpha','size:3'],
             'amount'=>['required','numeric','gt:0','decimal:0,2','max:999999999999'],
             'cash_account_key'=>['required',Rule::in(['bank','cash'])],
+            'bank_profile_id'=>['nullable','integer','min:1'],
             'paid_on'=>['required','date','before_or_equal:today'],
             'external_reference'=>['required','string','min:3','max:150'],
         ]);
@@ -228,11 +236,34 @@ class FinanceController extends Controller
             ->where('status','pending')->latest()->limit(100)->get();
         $costs=FinanceShipmentCost::query()->where('business_id',$business->id)
             ->where('status','pending')->latest()->limit(100)->get();
-        $hasPending=$requests->getCollection()->filter(fn($r)=>in_array($r->status,['pending','approved'],true))
-            ->map(fn($r)=>$r->source_type.':'.$r->source_id)->all();
+        $reliefs=\App\Models\FinanceInventoryRelief::query()->where('business_id',$business->id)
+            ->where('posting_status','not_posted')->latest()->limit(100)->get();
+        $creditNotes=\App\Models\FinanceCreditNote::query()->where('business_id',$business->id)
+            ->where('posting_status','not_posted')->latest()->limit(100)->get();
+        $openingBalances=\App\Models\FinanceOpeningBalance::query()->where('business_id',$business->id)
+            ->where('posting_status','not_posted')->latest()->limit(100)->get();
+        $balanceAdjustments=\App\Models\FinanceBalanceAdjustment::query()->where('business_id',$business->id)
+            ->where('posting_status','not_posted')->latest()->limit(100)->get();
+        $payrollRuns=\App\Models\FinancePayrollRun::query()->where('business_id',$business->id)
+            ->where('posting_status','not_posted')->latest()->limit(100)->get();
+        $payrollSettlements=\App\Models\FinancePayrollSettlement::query()->where('business_id',$business->id)
+            ->where('status','pending')->latest()->limit(100)->get();
+        $payrollReversals=\App\Models\FinancePayrollReversal::query()->where('business_id',$business->id)
+            ->where('posting_status','not_posted')->with('run')->latest()->limit(100)->get();
+        $transactionReversals=\App\Models\FinanceTransactionReversal::query()
+            ->where('business_id',$business->id)->where('posting_status','not_posted')
+            ->latest()->limit(100)->get();
+        $foreignBankOpenings=\App\Models\FinanceForeignBankOpening::query()
+            ->where('business_id',$business->id)->where('posting_status','not_posted')
+            ->latest()->limit(100)->get();
+        $hasPending=FinancePostingRequest::query()->where('business_id',$business->id)
+            ->whereIn('status',['pending','approved'])
+            ->get(['source_type','source_id'])->map(fn($r)=>$r->source_type.':'.$r->source_id)->all();
         return view('finance.reviews',compact(
             'business','requests','rates','invoices','bills','payments','costs',
-            'canSubmit','canApprove','canPost','hasPending'
+            'canSubmit','canApprove','canPost','hasPending','reliefs','creditNotes',
+            'openingBalances','balanceAdjustments','payrollRuns','payrollSettlements','payrollReversals',
+            'transactionReversals','foreignBankOpenings'
         ));
     }
 

@@ -1,0 +1,178 @@
+<?php
+namespace App\Http\Controllers;
+
+use App\Models\FinanceBankStatement;
+use App\Models\FinanceBankStatementLine;
+use App\Models\FinanceBankMatch;
+use App\Models\FinancePayment;
+use App\Models\FinanceShipmentCost;
+use App\Models\FinancePayrollSettlement;
+use App\Models\FinanceTransactionReversal;
+use App\Models\FinanceBankLedgerCheck;
+use App\Services\FinanceBankLedgerProofs;
+use App\Services\FinanceBankReconciliation;
+use App\Support\BusinessPermissions;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+
+class FinanceBankController extends Controller
+{
+    private function check(Request $request,string $permission):void
+    {
+        abort_unless(app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),$permission),403);
+    }
+    private function businessId(Request $request):int
+    {
+        return $request->attributes->get('activeBusiness')->id;
+    }
+    private function own(Request $request,int $id):FinanceBankStatement
+    {
+        return FinanceBankStatement::query()->where('business_id',$this->businessId($request))
+            ->findOrFail($id);
+    }
+    public function index(Request $request):View
+    {
+        $this->check($request,'finance.bank.view');
+        $business=$request->attributes->get('activeBusiness');
+        $statements=FinanceBankStatement::query()->where('business_id',$business->id)
+            ->withCount('lines')->latest()->paginate(20);
+        $bankProfiles=\App\Models\FinanceBankProfile::query()->where('business_id',$business->id)
+            ->where('active',true)->orderBy('label')->get();
+        $canImport=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'finance.bank.import');
+        return view('finance.bank.index',compact('business','statements','canImport','bankProfiles'));
+    }
+    public function import(Request $request,FinanceBankReconciliation $bank):RedirectResponse
+    {
+        $this->check($request,'finance.bank.import');
+        $data=$request->validate([
+            'currency'=>['required','alpha','size:3'],
+            'bank_profile_id'=>['nullable','regex:/^(?:legacy|[1-9][0-9]*)$/D'],
+            'period_from'=>['required','date_format:Y-m-d'],
+            'period_to'=>['required','date_format:Y-m-d','before_or_equal:today'],
+            'opening_balance'=>['required','numeric','decimal:0,2'],
+            'closing_balance'=>['required','numeric','decimal:0,2'],
+            'file'=>['required','file','mimes:csv,txt','max:1024'],
+        ]);
+        $statement=$bank->import($request->attributes->get('activeBusiness'),
+            $data,$request->file('file'),$request->user()->id);
+        return redirect()->route('finance.bank.show',$statement->id)->with('status',
+            'Bank CSV imported as unverified evidence. Independently match its lines against posted records.');
+    }
+    public function show(Request $request,int $statement):View
+    {
+        $this->check($request,'finance.bank.view');
+        $statement=$this->own($request,$statement)->load('account');
+        $lines=$statement->lines()->with('match')->orderBy('line_number')->paginate(100);
+        $canMatch=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'finance.bank.match');
+        $canReview=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'finance.bank.review');
+        $payments=FinancePayment::query()->where('business_id',$statement->business_id)
+            ->where('cash_account_id',$statement->account_id)
+            ->whereIn('status',['posted','reversed'])->where('currency',$statement->currency)
+            ->orderByDesc('id')->limit(250)->get();
+        $costs=FinanceShipmentCost::query()->where('business_id',$statement->business_id)
+            ->where('cash_account_id',$statement->account_id)
+            ->whereIn('status',['posted','reversed'])->where('currency',$statement->currency)
+            ->orderByDesc('id')->limit(250)->get();
+        $payrollSettlements=FinancePayrollSettlement::query()->where('business_id',$statement->business_id)
+            ->where('cash_account_id',$statement->account_id)
+            ->whereIn('status',['posted','reversed'])->where('currency',$statement->currency)
+            ->orderByDesc('id')->limit(250)->get();
+        $reversals=FinanceTransactionReversal::query()
+            ->where('business_id',$statement->business_id)
+            ->where('cash_account_id',$statement->account_id)
+            ->where('posting_status','posted')->where('currency',$statement->currency)
+            ->latest()->limit(250)->get();
+        $ledgerCheck=FinanceBankLedgerCheck::query()->where('business_id',$statement->business_id)
+            ->where('statement_id',$statement->id)->first();
+        $isLedgerCheckCurrent=$ledgerCheck
+            ?app(FinanceBankLedgerProofs::class)->isCurrent($ledgerCheck):false;
+        $ledgerPreview=null;
+        if($statement->status==='reconciled') {
+            try {$ledgerPreview=app(FinanceBankLedgerProofs::class)->preview($statement);}
+            catch(\Throwable) {$ledgerPreview=null;}
+        }
+        $canProofSubmit=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'finance.bank.proof.prepare');
+        $canProofReview=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'finance.bank.proof.review');
+        $matched=FinanceBankMatch::query()->where('business_id',$statement->business_id)
+            ->where('status','confirmed')->whereIn('statement_line_id',$statement->lines()->pluck('id'))
+            ->count();
+        return view('finance.bank.show',compact(
+            'statement','lines','canMatch','canReview','payments','costs','payrollSettlements',
+            'reversals','ledgerCheck','ledgerPreview','isLedgerCheckCurrent',
+            'canProofSubmit','canProofReview','matched'
+        ));
+    }
+    public function propose(Request $request,int $statement,int $line,
+        FinanceBankReconciliation $bank):RedirectResponse
+    {
+        $this->check($request,'finance.bank.match');
+        $statement=$this->own($request,$statement);
+        $data=$request->validate([
+            'candidate'=>['required','regex:/^(payment|shipment_cost|payroll_settlement|transaction_reversal):[1-9][0-9]*$/D'],
+            'note'=>['required','string','min:10','max:1000'],
+        ]);
+        [$type,$sourceId]=explode(':',$data['candidate'],2);
+        $line=FinanceBankStatementLine::query()->where('business_id',$statement->business_id)
+            ->where('statement_id',$statement->id)->findOrFail($line);
+        $bank->propose($line,$type,(int)$sourceId,$data['note'],
+            $request->user()->id);
+        return back()->with('status','Match proposed; an independent reviewer must confirm.');
+    }
+    public function confirm(Request $request,int $match,FinanceBankReconciliation $bank):RedirectResponse
+    {
+        $this->check($request,'finance.bank.review');
+        $data=$request->validate(['note'=>['required','string','min:10','max:1000']]);
+        $match=FinanceBankMatch::query()->where('business_id',$this->businessId($request))
+            ->findOrFail($match);
+        $bank->review($match,true,$data['note'],$request->user()->id);
+        return back()->with('status','Statement line independently reconciled to its posted entry.');
+    }
+    public function reject(Request $request,int $match,FinanceBankReconciliation $bank):RedirectResponse
+    {
+        $this->check($request,'finance.bank.review');
+        $data=$request->validate(['note'=>['required','string','min:10','max:1000']]);
+        $match=FinanceBankMatch::query()->where('business_id',$this->businessId($request))
+            ->findOrFail($match);
+        $bank->review($match,false,$data['note'],$request->user()->id);
+        return back()->with('status','Incorrect match rejected. The statement line can be proposed again.');
+    }
+    public function proposeLedgerProof(Request $request,int $statement,
+        FinanceBankLedgerProofs $proofs):RedirectResponse
+    {
+        $this->check($request,'finance.bank.proof.prepare');
+        $data=$request->validate(['notes'=>['required','string','min:20','max:2000']]);
+        $record=$this->own($request,$statement);
+        $proofs->submit($record,$request->user()->id,$data['notes']);
+        return back()->with('status',
+            'Bank and ledger figures match. Independent verification requested; this is not bank-authenticated evidence.');
+    }
+
+    public function reviewLedgerProof(Request $request,int $check,string $decision,
+        FinanceBankLedgerProofs $proofs):RedirectResponse
+    {
+        $this->check($request,'finance.bank.proof.review');
+        abort_unless(in_array($decision,['approve','reject'],true),404);
+        $data=$request->validate(['notes'=>['required','string','min:15','max:2000']]);
+        $check=FinanceBankLedgerCheck::query()->where('business_id',$this->businessId($request))
+            ->findOrFail($check);
+        $proofs->review($check,$decision==='approve',$request->user()->id,$data['notes']);
+        return back()->with('status',$decision==='approve'
+            ?'The uploaded statement and posted bank ledger agree as of this verification.'
+            :'Book-balance proof rejected with audit evidence.');
+    }
+
+    public function complete(Request $request,int $statement,FinanceBankReconciliation $bank):RedirectResponse
+    {
+        $this->check($request,'finance.bank.review');
+        $bank->complete($this->own($request,$statement),$request->user()->id);
+        return back()->with('status','Every imported statement line is confirmed. The statement has been marked reconciled.');
+    }
+}

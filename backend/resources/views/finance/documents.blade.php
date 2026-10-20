@@ -29,6 +29,12 @@
 <option value="{{ $invoice->id }}">{{ $invoice->reference }} · {{ $invoice->customer->name }} · {{ $invoice->currency }} {{ $invoiceBalances[$invoice->id] }} available</option>@endif @endforeach</select></label>
 <div class="form-columns"><label class="field"><span>Amount in invoice currency</span><input type="number" name="amount" step=".01" min=".01" required></label>
 <label class="field"><span>Recorded into</span><select name="cash_account_key"><option value="bank">Bank / electronic</option><option value="cash">Cash</option></select></label></div>
+@if($bankProfiles->isNotEmpty())
+<label class="field"><span>Named bank ledger (when using bank/electronic)</span>
+<select name="bank_profile_id"><option value="">Cash only / legacy bank not available</option>
+@foreach($bankProfiles as $bank)<option value="{{ $bank->id }}">{{ $bank->label }} · {{ $bank->institution }} · {{ $bank->currency }}</option>@endforeach
+</select><small>Bank transfer? Choose its actual named bank. Leave blank only when recording cash. Currency must match the invoice, supplier bill or expense.</small></label>
+@endif
 <label class="field"><span>Date funds were received</span><input type="date" name="payment_on" value="{{ now()->format('Y-m-d') }}" max="{{ now()->format('Y-m-d') }}" required></label>
 <label class="field"><span>Bank, mobile money or external reference</span><input name="external_reference" required minlength="3" maxlength="150"></label>
 <label class="field"><span>Notes (optional)</span><textarea name="notes" rows="2" maxlength="2000"></textarea></label>
@@ -43,6 +49,12 @@
 <option value="{{ $bill->id }}">{{ $bill->reference }} · {{ $bill->currency }} {{ $billBalances[$bill->id] }} payable</option>@endif @endforeach</select></label>
 <div class="form-columns"><label class="field"><span>Amount in bill currency</span><input name="amount" type="number" step=".01" min=".01" required></label>
 <label class="field"><span>Paid from</span><select name="cash_account_key"><option value="bank">Bank / electronic</option><option value="cash">Cash</option></select></label></div>
+@if($bankProfiles->isNotEmpty())
+<label class="field"><span>Named bank ledger (when using bank/electronic)</span>
+<select name="bank_profile_id"><option value="">Cash only / legacy bank not available</option>
+@foreach($bankProfiles as $bank)<option value="{{ $bank->id }}">{{ $bank->label }} · {{ $bank->institution }} · {{ $bank->currency }}</option>@endforeach
+</select><small>Bank transfer? Choose its actual named bank. Leave blank only when recording cash. Currency must match the invoice, supplier bill or expense.</small></label>
+@endif
 <label class="field"><span>Date of payment</span><input name="payment_on" type="date" required max="{{ now()->format('Y-m-d') }}" value="{{ now()->format('Y-m-d') }}"></label>
 <label class="field"><span>Bank or external payment reference</span><input name="external_reference" maxlength="150" minlength="3" required></label>
 <button class="primary-button">Record supplier payment for review</button></form>
@@ -57,6 +69,12 @@
 <label class="field"><span>Expense description</span><input name="description" maxlength="250" minlength="5" required></label>
 <div class="form-columns"><label class="field"><span>Paid amount</span><input name="amount" type="number" min=".01" step=".01" required></label>
 <label class="field"><span>Paid via</span><select name="cash_account_key"><option value="bank">Bank / electronic</option><option value="cash">Cash</option></select></label></div>
+@if($bankProfiles->isNotEmpty())
+<label class="field"><span>Named bank ledger (when using bank/electronic)</span>
+<select name="bank_profile_id"><option value="">Cash only / legacy bank not available</option>
+@foreach($bankProfiles as $bank)<option value="{{ $bank->id }}">{{ $bank->label }} · {{ $bank->institution }} · {{ $bank->currency }}</option>@endforeach
+</select><small>Bank transfer? Choose its actual named bank. Leave blank only when recording cash. Currency must match the invoice, supplier bill or expense.</small></label>
+@endif
 <label class="field"><span>Payment date</span><input name="paid_on" type="date" value="{{ now()->format('Y-m-d') }}" max="{{ now()->format('Y-m-d') }}" required></label>
 <label class="field"><span>External voucher / proof reference</span><input name="external_reference" minlength="3" maxlength="150" required></label>
 <button class="secondary-button">Record shipment cost for review</button></form>
