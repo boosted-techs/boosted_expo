@@ -31,6 +31,38 @@ $sections = config('expo.sections');
       </a>
       @endif
     @endforeach
+    @if($access->allows($membership, 'customers.view'))
+    <a href="{{ route('customers.index') }}" class="{{ request()->routeIs('customers.*')?'active':'' }}"><span class="nav-dot"></span>Customers</a>
+    @endif
+    @if($access->allows($membership, 'suppliers.view'))
+    <a href="{{ route('suppliers.index') }}" class="{{ request()->routeIs('suppliers.*')?'active':'' }}"><span class="nav-dot"></span>Suppliers</a>
+    @endif
+    @if($access->allows($membership, 'procurement.view'))
+    <a href="{{ route('supply-requests.index') }}" class="{{ request()->routeIs('supply-requests.*')?'active':'' }}"><span class="nav-dot"></span>Supply Requests</a>
+    @endif
+    @if($access->allows($membership, 'purchases.view'))
+    <a href="{{ route('purchases.index') }}" class="{{ request()->routeIs('purchases.*')?'active':'' }}"><span class="nav-dot"></span>Purchases</a>
+    @endif
+    @if($access->allows($membership, 'receipts.view'))
+    <a href="{{ route('receiving.index') }}" class="{{ request()->routeIs('receiving.*')?'active':'' }}"><span class="nav-dot"></span>Goods Receiving</a>
+    <a href="{{ route('stock.index') }}" class="{{ request()->routeIs('stock.*')?'active':'' }}"><span class="nav-dot"></span>Stock Batches</a>
+    @endif
+    @if($access->allows($membership, 'packing.view'))
+    <a href="{{ route('packing.index') }}" class="{{ request()->routeIs('packing.*')?'active':'' }}"><span class="nav-dot"></span>Packing Jobs</a>
+    @endif
+    @if($access->allows($membership, 'cartons.view'))
+    <a href="{{ route('cartons.index') }}" class="{{ request()->routeIs('cartons.*')?'active':'' }}"><span class="nav-dot"></span>Packed Cartons</a>
+    @endif
+    @if($access->allows($membership, 'shipments.view'))
+    <a href="{{ route('shipments.index') }}" class="{{ request()->routeIs('shipments.*')?'active':'' }}"><span class="nav-dot"></span>Export Shipments</a>
+    @endif
+    @if($access->allows($membership, 'documents.view'))
+    <a href="{{ route('export-documents.index') }}" class="{{ request()->routeIs('export-documents.*')?'active':'' }}"><span class="nav-dot"></span>Export Documents</a>
+    <a href="{{ route('document-templates.index') }}" class="{{ request()->routeIs('document-templates.*')?'active':'' }}"><span class="nav-dot"></span>Document Templates</a>
+    @endif
+    @if($access->allows($membership, 'labels.view'))
+    <a href="{{ route('labels.index') }}" class="{{ request()->routeIs('labels.*')?'active':'' }}"><span class="nav-dot"></span>Sticker Templates</a>
+    @endif
     @if($access->allows($membership, 'catalogue.view'))
     <a href="{{ route('products.index') }}" class="{{ request()->routeIs('products.*')?'active':'' }}"><span class="nav-dot"></span>Product Catalogue</a>
     @endif

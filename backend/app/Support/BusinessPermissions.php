@@ -6,18 +6,41 @@ use App\Models\BusinessMembership;
 
 class BusinessPermissions
 {
-    // Explicitly deny permissions not listed here. Configurable role grants come in a later pass.
+    // This first release uses conservative predefined grants. A business-managed
+    // approval and role-policy editor will be added after operational workflows.
     private const ROLE_GRANTS = [
         'owner' => ['*'],
         'admin' => ['*'],
-        'sales' => ['section.overview', 'section.sales', 'catalogue.view'],
-        'buyer' => ['section.overview', 'section.purchasing', 'catalogue.view'],
-        'warehouse' => ['section.overview', 'section.operations', 'catalogue.view'],
-        'packing' => ['section.overview', 'section.operations', 'catalogue.view'],
-        'logistics' => ['section.overview', 'section.exports', 'catalogue.view'],
-        'accountant' => ['section.overview', 'section.finance', 'catalogue.view'],
-        'hr' => ['section.overview', 'section.staff'],
-        'viewer' => ['section.overview', 'catalogue.view'],
+        'sales' => [
+            'section.overview','section.sales','catalogue.view',
+            'customers.view','customers.manage','shipments.view','documents.view',
+        ],
+        'buyer' => [
+            'section.overview','section.purchasing','catalogue.view',
+            'suppliers.view','suppliers.manage','procurement.view','stock.view',
+            'procurement.create','purchases.view','purchases.create','receipts.view',
+        ],
+        'warehouse' => [
+            'section.overview','section.operations','catalogue.view',
+            'purchases.view','receipts.view','receipts.post',
+            'stock.view','packing.view','packing.manage','cartons.view',
+            'labels.view','labels.generate','traceability.publish',
+            'shipments.view','shipments.manage',
+            'documents.view','documents.generate',
+        ],
+        'packing' => ['section.overview','section.operations','catalogue.view','receipts.view',
+            'stock.view','packing.view','packing.manage','cartons.view','labels.view','labels.generate'],
+        'logistics' => ['section.overview','section.exports','catalogue.view','receipts.view',
+            'stock.view','packing.view','cartons.view','labels.view','labels.generate',
+            'shipments.view','shipments.manage','shipments.dispatch',
+            'documents.view','documents.generate'],
+        'accountant' => [
+            'section.overview','section.finance','catalogue.view',
+            'customers.view','suppliers.view','procurement.view','purchases.view','receipts.view',
+            'stock.view','packing.view','cartons.view','shipments.view','documents.view',
+        ],
+        'hr' => ['section.overview','section.staff'],
+        'viewer' => ['section.overview','catalogue.view'],
     ];
 
     public const INVITABLE_ROLES = [

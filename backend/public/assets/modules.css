@@ -8,3 +8,27 @@
 @media(max-width:1000px){.split-panels{grid-template-columns:1fr}}@media(max-width:850px){.username{display:none}.auth-shell{grid-template-columns:1fr}.auth-side{display:none}.auth-main{min-height:100vh}.section-card{padding:18px}}@media(max-width:540px){.form-columns{grid-template-columns:1fr}.page-intro{align-items:start}.search-row{align-items:stretch}.search-row .secondary-button{width:100%}.signout{padding:7px 9px}.crumb{font-size:11px}.form-actions>*{flex:1}}
 .image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:14px;margin-top:18px}.image-tile{border:1px solid var(--line);border-radius:12px;padding:9px}.image-tile img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:9px;background:var(--soft)}.image-tile .text-button{margin-top:10px}.product-cell{display:flex;align-items:center;gap:13px}.small-thumb{width:55px;height:55px;object-fit:cover;border-radius:9px;background:var(--soft);flex:none}
 .qr-panel{display:flex;gap:20px;align-items:center;margin:18px 0}.qr-panel img{display:block;max-width:45%;height:auto;border-radius:12px;border:1px solid var(--line)}.qr-panel p{margin:4px 0 13px}.public-qr-body{min-height:100vh;display:grid;place-items:center;padding:30px 15px}.public-qr-card{width:min(560px,100%);background:var(--panel);padding:35px;border-radius:20px;border:1px solid var(--line)}.public-qr-card h1{font-size:30px;letter-spacing:-1px;margin:14px 0 6px}.public-qr-card p{color:var(--muted)}.public-qr-card .record strong,.public-qr-card .record span{font-size:14px}.public-fields{margin:22px 0}.public-product-photo{width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin-top:15px}.public-footer{font-size:12px;color:var(--muted);margin-top:30px;text-align:center}
+.supplier-choices{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:13px}.supplier-choices .check-row{border:1px solid var(--line);border-radius:11px;padding:12px;background:var(--bg)}.supplier-choices small{font-size:11px;font-weight:500;color:var(--muted)}.data-table .secondary-button{min-height:33px;padding:6px 10px;font-size:12px}.data-table td{vertical-align:middle}.public-quote-instruction{font-size:13px;color:var(--muted)}
+
+/* Packing and label settings */
+.print-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:8px}
+.print-fields .check-row{min-height:43px;background:var(--bg);padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.batch-line{margin-bottom:13px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.batch-line .remove-batch{grid-column:1/-1;justify-self:start}
+#more-batch:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:540px){.print-fields{grid-template-columns:1fr}.supplier-choices{grid-template-columns:1fr}}
+
+/* Export shipment and documentation tools */
+.shipment-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0 6px}
+.shipment-facts>div{display:flex;flex-direction:column;gap:7px;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:15px;min-width:0}
+.shipment-facts small{color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-size:10px;font-weight:800}
+.shipment-facts strong{color:var(--ink);font-size:14px;overflow-wrap:anywhere}
+.shipment-facts span{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.shipment-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:11px;max-height:470px;overflow:auto;padding:4px;margin:8px 0}
+.shipment-picker .check-row{display:flex;align-items:center;gap:13px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:15px;cursor:pointer;min-height:75px}
+.shipment-picker .check-row small{display:block;font-weight:500;color:var(--muted);margin-top:5px}
+.shipment-picker .check-row strong{font-size:13px}
+.shipment-picker input{accent-color:var(--green);height:18px;width:18px;flex:none}
+@media(max-width:1150px){.shipment-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:610px){.shipment-facts{grid-template-columns:1fr}.shipment-picker{grid-template-columns:1fr;max-height:350px}}
+#packing-columns[hidden]{display:none!important}
