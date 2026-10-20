@@ -14,6 +14,9 @@
     @foreach([
       ['Products','products.index','catalogue.view'],
       ['Customers','customers.index','customers.view'],
+      ['Customer quotations','sales-requests.index','sales.view'],
+      ['Confirmed orders','sales-orders.index','sales.orders.view'],
+      ['Commercial invoices','commercial-invoices.index','invoices.view'],
       ['Suppliers','suppliers.index','suppliers.view'],
       ['Purchases','purchases.index','purchases.view'],
       ['Receive produce','receiving.index','receipts.view'],
@@ -44,7 +47,7 @@
       'settings' => [['Company profile','Locations, warehouses and business identity'],['Approvals','Configurable approval rules'],['Integrations','R2 storage, push and offline settings']],
     ][$section];
     $workingLinks = [
-      'sales' => [['Customer directory','customers.index','customers.view']],
+      'sales' => [['Customers','customers.index','customers.view'],['Customer requests & quotations','sales-requests.index','sales.view'],['Confirmed sales orders','sales-orders.index','sales.orders.view'],['Commercial invoices','commercial-invoices.index','invoices.view']],
       'purchasing' => [
         ['Suppliers','suppliers.index','suppliers.view'],
         ['Supplier quotations','supply-requests.index','procurement.view'],
@@ -68,7 +71,7 @@
       ],
     ][$section] ?? [];
     $workingCards = [
-      'sales'=>[0],'purchasing'=>[0,1,2],
+      'sales'=>[0,1,2],'purchasing'=>[0,1,2],
       'operations'=>[0,1,2],'exports'=>[0,1,2],'templates'=>[0,1,2],
     ][$section] ?? [];
   @endphp

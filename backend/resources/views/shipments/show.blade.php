@@ -17,6 +17,19 @@
 <div class="notice"><span>●</span><div><strong>Movement recorded manually</strong><p>The export team has marked this shipment {{ $shipment->status }}. This entry is not independently verified by an airline or customs office.</p></div></div>
 @endif
 <section class="section-card">
+<h2>Linked customer order</h2>
+@if($shipment->salesOrder)
+<div class="record"><strong>Confirmed order</strong><a class="action-link" href="{{ route('sales-orders.show',$shipment->sales_order_id) }}">{{ $shipment->salesOrder->reference }}</a></div>
+<div class="record"><strong>Confirmed value</strong><span>{{ $shipment->salesOrder->currency }} {{ $shipment->salesOrder->grand_total }}</span></div>
+<p class="form-hint">Only this shipment's assigned cartons can be invoiced. Other order quantities remain available for additional shipments.</p>
+@else
+<p class="notice-message">This shipment is not linked to a confirmed sales order. It may still be used for operational dispatch and packing documents, but not commercial invoicing.</p>
+@if($canManage && $shipment->status==='draft')
+<a href="{{ route('sales-orders.index') }}" class="action-link">Link via confirmed sales orders</a>
+@endif
+@endif
+</section>
+<section class="section-card">
 <h2>Shipment and flight information</h2><p class="form-hint">Times shown in company timezone: {{ $business->timezone }}.</p>
 <div class="shipment-facts">
 <div><small>Buyer / consignee</small><strong>{{ $shipment->customer->name }}</strong><span>{{ $shipment->customer->city }} · {{ $shipment->customer->country_code }}</span></div>
@@ -119,6 +132,23 @@
 </div>
 @empty<p class="empty-msg">No documents issued yet.</p>@endforelse
 @if($shipment->status==='cancelled' || $shipment->events->contains('action','reopened'))<p class="form-hint">This shipment was cancelled or reopened. Previously issued documents may not reflect its current carton allocation. Verify before sharing.</p>@endif
+</section>
+@endif
+@if($canSeeInvoice)
+<section class="section-card"><h2>Commercial invoice</h2>
+@if($shipment->commercialInvoice)
+<div class="record"><div><strong>{{ $shipment->commercialInvoice->reference }}</strong><small>{{ $shipment->commercialInvoice->currency }} {{ $shipment->commercialInvoice->grand_total }} · Not posted to financial ledger</small></div>
+<a class="action-link" href="{{ route('commercial-invoices.show',$shipment->commercialInvoice->id) }}">View invoice</a></div>
+@elseif($canInvoice && $shipment->sales_order_id && in_array($shipment->status,['ready','dispatched','delivered'],true))
+<p class="muted">Issue a commercial invoice using the quantities actually allocated to this shipment and the accepted sales order's unit prices. Freight and insurance are optional additions in the same currency.</p>
+<form method="POST" action="{{ route('commercial-invoices.issue',$shipment->id) }}" class="form-stack">@csrf
+<div class="form-columns"><label class="field"><span>Freight ({{ $shipment->salesOrder->currency }})</span><input name="freight_amount" type="number" min="0" step=".01" required value="0.00"></label>
+<label class="field"><span>Insurance ({{ $shipment->salesOrder->currency }})</span><input name="insurance_amount" type="number" min="0" step=".01" required value="0.00"></label></div>
+<label class="field"><span>Additional invoice note (optional)</span><textarea name="notes" rows="2" maxlength="2000"></textarea></label>
+<div class="notice"><span>●</span><div><strong>Immutable after issuance</strong><p>Review the shipment, prices, tax rate and charges carefully. The invoice cannot be edited or reissued until the future controlled amendment workflow is implemented.</p></div></div>
+<button class="primary-button" onclick="return confirm('Issue the commercial invoice now? Its contents cannot be edited afterwards.')">Issue commercial invoice</button></form>
+@else<p class="form-hint">Link a confirmed customer order and mark the shipment ready before issuing a commercial invoice.</p>
+@endif
 </section>
 @endif
 <section class="section-card"><h2>Activity history</h2>

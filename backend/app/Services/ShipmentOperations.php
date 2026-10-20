@@ -59,6 +59,16 @@ class ShipmentOperations
                     $changes[$key]=['before'=>$shipment->{$key},'after'=>$value];
                 }
             }
+            if($shipment->sales_order_id && (int)($data['customer_id']??$shipment->customer_id)!==$shipment->customer_id) {
+                throw ValidationException::withMessages(['customer_id'=>'Customer must match the linked sales order.']);
+            }
+            if($shipment->sales_order_id && !empty($data['incoterm'])) {
+                $order=\App\Models\SalesOrder::query()->where('business_id',$shipment->business_id)
+                    ->findOrFail($shipment->sales_order_id);
+                if($order->incoterm && $order->incoterm!==$data['incoterm']) {
+                    throw ValidationException::withMessages(['incoterm'=>'Shipment term must match the accepted sales order.']);
+                }
+            }
             $shipment->update($data);
             if ($changes !== []) $this->event($shipment,$userId,'updated',['fields'=>array_keys($changes)]);
             return $shipment;
@@ -94,6 +104,13 @@ class ShipmentOperations
                 }
             }
 
+            if($shipment->sales_order_id) {
+                $order=\App\Models\SalesOrder::query()->where('business_id',$shipment->business_id)
+                    ->lockForUpdate()->findOrFail($shipment->sales_order_id);
+                $incoming=$cartons->filter(fn($carton)=>!$allocated->has($carton->id));
+                $incoming->each(fn($carton)=>$carton->load('contents'));
+                app(SalesFulfillment::class)->assertCapacity($order,$incoming->all());
+            }
             $added=0;
             foreach ($cartons as $carton) {
                 if ($allocated->has($carton->id)) continue;
@@ -155,6 +172,11 @@ class ShipmentOperations
                     ]);
                 }
             }
+            if($shipment->sales_order_id) {
+                $order=\App\Models\SalesOrder::query()->where('business_id',$shipment->business_id)
+                    ->lockForUpdate()->findOrFail($shipment->sales_order_id);
+                app(SalesFulfillment::class)->assertCapacity($order,[]);
+            }
             $shipment->update(['status'=>'ready']);
             $this->event($shipment,$userId,'marked_ready',['carton_count'=>$allocations->count()]);
         });
@@ -165,6 +187,8 @@ class ShipmentOperations
         DB::transaction(function () use ($shipment,$userId) {
             $shipment=$this->lock($shipment);
             abort_unless($shipment->status==='ready',422,'Only a ready shipment can be reopened.');
+            abort_unless(! $shipment->commercialInvoice()->exists(),422,
+                'A commercial invoice has been issued. A controlled correction/credit workflow is required before changing this shipment.');
             $shipment->update(['status'=>'draft']);
             $this->event($shipment,$userId,'reopened',[
                 'warning'=>'Documents issued before reopening may not match the revised shipment.',
@@ -230,6 +254,8 @@ class ShipmentOperations
             $shipment=$this->lock($shipment);
             abort_unless(in_array($shipment->status,['draft','ready'],true),422,
                 'Dispatched shipments cannot be cancelled through this workflow.');
+            abort_unless(! $shipment->commercialInvoice()->exists(),422,
+                'This shipment already has a commercial invoice and cannot be cancelled here.');
             $allocations=$shipment->allocations()->orderBy('carton_id')->lockForUpdate()->get();
             $cartons=Carton::query()->where('business_id',$shipment->business_id)
                 ->whereIn('id',$allocations->pluck('carton_id'))->orderBy('id')

@@ -13,7 +13,7 @@ class ExportShipment extends Model
         'origin_airport','destination_country','destination_airport','carrier','flight_number',
         'air_waybill','scheduled_departure_at','estimated_arrival_at',
         'actual_departure_at','actual_arrival_at','incoterm','notes',
-        'created_by','dispatched_by','delivered_by',
+        'created_by','dispatched_by','delivered_by','sales_order_id',
     ];
 
     protected function casts(): array
@@ -25,6 +25,8 @@ class ExportShipment extends Model
     }
 
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
+    public function salesOrder(): BelongsTo { return $this->belongsTo(SalesOrder::class, 'sales_order_id'); }
+    public function commercialInvoice(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(CommercialInvoice::class,'shipment_id'); }
     public function business(): BelongsTo { return $this->belongsTo(Business::class); }
     public function allocations(): HasMany { return $this->hasMany(ShipmentCarton::class, 'shipment_id'); }
     public function events(): HasMany { return $this->hasMany(ShipmentEvent::class, 'shipment_id'); }

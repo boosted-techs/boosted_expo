@@ -24,6 +24,11 @@ use App\Http\Controllers\LabelTemplateController;
 use App\Http\Controllers\ExportShipmentController;
 use App\Http\Controllers\ExportDocumentController;
 use App\Http\Controllers\ExportDocumentTemplateController;
+use App\Http\Controllers\SalesRequestController;
+use App\Http\Controllers\SalesQuotationController;
+use App\Http\Controllers\SalesOrderController;
+use App\Http\Controllers\CommercialInvoiceController;
+use App\Http\Controllers\InvoiceAccountingHandoffController;
 use App\Support\BusinessPermissions;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +57,42 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('business')->group(function () {
+        Route::get('/sales-requests', [SalesRequestController::class,'index'])->name('sales-requests.index');
+        Route::get('/sales-requests/new', [SalesRequestController::class,'create'])->name('sales-requests.create');
+        Route::post('/sales-requests', [SalesRequestController::class,'store'])->name('sales-requests.store');
+        Route::get('/sales-requests/{record}', [SalesRequestController::class,'show'])
+            ->whereNumber('record')->name('sales-requests.show');
+        Route::post('/sales-requests/{record}/quotation', [SalesRequestController::class,'draft'])
+            ->whereNumber('record')->name('sales-requests.draft');
+        Route::get('/sales-quotes/{quote}', [SalesQuotationController::class,'show'])
+            ->whereNumber('quote')->name('sales-quotes.show');
+        Route::put('/sales-quotes/{quote}', [SalesQuotationController::class,'update'])
+            ->whereNumber('quote')->name('sales-quotes.update');
+        Route::post('/sales-quotes/{quote}/issue', [SalesQuotationController::class,'issue'])
+            ->whereNumber('quote')->name('sales-quotes.issue');
+        Route::post('/sales-quotes/{quote}/confirm', [SalesQuotationController::class,'confirm'])
+            ->whereNumber('quote')->name('sales-quotes.confirm');
+        Route::get('/sales-quotes/{quote}/print', [SalesQuotationController::class,'print'])
+            ->whereNumber('quote')->name('sales-quotes.print');
+        Route::get('/sales-quotes/{quote}/pdf', [SalesQuotationController::class,'pdf'])
+            ->whereNumber('quote')->name('sales-quotes.pdf');
+        Route::get('/sales-orders', [SalesOrderController::class,'index'])->name('sales-orders.index');
+        Route::get('/sales-orders/{order}', [SalesOrderController::class,'show'])
+            ->whereNumber('order')->name('sales-orders.show');
+        Route::post('/sales-orders/{order}/shipments/{shipment}', [SalesOrderController::class,'link'])
+            ->whereNumber('order')->whereNumber('shipment')->name('sales-orders.shipments.link');
+        Route::get('/invoice-accounting-handoff', [InvoiceAccountingHandoffController::class,'index'])->name('invoice-accounting-handoff.index');
+        Route::get('/commercial-invoices', [CommercialInvoiceController::class,'index'])
+            ->name('commercial-invoices.index');
+        Route::get('/commercial-invoices/{invoice}', [CommercialInvoiceController::class,'show'])
+            ->whereNumber('invoice')->name('commercial-invoices.show');
+        Route::post('/shipments/{shipment}/commercial-invoice', [CommercialInvoiceController::class,'issue'])
+            ->whereNumber('shipment')->name('commercial-invoices.issue');
+        Route::get('/commercial-invoices/{invoice}/print', [CommercialInvoiceController::class,'print'])
+            ->whereNumber('invoice')->name('commercial-invoices.print');
+        Route::get('/commercial-invoices/{invoice}/pdf', [CommercialInvoiceController::class,'pdf'])
+            ->whereNumber('invoice')->name('commercial-invoices.pdf');
+
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::get('/customers/{customer}/edit', [CustomerController::class, 'edit'])->whereNumber('customer')->name('customers.edit');

@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Carton;
 use App\Models\Customer;
 use App\Models\ExportShipment;
+use App\Models\SalesOrder;
+use App\Services\SalesFulfillment;
+use Illuminate\Support\Facades\DB;
 use App\Services\ShipmentOperations;
 use App\Support\BusinessPermissions;
 use Illuminate\Support\Carbon;
@@ -81,7 +84,13 @@ class ExportShipmentController extends Controller
         $customers=Customer::query()->where('business_id',$business->id)->where('active',true)
             ->orderBy('name')->get();
         $creationKey=(string)Str::uuid();
-        return view('shipments.create',compact('customers','business','creationKey'));
+        $orders=SalesOrder::query()->where('business_id',$business->id)->where('status','confirmed')->with('customer')->latest()->get();
+        $prefillOrderId=(int)$request->query('sales_order_id',0);
+        $prefillCustomerId=(int)$request->query('customer_id',0);
+        if($prefillOrderId && $orders->firstWhere('id',$prefillOrderId)) {
+            $prefillCustomerId=$orders->firstWhere('id',$prefillOrderId)->customer_id;
+        }
+        return view('shipments.create',compact('customers','business','creationKey','orders','prefillOrderId','prefillCustomerId'));
     }
 
     public function store(Request $request, ShipmentOperations $operations): RedirectResponse
@@ -89,8 +98,17 @@ class ExportShipmentController extends Controller
         $this->check($request,'shipments.manage');
         $data=$this->payload($request);
         $key=$request->validate(['creation_key'=>['required','uuid']]);
-        $shipment=$operations->create($request->attributes->get('activeBusiness')->id,
-            [...$data, ...$key],$request->user()->id);
+        $order=$request->validate(['sales_order_id'=>['nullable','integer']]);
+        $businessId=$request->attributes->get('activeBusiness')->id;
+        $shipment=DB::transaction(function () use($request,$operations,$data,$key,$order,$businessId) {
+            $shipment=$operations->create($businessId,[...$data,...$key],$request->user()->id);
+            if(!empty($order['sales_order_id'])) {
+                $sale=SalesOrder::query()->where('business_id',$businessId)
+                    ->findOrFail($order['sales_order_id']);
+                app(SalesFulfillment::class)->linkShipment($shipment,$sale,$request->user()->id);
+            }
+            return $shipment;
+        });
         return redirect()->route('shipments.show',$shipment->id)
             ->with('status','Shipment draft saved. Allocate completed cartons before confirming dispatch.');
     }
@@ -117,7 +135,7 @@ class ExportShipmentController extends Controller
     {
         $this->check($request,'shipments.view');
         $shipment=$this->own($request,$shipment)->load([
-            'customer','allocations.carton.packingJob.product',
+            'customer','salesOrder','commercialInvoice','allocations.carton.packingJob.product',
             'allocations.carton.contents.batch','events.actor','documents.template'
         ]);
         $businessId=$shipment->business_id;
@@ -134,6 +152,12 @@ class ExportShipmentController extends Controller
         $canViewDocs=app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'),'documents.view'
         );
+        $canInvoice=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'invoices.issue'
+        );
+        $canSeeInvoice=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'invoices.view'
+        );
         if ($canManage && $shipment->status==='draft') {
             $search=trim((string)$request->query('carton_search',''));
             $available=Carton::query()->where('business_id',$businessId)
@@ -149,7 +173,7 @@ class ExportShipmentController extends Controller
             ->orderBy('type')->orderBy('name')->get();
         return view('shipments.show',compact(
             'shipment','available','canManage','canDispatch','canGenerate',
-            'canViewDocs','documentTemplates'
+            'canViewDocs','documentTemplates','canInvoice','canSeeInvoice'
         ));
     }
 

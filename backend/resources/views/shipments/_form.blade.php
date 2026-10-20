@@ -1,9 +1,15 @@
 <div class="form-stack">
+@if(isset($orders))
+<label class="field"><span>Confirmed sales order (optional)</span>
+<select name="sales_order_id"><option value="">Unlinked shipment / operational only</option>
+@foreach($orders as $order)<option value="{{ $order->id }}" @selected(old('sales_order_id',$prefillOrderId??null)==$order->id)>{{ $order->reference }} · {{ $order->customer->name }} · {{ $order->currency }} {{ $order->grand_total }}</option>@endforeach
+</select><small>Link the shipment to an accepted quotation for quantity reconciliation and commercial invoicing. The customer must match the order.</small></label>
+@endif
 <div class="form-columns">
 <label class="field"><span>Buyer / consignee</span>
 <select name="customer_id" required><option value="">Choose customer</option>
 @foreach($customers as $customer)
-<option value="{{ $customer->id }}" @selected(old('customer_id',$shipment?->customer_id)==$customer->id)>{{ $customer->name }} — {{ $customer->country_code }}</option>
+<option value="{{ $customer->id }}" @selected(old('customer_id',$shipment?->customer_id ?? ($prefillCustomerId ?? null))==$customer->id)>{{ $customer->name }} — {{ $customer->country_code }}</option>
 @endforeach</select></label>
 <label class="field"><span>Transport mode</span><input value="Air freight" disabled><small>Air shipments are supported in this release.</small></label>
 </div>

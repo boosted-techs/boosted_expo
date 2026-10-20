@@ -7,6 +7,7 @@ use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ProductController extends Controller
@@ -85,7 +86,12 @@ class ProductController extends Controller
         $product = $this->productForBusiness($request, $product);
         $data = $this->validated($request, $product);
         $data['active'] = $request->boolean('active');
-        $product->update($data);
+        DB::transaction(function () use($product,$data) {
+            $product=Product::query()->where('business_id',$product->business_id)
+                ->lockForUpdate()->findOrFail($product->id);
+            app(\App\Services\ProductUnitRules::class)->ensureUnchangedWhenReferenced($product,$data['base_unit']);
+            $product->update($data);
+        });
 
         return redirect()->route('products.index')->with('status', 'Product updated.');
     }

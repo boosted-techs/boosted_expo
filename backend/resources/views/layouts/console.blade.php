@@ -34,6 +34,18 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'customers.view'))
     <a href="{{ route('customers.index') }}" class="{{ request()->routeIs('customers.*')?'active':'' }}"><span class="nav-dot"></span>Customers</a>
     @endif
+    @if($access->allows($membership, 'sales.view'))
+    <a href="{{ route('sales-requests.index') }}" class="{{ request()->routeIs('sales-requests.*')||request()->routeIs('sales-quotes.*')?'active':'' }}"><span class="nav-dot"></span>Customer Requests & Quotes</a>
+    @endif
+    @if($access->allows($membership, 'sales.orders.view'))
+    <a href="{{ route('sales-orders.index') }}" class="{{ request()->routeIs('sales-orders.*')?'active':'' }}"><span class="nav-dot"></span>Sales Orders</a>
+    @endif
+    @if($access->allows($membership, 'invoices.view'))
+    <a href="{{ route('commercial-invoices.index') }}" class="{{ request()->routeIs('commercial-invoices.*')?'active':'' }}"><span class="nav-dot"></span>Commercial Invoices</a>
+    @endif
+    @if($access->allows($membership, 'finance.handoff.view'))
+    <a href="{{ route('invoice-accounting-handoff.index') }}" class="{{ request()->routeIs('invoice-accounting-handoff.*')?'active':'' }}"><span class="nav-dot"></span>Invoice Finance Handoff</a>
+    @endif
     @if($access->allows($membership, 'suppliers.view'))
     <a href="{{ route('suppliers.index') }}" class="{{ request()->routeIs('suppliers.*')?'active':'' }}"><span class="nav-dot"></span>Suppliers</a>
     @endif

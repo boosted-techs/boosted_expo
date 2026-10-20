@@ -73,6 +73,10 @@ class ProductImportController extends Controller
                 ];
                 if ($row['description'] !== null) $values['description'] = $row['description'];
                 if ($row['active'] !== null) $values['active'] = $row['active'];
+                $current = Product::query()->where('business_id',$staged->business_id)
+                    ->where('sku',$row['sku'])->lockForUpdate()->first();
+                if($current) app(\App\Services\ProductUnitRules::class)->ensureUnchangedWhenReferenced(
+                    $current,$values['base_unit']);
                 $product = Product::updateOrCreate(
                     ['business_id' => $staged->business_id, 'sku' => $row['sku']],
                     $values,

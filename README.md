@@ -29,6 +29,9 @@ no public self-registration routes or default passwords.
 - Product catalogue, CSV/XLSX preview/import/export and basic media management.
 - Customer and supplier directories, sourcing RFQs, invited supplier quotations,
   quotation revision history and owner/admin supplier selection.
+- Customer sales enquiries, issued/revisioned price quotations, confirmed sales
+  orders, shipment quantity fulfilment, commercial invoices and an accountant's
+  read-only invoice handoff.
 - Market and walk-in purchasing, purchase orders, partial goods receipts,
   rejected produce, farmer codes and traceable accepted stock batches.
 - Packing jobs, multi-batch cartons, optional grades, gross/net/tare measurements,
@@ -105,12 +108,13 @@ other devices; URLs using localhost will not work from a customer's phone.
 
 ## Current limits / next phases
 
-Customer sales quotation revisions and allocation, commercial invoices,
-costing/accounting journals, payments, multi-currency FX handling,
+Customer and supplier self-service portals, actual quotation email delivery,
+accounting journals, payment matching, credit/debit notes, invoice amendments,
+shipment costing/profitability, multi-currency FX accounting,
 configurable business approval policies, staff shifts and payroll,
 real PWA offline synchronisation, push notifications, carrier status
 integrations, regulatory export certificates, and full security QA remain pending.
-Financial data from purchase records is not yet ledger-posted.
+Financial data from purchases and commercial invoices is not yet ledger-posted.
 
 ## Verification
 
@@ -120,8 +124,9 @@ Financial data from purchase records is not yet ledger-posted.
     php artisan migrate:status
     php artisan route:list
 
-Do not run migrate:fresh on data to be retained. This development pass used
-additive migrations only. No production deployment or GitHub push was made.
+Do not run migrate:fresh on data to be retained. All recent changes use
+additive migrations. The prior development phase was pushed separately by the
+project owner. New local changes still require review before committing or pushing.
 
 ## Shipment planning, carton allocation and export documents — October 2026
 
@@ -152,3 +157,75 @@ Readiness checks enforce flight, AWB, airport fields and carton allocation befor
 dispatch. Existing document snapshots are retained when a shipment is revised.
 This module is still a development release requiring business-user acceptance
 testing and validation with actual export operations.
+
+## Customer sales, shipment fulfilment and commercial invoices — October 2026
+
+This pass added a working business-scoped sales workflow:
+
+1. Sales staff record a customer enquiry with one or more product quantities.
+2. Staff prepare a draft price quotation using an explicit currency, agreed
+   incoterm, validity date, and optional discount/tax percentages. All prices
+   use decimal arithmetic and are validated against supported amount limits.
+3. Once issued, a quotation is locked and its exact printable HTML is
+   snapshotted. A PDF can be downloaded and shared **manually** with the buyer.
+   Later revisions keep previous issued prices and documents unchanged.
+   The application does **not** email quotations to customers automatically.
+4. The owner or company administrator records the buyer's written acceptance
+   (PO or communication reference). This creates a confirmed sales order
+   with uneditable quoted quantities, unit prices and product details.
+5. A shipment may be linked to one confirmed order. Multiple shipments may
+   fulfil that order partially. The aggregate of all cartons across those
+   shipments cannot exceed the order quantities by product. A carton can
+   be allocated to only one shipment. Shipment allocation never deducts
+   loose warehouse stock again.
+6. After a linked shipment is ready, the owner, administrator or accountant
+   may issue **one** commercial invoice for its allocated carton quantities.
+   Unit prices are inherited from the accepted order; freight and insurance
+   can be entered separately. Invoice HTML, PDF source, totals, currency,
+   customer, product identifiers and shipment details are immutable snapshots.
+   The invoice cannot be edited or reissued in this release. Shipments with
+   issued commercial invoices cannot be reopened or cancelled in the draft
+   workflow; a controlled amendment/credit process is planned.
+7. Every issued invoice also creates a company-isolated **accounting handoff**,
+   visible to accountants and company owners. This handoff is explicitly
+   UNPOSTED and awaiting the company accounting/revenue-recognition policy.
+   It displays documentary invoice totals separately by currency. It does not
+   debit receivables, credit revenue, calculate exchange differences, recognise
+   income, or record payments.
+
+Business roles: sales staff can work on requests/quotes and view orders;
+owner/admin confirms customer acceptance; logistics may link ships and
+allocate stock; owner/admin/accountant issues commercial invoices.
+The first release uses predefined permissions rather than a configurable
+approval editor. Public customer self-service and email delivery remain pending.
+
+Product-unit integrity: kilograms, boxes and other units cannot be changed on
+an existing catalogue item that has receiving, purchase, packing or sales
+records. Product names, codes and units are copied to quotation/order lines so
+later catalogue edits do not alter commercial snapshots. The same unit guard
+also applies to Excel catalogue imports.
+
+Important limitations:
+- Tax and discount percentages are manually supplied, not validated against
+  tax authority rules or local export tax exemptions. Verify with an accountant.
+- Splitting an order across shipments can create small rounding differences
+  in per-shipment discounts or taxes; reconcile as part of the later accounting
+  workflow.
+- Commercial invoices are development-stage documents and may lack regulated
+  customs, HS code, exporter registration or banking particulars required by
+  a specific country/corridor.
+- Buyer acceptance is manually recorded by staff; no digital buyer signature
+  or provider-verified acceptance is captured.
+- There is no accounting ledger posting, credit/debit note or invoice correction
+  workflow, and no external payment or carrier integration.
+
+The new additive migrations are 000010 through 000013. Do not use
+php artisan migrate:fresh when preserving business records.
+
+To test the entire project from backend:
+
+    php artisan view:cache
+    php artisan test
+    php artisan migrate:status
+
+This pass is local only; it has **not** been pushed or deployed.
