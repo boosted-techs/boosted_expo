@@ -1,0 +1,53 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\BusinessMembership;
+use App\Services\InviteBusinessUser;
+use App\Support\BusinessPermissions;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
+
+class TeamController extends Controller
+{
+    public function index(Request $request, BusinessPermissions $access): View
+    {
+        abort_unless($access->allows($request->attributes->get('membership'), 'team.view'), 403);
+        $business = $request->attributes->get('activeBusiness');
+        $members = BusinessMembership::query()->where('business_id', $business->id)->with('user')->get();
+        $pending = $business->invitations()->whereNull('accepted_at')->where('expires_at', '>', now())->latest()->get();
+        $roles = array_values(array_filter(
+            BusinessPermissions::INVITABLE_ROLES,
+            fn (string $role) => $access->canInviteRole($request->attributes->get('membership'), $role),
+        ));
+
+        return view('team.index', compact('business', 'members', 'pending', 'roles'));
+    }
+
+    public function invite(Request $request, BusinessPermissions $access, InviteBusinessUser $invites): RedirectResponse
+    {
+        $membership = $request->attributes->get('membership');
+        abort_unless($access->allows($membership, 'team.invite'), 403);
+        $input = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'role' => ['required', Rule::in(BusinessPermissions::INVITABLE_ROLES)],
+        ]);
+        abort_unless($access->canInviteRole($membership, $input['role']), 403);
+
+        $email = strtolower(trim($input['email']));
+        $business = $request->attributes->get('activeBusiness');
+        if ($business->memberships()->whereHas('user', fn ($q) => $q->where('email', $email))->where('active', true)->exists()) {
+            throw ValidationException::withMessages(['email' => 'This user already belongs to the business.']);
+        }
+
+        $invites->send($business, $email, $input['role'], $request->user()->id);
+
+        $message = config('mail.default') === 'log'
+            ? 'Invitation recorded in the development mail log (not sent to '.$email.').' 
+            : 'Invitation sent to '.$email;
+        return back()->with('status', $message);
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Boosted Export ERP",
+  "short_name": "Boosted Export",
+  "description": "Operations management for agricultural exporters",
+  "start_url": "/workspace",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f8f4",
+  "theme_color": "#37664b"
+}
