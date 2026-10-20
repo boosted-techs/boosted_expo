@@ -16,5 +16,15 @@
 <div class="record"><strong>Insurance</strong><span>{{ $invoice->insurance_amount }}</span></div>
 <div class="record"><strong>Commercial invoice total</strong><strong>{{ $invoice->currency }} {{ $invoice->grand_total }}</strong></div>
 </section>
-<div class="notice"><span>●</span><div><strong>Financial posting pending</strong><p>This document records the export transaction's commercial value. It is not a tax filing, payment receipt or general-ledger entry. Credit notes and invoice amendments are not yet available.</p></div></div>
+<div class="notice"><span>●</span><div>
+@if($invoice->posting_status==='posted')
+<strong>Commercial invoice recognised by reviewed journal posting</strong>
+<p>The financial recognition workflow has posted an approved journal. This is not evidence of customer payment, bank reconciliation, tax compliance or receipt settlement.</p>
+@else
+<strong>Financial posting pending</strong>
+<p>This commercial invoice is not yet recognised in the ledger. Record shipment dispatch and submit the transaction for independent finance approval.</p>
+@endif
+@if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.view'))<p><a class="action-link" href="{{ route('finance.index') }}">Finance and trial balance</a></p>@endif
+<p>Credit notes, corrections, revenue adjustments and statutory review are not yet available.</p>
+</div></div>
 @endsection

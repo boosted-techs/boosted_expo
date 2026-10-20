@@ -19,6 +19,7 @@ class InvoiceAccountingHandoffController extends Controller
             ->latest()->paginate(30);
         $byCurrency=[];
         foreach(InvoiceAccountingHandoff::query()->where('business_id',$b)
+            ->where('posting_status','awaiting_accounting_policy')
             ->select(['currency','commercial_amount'])->cursor() as $entry) {
             $byCurrency[$entry->currency]=($byCurrency[$entry->currency]??BigDecimal::zero())
                 ->plus((string)$entry->commercial_amount);

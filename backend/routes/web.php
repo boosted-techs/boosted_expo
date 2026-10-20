@@ -29,6 +29,7 @@ use App\Http\Controllers\SalesQuotationController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\CommercialInvoiceController;
 use App\Http\Controllers\InvoiceAccountingHandoffController;
+use App\Http\Controllers\FinanceController;
 use App\Support\BusinessPermissions;
 use Illuminate\Support\Facades\Route;
 
@@ -57,6 +58,31 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('business')->group(function () {
+        // Finance requests, independent approval and immutable balanced postings.
+        Route::get('/finance', [FinanceController::class,'dashboard'])->name('finance.index');
+        Route::post('/finance/setup', [FinanceController::class,'setup'])->name('finance.setup');
+        Route::get('/finance/rates', [FinanceController::class,'rates'])->name('finance.rates');
+        Route::post('/finance/rates', [FinanceController::class,'proposeRate'])->name('finance.rates.propose');
+        Route::post('/finance/rates/{rate}/approve', [FinanceController::class,'approveRate'])
+            ->whereNumber('rate')->name('finance.rates.approve');
+        Route::get('/finance/documents', [FinanceController::class,'documents'])->name('finance.documents');
+        Route::post('/finance/bills/purchase/{purchase}', [FinanceController::class,'bill'])
+            ->whereNumber('purchase')->name('finance.bills.store');
+        Route::post('/finance/payments', [FinanceController::class,'payment'])->name('finance.payments.store');
+        Route::post('/finance/shipment-costs', [FinanceController::class,'cost'])->name('finance.costs.store');
+        Route::get('/finance/reviews', [FinanceController::class,'reviews'])->name('finance.reviews');
+        Route::post('/finance/reviews/{type}/{source}', [FinanceController::class,'requestPosting'])
+            ->whereNumber('source')->name('finance.reviews.request');
+        Route::post('/finance/reviews/{review}/approve', [FinanceController::class,'approvePosting'])
+            ->whereNumber('review')->name('finance.reviews.approve');
+        Route::post('/finance/reviews/{review}/reject', [FinanceController::class,'rejectPosting'])
+            ->whereNumber('review')->name('finance.reviews.reject');
+        Route::post('/finance/reviews/{review}/post', [FinanceController::class,'post'])
+            ->whereNumber('review')->name('finance.reviews.post');
+        Route::get('/finance/shipments/{shipment}/contribution', [FinanceController::class,'contribution'])
+            ->whereNumber('shipment')->name('finance.contribution');
+        Route::get('/finance/journals/{journal}', [FinanceController::class,'journal'])
+            ->whereNumber('journal')->name('finance.journal');
         Route::get('/sales-requests', [SalesRequestController::class,'index'])->name('sales-requests.index');
         Route::get('/sales-requests/new', [SalesRequestController::class,'create'])->name('sales-requests.create');
         Route::post('/sales-requests', [SalesRequestController::class,'store'])->name('sales-requests.store');

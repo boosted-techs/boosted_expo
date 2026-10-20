@@ -229,3 +229,108 @@ To test the entire project from backend:
     php artisan migrate:status
 
 This pass is local only; it has **not** been pushed or deployed.
+
+## Financial control, ledger and shipment contribution — October 2026
+
+This phase adds a conservative, business-isolated first-release accounting
+workflow. It is **not** a fully audited accounting, bank-feed or tax compliance
+system, and it is not safe to use as the only financial book until acceptance
+testing, production database concurrency tests and policy review are complete.
+
+### Finance setup and rates
+
+- Business owners/admins activate a company-specific standard chart. Accounts:
+  cash, bank/electronic, trade receivables, inventory, payables, sales tax,
+  export sales, COGS (reserved; not automatically posted), shipment expenses
+  and realised foreign-exchange gains/losses.
+- The company's existing `base_currency` determines reporting currency.
+- Accountants record dated manual FX rates with a source note; a different
+  authorised owner/admin must approve each rate. Approved rates are immutable.
+  There is **no live market rate feed** and no arbitrary default for foreign
+  currencies. Each journal preserves its approved historical conversion rate.
+- Chart balances are summed from immutable, double-entry journal lines using
+  decimal arithmetic. Journal amounts balance in **both source currency and
+  company base currency**.
+
+### Financial source documents
+
+- Supplier bills: prepare after a purchase order is fully received. One bill
+  per order is calculated from actual *accepted* produce quantity times that
+  PO's unit price, not from rejected produce or the estimated original total.
+  Supplier-document reference and date are recorded. Partial supplier-billing,
+  bill amendments, taxes, advance payments and supplier returns are future work.
+- Customer receipts: allocate partial or full manual receipts in the original
+  posted commercial invoice currency; pending payments reserve the remaining
+  balance, preventing duplicate allocation. External reference is mandatory.
+- Supplier payments: the same controls apply to approved, posted supplier bills.
+  Cash and bank/electronic accounts are selectable.
+- Shipment expenses: record freight, packing material, ground transport,
+  handling, airline, inspection or miscellaneous *paid* costs with a document
+  reference and selected cash/bank account. Expense evidence is **not** verified
+  by a bank/payment provider.
+
+All new source records stay pending/unposted until independent approval.
+
+### Three-step posting and audit
+
+1. Accountant or authorised staff proposes the source transaction, journal
+   date, exact approved FX rate and explanatory evidence.
+2. A **different** authorised reviewer approves or rejects it, with reasons.
+3. An authorised poster **other than the approver** posts balanced debit/credit
+   lines transactionally and locks the source against reposting. All actions
+   are recorded in an immutable-sequence approval event log. There are no
+   arbitrary direct journal-edit endpoints in this release.
+
+A revenue-recognition proposal requires the shipment to have a manually
+recorded dispatched/delivered status. The reviewer must still independently
+check the Incoterm, transfer evidence and company's accounting policy; the
+shipment status is **not** independently verified by the carrier. Invoices
+are **not** automatically recognised on issuance. Income is posted as trade
+receivables vs export sales and separately records manually calculated invoice
+tax as a liability. Freight/insurance billed to customers are included in the
+initial export-sales account; category-specific revenue separation is planned.
+
+Supplier bills post inventory vs trade payables. A customer receipt settles
+receivables against cash/bank; a supplier payment settles payables against
+cash/bank. When invoice/bill and payment posting rates differ, realised FX
+gain/loss is recorded as base-currency-only balancing journal lines. Exact
+decimal amounts are used, and the final partial payment consumes any remaining
+base-currency rounding difference. Posted entries cannot be edited/deleted
+through the application. **Reversals and controlled correction workflows are
+still pending**, so this is not yet a production accounting system.
+
+### Shipment contribution
+
+Under an individual shipment, **Shipment contribution estimate** shows:
+- Posted export-sales revenue converted to base currency.
+- Packed carton contents traced to the accepted goods receipt and supplier
+  purchase order. Cost is estimated from consumed quantities and the unit
+  price of posted supplier bills at their locked FX rates.
+- Separately posted direct shipment expenses at locked rates.
+- A provisional contribution only if all known inputs are posted and traceable.
+
+Missing invoices, unposted costs, unmatched source batches or unpaid/billed
+produce are flagged rather than silently assigning zero cost. The estimate
+excludes sorting waste reallocation, stock costing/COGS journal entries,
+payroll, overheads and other costs. **It is not an audited P&L, tax result,
+cash-flow result or recognised margin.** Recording expenses and receipts
+does not verify payment settlement; bank reconciliation is still pending.
+
+### Known next steps
+
+Actual bank/mobile-money reconciliation, opening balances, transaction imports,
+partial supplier bills, credit notes/reversals, cost of goods sold and stock
+valuation entries, wastage costing, journal adjustments, company-defined
+accounting/recognition policies, approval matrix configuration, tax compliance,
+fiscal periods/closing, budget control, foreign account revaluation, cash
+advances, expenses reimbursement and reviewed P&L/balance sheet reports.
+
+Migration `2026_10_20_000014_create_finance_ledgers` is additive only.
+The current pass runs locally and was **not** pushed or deployed. After review:
+
+    cd /opt/homebrew/var/www/boosted_expo/backend
+    php artisan migrate
+    php artisan view:cache
+    php artisan test
+
+No migrations were reset and no real-money transactions were initiated.

@@ -17,6 +17,7 @@
       ['Customer quotations','sales-requests.index','sales.view'],
       ['Confirmed orders','sales-orders.index','sales.orders.view'],
       ['Commercial invoices','commercial-invoices.index','invoices.view'],
+      ['Finance & ledger','finance.index','finance.view'],
       ['Suppliers','suppliers.index','suppliers.view'],
       ['Purchases','purchases.index','purchases.view'],
       ['Receive produce','receiving.index','receipts.view'],
@@ -41,7 +42,7 @@
       'purchasing' => [['Market purchases','Record market buying and sourcing costs'],['Walk-in suppliers','Record purchases without a supplier account'],['Supply requests','Collect quotations and select suppliers']],
       'operations' => [['Goods receiving','Record accepted and rejected incoming produce'],['Stock batches','Trace available produce and farmer origins'],['Packing jobs','Record grades, cartons and sorting losses']],
       'exports' => [['Shipment planning','Allocate completed cartons without double booking'],['Packing lists','Issue configurable buyer packing lists and dispatch notes'],['Dispatch tracking','Track flights, AWB numbers and manual milestones']],
-      'finance' => [['Business accounts','General ledger, receivables and payables'],['Multiple currencies','Amounts and reporting currencies'],['Shipment profit','Allocate costs by shipment']],
+      'finance' => [['Business accounts','Balanced journals, company chart and posting approvals'],['Multiple currencies','Approved historical conversion rates and foreign-exchange differences'],['Shipment contribution','Documented costs and provisional margin analysis']],
       'staff' => [['Attendance','Record attendance and work shifts'],['Remuneration','Daily, monthly and piece-rate wages'],['Payroll','Approve and account for earnings']],
       'templates' => [['Sticker templates','Generate Zebra ZPL with selectable fields and shipment details'],['Product, batch & carton QR','Selectable scannable identities with visibility controls'],['Business documents','Configure packing-list columns and print PDF documents']],
       'settings' => [['Company profile','Locations, warehouses and business identity'],['Approvals','Configurable approval rules'],['Integrations','R2 storage, push and offline settings']],
@@ -59,6 +60,12 @@
         ['Packing jobs','packing.index','packing.view'],
         ['Packed cartons','cartons.index','cartons.view'],
       ],
+      'finance' => [
+        ['Finance dashboard','finance.index','finance.view'],
+        ['Supplier bills, payments and shipment costs','finance.documents','finance.documents.view'],
+        ['Approvals and posting queue','finance.reviews','finance.reviews.view'],
+        ['Exchange rates','finance.rates','finance.rates.view'],
+      ],
       'exports' => [
         ['Export shipments','shipments.index','shipments.view'],
         ['Packing lists and dispatch notes','export-documents.index','documents.view'],
@@ -72,7 +79,8 @@
     ][$section] ?? [];
     $workingCards = [
       'sales'=>[0,1,2],'purchasing'=>[0,1,2],
-      'operations'=>[0,1,2],'exports'=>[0,1,2],'templates'=>[0,1,2],
+      'operations'=>[0,1,2],'exports'=>[0,1,2],
+      'finance'=>[0,1],'templates'=>[0,1,2],
     ][$section] ?? [];
   @endphp
   @if(count($workingLinks))

@@ -43,6 +43,9 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'invoices.view'))
     <a href="{{ route('commercial-invoices.index') }}" class="{{ request()->routeIs('commercial-invoices.*')?'active':'' }}"><span class="nav-dot"></span>Commercial Invoices</a>
     @endif
+    @if($access->allows($membership, 'finance.view'))
+    <a href="{{ route('finance.index') }}" class="{{ request()->routeIs('finance.*')?'active':'' }}"><span class="nav-dot"></span>Finance & Ledger</a>
+    @endif
     @if($access->allows($membership, 'finance.handoff.view'))
     <a href="{{ route('invoice-accounting-handoff.index') }}" class="{{ request()->routeIs('invoice-accounting-handoff.*')?'active':'' }}"><span class="nav-dot"></span>Invoice Finance Handoff</a>
     @endif

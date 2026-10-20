@@ -1,0 +1,84 @@
+@extends('layouts.console')
+@section('title','Finance Posting Reviews')
+@section('content')
+<div class="page-intro"><div><span class="eyebrow">FINANCIAL APPROVALS</span><h1>Review and post transactions</h1><p>Check source documents, exchange-rate evidence and business-event dates before approving their double-entry journals.</p></div></div>
+<div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.index') }}">Trial balance</a><a class="secondary-button" href="{{ route('finance.documents') }}">Source documents</a><a class="secondary-button" href="{{ route('finance.rates') }}">Approved exchange rates</a></div>
+<div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>The person proposing a posting cannot approve it; the approver cannot post it. Posted journals cannot be edited. An invoice may only be proposed for revenue recognition after shipment dispatch is recorded, and the reviewer must assess the agreed terms and transfer evidence. For foreign currencies, select an approved historical rate effective no later than the posting date.</p></div></div>
+@if($canSubmit)
+<section class="section-card"><h2>Source documents awaiting finance posting</h2>
+<p class="muted">Submitting a document here does not affect the ledger. Enter a meaningful audit explanation and, where applicable, the exact approved exchange rate.</p>
+@php $sourceSections=[
+ ['type'=>'commercial_invoice','name'=>'Commercial invoices (revenue recognition)','rows'=>$invoices],
+ ['type'=>'supplier_bill','name'=>'Supplier bills (accepted produce and payables)','rows'=>$bills],
+ ['type'=>'payment','name'=>'Recorded customer and supplier payments','rows'=>$payments],
+ ['type'=>'shipment_cost','name'=>'Recorded paid shipment costs','rows'=>$costs],
+ ]; @endphp
+@foreach($sourceSections as $section)
+<h3 style="margin-top:24px">{{ $section['name'] }}</h3>
+@forelse($section['rows'] as $source)
+@php
+ $id=$section['type'].':'.$source->id;
+ $currency=$source->currency;
+ $amount=match($section['type']){
+  'commercial_invoice'=>$source->grand_total,
+  'supplier_bill'=>$source->total,
+  default=>$source->amount,
+ };
+ $eligible=$section['type']!=='commercial_invoice' ||
+  in_array($source->shipment?->status,['dispatched','delivered'],true);
+@endphp
+<details class="finance-details">
+<summary><strong>{{ $source->reference }}</strong> · {{ $currency }} {{ $amount }} ·
+@if($eligible && !in_array($id,$hasPending)) Ready for submission
+@elseif(!$eligible) Awaiting recorded dispatch
+@else Review already submitted @endif</summary>
+@if($eligible && !in_array($id,$hasPending))
+<form method="POST" action="{{ route('finance.reviews.request',['type'=>$section['type'],'source'=>$source->id]) }}" class="form-stack">@csrf
+<label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ now()->format('Y-m-d') }}" required max="{{ now()->format('Y-m-d') }}"></label>
+@if($currency!==$business->base_currency)
+<label class="field"><span>Approved conversion rate for {{ $currency }} → {{ $business->base_currency }}</span>
+<select name="exchange_rate_id" required><option value="">Choose a locked historical rate</option>
+@foreach($rates as $rate)@if($rate->currency===$currency)
+<option value="{{ $rate->id }}">{{ $rate->effective_on->format('d M Y') }} · 1 {{ $currency }} = {{ $rate->rate_to_base }} {{ $business->base_currency }} · {{ $rate->source_note }}</option>
+@endif @endforeach
+</select></label>
+@else<p class="form-hint">The business base currency uses an automatic rate of 1.</p>@endif
+<label class="field"><span>{{ $section['type']==='commercial_invoice' ? 'Evidence for recognising revenue (mandatory)' : 'Supporting documents and accounting basis (mandatory)' }}</span>
+<textarea name="basis_notes" required minlength="20" maxlength="3000" rows="3" placeholder="State the document, date, agreement, reference and the business reason for posting."></textarea></label>
+<button class="primary-button">Submit for independent approval</button></form>
+@else
+<p class="form-hint">{{ $eligible ? 'Check the approval register below. Rejected reviews may be resubmitted when the source is still eligible.' : 'Finance cannot recognise revenue from a shipment still being prepared. Dispatch must be recorded and transfer evidence reviewed.' }}</p>
+@endif
+</details>
+@empty<p class="empty-msg">No outstanding documents in this category.</p>@endforelse
+@endforeach
+</section>
+@endif
+<section class="section-card"><h2>Posting review register</h2>
+<div class="table-wrap"><table class="data-table"><thead><tr><th>Type</th><th>Document</th><th>Posting date</th><th>Status</th><th>Exchange rate</th><th>Evidence</th><th>Controls</th></tr></thead><tbody>
+@forelse($requests as $review)
+<tr><td>{{ ucwords(str_replace('_',' ',$review->source_type)) }}</td><td>#{{ $review->source_id }}</td><td>{{ $review->posting_on->format('d M Y') }}</td>
+<td><span class="tiny-pill">{{ ucfirst($review->status) }}</span></td>
+<td>{{ $review->exchangeRate ? ($review->exchangeRate->currency.' @ '.$review->exchangeRate->rate_to_base) : 'Base currency' }}</td>
+<td><small>{{ $review->basis_notes }}</small></td>
+<td>
+@if($review->status==='pending' && $canApprove && $review->requested_by!==auth()->id())
+<form method="POST" action="{{ route('finance.reviews.approve',$review->id) }}" class="form-stack" style="min-width:175px">@csrf
+<input name="notes" maxlength="2000" minlength="10" required placeholder="Reviewer evidence / decision">
+<button class="secondary-button">Approve review</button></form>
+<form method="POST" action="{{ route('finance.reviews.reject',$review->id) }}" class="form-stack" style="margin-top:6px">@csrf
+<input name="notes" maxlength="2000" minlength="10" required placeholder="Reason for rejection">
+<button class="text-button">Reject</button></form>
+@elseif($review->status==='approved' && $canPost && $review->approved_by!==auth()->id())
+<form method="POST" action="{{ route('finance.reviews.post',$review->id) }}"
+onsubmit="return confirm('Post this independently approved journal? Ledger postings cannot be edited.')">@csrf
+<button class="primary-button">Post journal</button></form>
+@elseif($review->status==='posted')
+<span class="form-hint">Posted — locked</span>
+@else<span class="form-hint">Awaiting another authorised person</span>
+@endif
+</td></tr>
+@empty<tr><td colspan="7" class="empty-msg">No finance posting reviews yet.</td></tr>@endforelse
+</tbody></table></div>{{ $requests->links() }}
+</section>
+@endsection

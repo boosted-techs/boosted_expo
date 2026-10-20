@@ -7,6 +7,8 @@
 <span class="tiny-pill">{{ strtoupper($shipment->status) }}</span></div>
 <div class="form-actions" style="margin-bottom:20px">
 <a class="secondary-button" href="{{ route('shipments.index') }}">All shipments</a>
+@if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.view'))
+<a class="secondary-button" href="{{ route('finance.contribution',$shipment->id) }}">Shipment contribution estimate</a>@endif
 @if($canManage && $shipment->status==='draft')
 <a class="secondary-button" href="{{ route('shipments.edit',$shipment->id) }}">Edit details</a>
 @endif
