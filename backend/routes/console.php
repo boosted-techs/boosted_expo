@@ -3,6 +3,18 @@
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schedule;
+
+// Schedules are opt-in until production Redis, encrypted backup key and an
+// external scheduler are configured. They never run in local development.
+if (config('expo_operations.backup_schedule') === true) {
+    Schedule::command('expo:backup')->dailyAt('02:20')
+        ->timezone('UTC')->onOneServer()->withoutOverlapping(180);
+}
+if (config('expo_operations.monitor_schedule') === true) {
+    Schedule::command('expo:monitor')->everyFiveMinutes()
+        ->onOneServer()->withoutOverlapping(10);
+}
 
 Artisan::command('expo:bootstrap-admin', function () {
     if (User::query()->where('is_platform_admin', true)->exists()) {

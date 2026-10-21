@@ -59,23 +59,8 @@
 </section>
 @if($canManage && in_array($job->status,['open','in_progress'],true))
 <section class="section-card"><h2>Finish packing</h2><p class="muted">Completing the job prevents further carton and sorting entries. Check all weights and losses first.</p>
-<form method="POST" action="{{ route('packing.complete',$job->id) }}" onsubmit="return confirm('Complete and lock this packing job?')">@csrf<button class="primary-button">Complete packing job</button></form></section>
+<form method="POST" action="{{ route('packing.complete',$job->id) }}" data-confirm="Complete and lock this packing job?">@csrf<button class="primary-button">Complete packing job</button></form></section>
 @endif
 @if($job->status==='completed')<div class="notice"><span>●</span><div><strong>Packing completed</strong><p>Recorded cartons remain available for the future export-allocation workflow. No shipment or payment has been created.</p></div></div>@endif
-<script>
-const addBatch = document.getElementById('more-batch');
-if(addBatch){
- let nextIndex=1;
- addBatch.addEventListener('click',()=>{
-   if(nextIndex>=10)return;
-   const target=document.getElementById('batch-lines');
-   const html=document.getElementById('batch-line-template').innerHTML.replaceAll('__INDEX__',String(nextIndex++));
-   target.insertAdjacentHTML('beforeend',html);
-   if(nextIndex>=10)addBatch.disabled=true;
- });
- document.getElementById('batch-lines').addEventListener('click',e=>{
-   if(e.target.classList.contains('remove-batch'))e.target.closest('.batch-line')?.remove();
- });
-}
-</script>
+<script src="/assets/packing-ui.js.js" defer></script>
 @endsection

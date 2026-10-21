@@ -1,0 +1,19 @@
+; Production queue worker. Configure restart-on-deploy with php artisan queue:restart.
+; App runtime user must have access only to the required application
+; private storage and its own logs. Never run as root.
+[program:boosted-export-erp-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=/usr/bin/php /srv/boosted-export-erp/backend/artisan queue:work redis --queue=default --sleep=2 --tries=3 --backoff=5 --timeout=60 --max-time=3600
+directory=/srv/boosted-export-erp/backend
+user=www-data
+numprocs=2
+autostart=true
+autorestart=true
+startsecs=4
+stopwaitsecs=90
+redirect_stderr=true
+stdout_logfile=/var/log/boosted-export-erp/queue-worker.log
+stdout_logfile_maxbytes=25MB
+stdout_logfile_backups=5
+stopasgroup=true
+killasgroup=true

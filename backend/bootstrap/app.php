@@ -2,6 +2,9 @@
 
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\ResolveActiveBusiness;
+use App\Http\Middleware\ProductionSecurity;
+use App\Http\Middleware\TrustConfiguredProxies;
+use App\Http\Middleware\RequirePrivilegedMfa;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,6 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/workspace');
+        $middleware->web(
+            prepend: [TrustConfiguredProxies::class],
+            append: [ProductionSecurity::class, RequirePrivilegedMfa::class],
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

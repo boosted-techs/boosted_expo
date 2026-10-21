@@ -775,3 +775,18 @@ Accounting Controls > Accounting Periods provides a separately approved reopenin
     php artisan route:list --path=finance
 
 Everything in this phase is local only. No commit or push, production deployment, actual bank transfer, customer refund, payroll disbursement, forex order or tax remittance was initiated.
+
+
+## Phase 1 — Security and production infrastructure engineering (21 October 2026)
+
+Phase 1 implementation is complete for the features that can be developed locally. The runbook is at deploy/PHASE1_PRODUCTION_RUNBOOK.md and Nginx/Supervisor example configuration is under deploy/nginx and deploy/supervisor.
+
+- Production HTTPS, strict trusted reverse-proxy allowlist, restrictive script CSP, HSTS and defensive browser/session headers.
+- Privileged authenticator-based MFA in production (platform administration, business owners, admins, accountants, logistics), encrypted TOTP seed and single-use recovery codes. Local development sign-in remains unchanged.
+- PostgreSQL migration-order fix; all application migrations and the entire suite verified on a disposable PostgreSQL database, with the existing local SQLite data preserved.
+- Predis Redis client installed; private TLS PostgreSQL and Redis options, Redis cache/queue/session production templates.
+- Authenticated encrypted PostgreSQL/SQLite backups with integrity-checked staging restores, separate private offsite encrypted replication/read-back, operator runbook and recovery-only command. Live R2 object versions require separate provider configuration.
+- Opt-in CLI commands for production readiness, incident monitoring, encrypted backup and authorised email/R2 smoke tests; example queue worker and scheduled maintenance.
+- Composer/npm dependency audits and reproducible frontend dependency lockfile.
+
+**Release remains gated.** The current Mac environment is local/debug/SQLite with log-only mail and no real R2/offsite/provider credentials. Provision production DNS/HTTPS host, dedicated database, private Redis, real SMTP, private R2 and offsite disaster-recovery bucket, incident monitoring and backup-key escrow. Complete a rehearsal of existing SQLite-to-PostgreSQL DATA migration, real provider smoke tests, load/concurrency testing, independent penetration testing and financial acceptance. The production preflight deliberately refuses the local environment. No secret, live bank integration, real transfer, Git commit/push or production deployment was performed.

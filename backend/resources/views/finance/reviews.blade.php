@@ -103,7 +103,7 @@
 <button class="text-button">Reject</button></form>
 @elseif($review->status==='approved' && $canPost && $review->approved_by!==auth()->id())
 <form method="POST" action="{{ route('finance.reviews.post',$review->id) }}"
-onsubmit="return confirm('Post this independently approved journal? Ledger postings cannot be edited.')">@csrf
+data-confirm="Post this independently approved journal? Ledger postings cannot be edited.">@csrf
 <button class="primary-button">Post journal</button></form>
 @elseif($review->status==='posted')
 <span class="form-hint">Posted — locked</span>

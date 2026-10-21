@@ -12,7 +12,7 @@
 <details class="finance-details"><summary><strong>{{ $invoice->reference }}</strong> · {{ $invoice->customer->name }} · {{ $invoice->currency }} {{ $invoice->grand_total }}</summary>
 <form method="POST" action="{{ route('finance.credits.prepare',$invoice->id) }}" class="form-stack">@csrf
 <label class="field"><span>Detailed correction reason</span><textarea name="reason" rows="3" required minlength="20" maxlength="3000" placeholder="Explain why the full invoice must be credited and reference the buyer authorisation or error."></textarea></label>
-<button class="secondary-button" onclick="return confirm('Prepare a FULL credit correction for this invoice? This does not refund any money.')">Prepare full credit note</button></form></details>
+<button class="secondary-button" data-confirm="Prepare a FULL credit correction for this invoice? This does not refund any money.">Prepare full credit note</button></form></details>
 @endforeach
 </section>
 @endif

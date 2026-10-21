@@ -60,6 +60,21 @@ return [
             'report' => false,
         ],
 
+        // Separately credentialed PRIVATE, OFF-HOST disaster-recovery archive.
+        // Backups are already encrypted before upload and checked after download.
+        'expo_backup_offsite' => [
+            'driver' => 's3',
+            'key' => env('EXPO_BACKUP_OFFSITE_ACCESS_KEY_ID'),
+            'secret' => env('EXPO_BACKUP_OFFSITE_SECRET_ACCESS_KEY'),
+            'region' => 'auto',
+            'bucket' => env('EXPO_BACKUP_OFFSITE_BUCKET'),
+            'endpoint' => env('EXPO_BACKUP_OFFSITE_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'throw' => true,
+            'report' => true,
+            'visibility' => 'private',
+        ],
+
         // Cloudflare R2 private object storage. Supply credentials through environment variables.
         'r2' => [
             'driver' => 's3',

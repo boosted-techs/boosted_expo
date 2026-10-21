@@ -7,7 +7,7 @@
 <title>@yield('title', 'Overview') · Boosted Export ERP</title>
 <link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
 <link rel="manifest" href="/manifest.webmanifest">
-<script>try{document.documentElement.dataset.theme=localStorage.getItem('expo-theme')==='dark'?'dark':'light'}catch(e){}</script>
+<script src="/assets/theme-init.js.js"></script>
 </head>
 <body>
 @php
@@ -126,7 +126,7 @@ $sections = config('expo.sections');
   <button class="mobile-menu" id="menu-btn" aria-label="Open navigation" aria-expanded="false">☰</button>
   <div class="crumb">Boosted Export <span>/</span> <strong>@yield('title', 'Overview')</strong></div>
   <div class="top-actions">
-    <span class="preview-pill">Development</span>
+    @if(config('app.env')!=='production')<span class="preview-pill">Development</span>@endif
     <button id="theme-btn" class="icon-button" aria-label="Toggle light and dark theme" title="Change theme">◐</button>
     <span class="username">{{ auth()->user()->name }}</span>
     <form method="POST" action="{{ route('logout') }}">@csrf<button class="signout" type="submit">Sign out</button></form>
@@ -136,17 +136,9 @@ $sections = config('expo.sections');
   @if(session('status'))<div class="flash success" role="status">{{ session('status') }}</div>@endif
   @if($errors->any())<div class="flash error" role="alert"><strong>Some details need attention.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
   @yield('content')
-  <footer class="foot">Boosted Technologies · Export ERP development workspace</footer>
+  <footer class="foot">Boosted Technologies · Export operations</footer>
 </main>
 </div></div>
 <div class="scrim" id="scrim" hidden></div>
-<script>
-const themeButton=document.getElementById('theme-btn');
-themeButton?.addEventListener('click',()=>{const v=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=v;try{localStorage.setItem('expo-theme',v)}catch(e){}});
-const side=document.getElementById('sidebar'),screen=document.getElementById('scrim'),menu=document.getElementById('menu-btn');
-function showMenu(open){side.classList.toggle('open',open);screen.hidden=!open;menu.setAttribute('aria-expanded',String(open))}
-menu.addEventListener('click',()=>showMenu(!side.classList.contains('open')));
-screen.addEventListener('click',()=>showMenu(false));
-document.addEventListener('keydown',e=>{if(e.key==='Escape')showMenu(false)});
-</script>
+<script src="/assets/console-ui.js.js" defer></script>
 </body></html>

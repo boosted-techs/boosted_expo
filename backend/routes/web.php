@@ -10,6 +10,7 @@ use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\ProductQrController;
 use App\Http\Controllers\PublicQrController;
 use App\Http\Controllers\SessionController;
+use App\Http\Controllers\MfaController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\SupplierController;
@@ -50,13 +51,26 @@ Route::post('/supplier-offer/{token}', [SupplierReplyController::class, 'store']
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [SessionController::class, 'create'])->name('login');
-    Route::post('/login', [SessionController::class, 'store'])->name('login.store');
+    Route::post('/login', [SessionController::class, 'store'])
+        ->middleware('throttle:12,1')->name('login.store');
 });
 Route::get('/invite/{token}', [InvitationController::class, 'show'])->name('invitations.show');
 Route::post('/invite/{token}', [InvitationController::class, 'accept'])
     ->middleware('throttle:10,1')->name('invitations.accept');
 
 Route::middleware('auth')->group(function () {
+    // Privileged staff must enrol and verify a second factor before any
+    // production workspace, financial or platform business action.
+    Route::get('/security/mfa/setup',[MfaController::class,'setup'])
+        ->name('security.mfa.setup');
+    Route::post('/security/mfa/setup',[MfaController::class,'enrol'])
+        ->middleware('throttle:6,1')->name('security.mfa.enrol');
+    Route::get('/security/mfa/challenge',[MfaController::class,'challenge'])
+        ->name('security.mfa.challenge');
+    Route::post('/security/mfa/challenge',[MfaController::class,'verify'])
+        ->middleware('throttle:8,1')->name('security.mfa.verify');
+    Route::get('/security/mfa/recovery-codes',[MfaController::class,'recovery'])
+        ->name('security.mfa.recovery');
     Route::post('/logout', [SessionController::class, 'destroy'])->name('logout');
     Route::get('/choose-business', [BusinessSelectionController::class, 'index'])->name('businesses.choose');
     Route::post('/choose-business', [BusinessSelectionController::class, 'store'])->name('businesses.activate');

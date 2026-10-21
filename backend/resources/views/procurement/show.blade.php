@@ -36,7 +36,7 @@
 @forelse($rfq->quotes as $offer)
 <tr><td><strong>{{ $offer->supplier->name }}</strong></td><td>{{ $offer->quantity }} {{ $rfq->product->base_unit }}</td><td>{{ $rfq->currency }} {{ $offer->unit_price }}</td><td>{{ $offer->delivery_on?->format('d M Y') ?: '—' }}</td><td>{{ $offer->revision }}</td><td>{{ ucfirst($offer->status) }}</td><td>
 @if($canAward && $rfq->status==='sent')
-<form method="POST" action="{{ route('supply-requests.award',['rfq'=>$rfq->id,'quote'=>$offer->id]) }}" onsubmit="return confirm('Select this supplier and create a purchase order?')">@csrf<button class="secondary-button" type="submit">Select offer</button></form>
+<form method="POST" action="{{ route('supply-requests.award',['rfq'=>$rfq->id,'quote'=>$offer->id]) }}" data-confirm="Select this supplier and create a purchase order?">@csrf<button class="secondary-button" type="submit">Select offer</button></form>
 @else — @endif</td></tr>
 @if($offer->revisions->count()>1)<tr><td colspan="7"><details><summary>View {{ $offer->revisions->count() }} revisions</summary>@foreach($offer->revisions->sortBy('revision') as $revision)<p class="form-hint">Revision {{ $revision->revision }}: {{ $revision->quantity }} × {{ $rfq->currency }} {{ $revision->unit_price }} · {{ $revision->submitted_via }} · {{ $revision->created_at }}</p>@endforeach</details></td></tr>@endif
 @empty<tr><td colspan="7" class="empty-msg">No quotations received yet.</td></tr>@endforelse

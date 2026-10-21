@@ -32,10 +32,4 @@
 </div></div>
 <p class="form-hint">Documents retain a full snapshot of the selected carton data and template settings when issued. Later changes to templates do not alter previously issued paperwork.</p>
 </div>
-<script>
-(function(){
- const type=document.getElementById('doc-type'), columns=document.getElementById('packing-columns');
- const apply=()=>{columns.hidden=type.value!=='packing_list';};
- if(type&&columns){type.addEventListener('change',apply);apply();}
-})();
-</script>
+<script src="/assets/document-template-ui.js.js" defer></script>

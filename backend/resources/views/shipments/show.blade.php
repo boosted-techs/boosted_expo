@@ -54,7 +54,7 @@
 <td>{{ $carton->packingJob?->product?->name ?: '—' }}</td><td>{{ $carton->net_weight_kg }} kg</td><td>{{ $carton->gross_weight_kg }} kg</td>
 <td>{{ $carton->grade ?: '—' }}</td><td>{{ $carton->contents->pluck('batch.batch_code')->filter()->implode(', ') }}</td>
 <td>@if($canManage && $shipment->status==='draft')
-<form method="POST" action="{{ route('shipments.release',['shipment'=>$shipment->id,'carton'=>$carton->id]) }}" onsubmit="return confirm('Return this carton to unallocated packed stock?')">@csrf @method('DELETE')
+<form method="POST" action="{{ route('shipments.release',['shipment'=>$shipment->id,'carton'=>$carton->id]) }}" data-confirm="Return this carton to unallocated packed stock?">@csrf @method('DELETE')
 <button class="text-button">Release</button></form>
 @else<span class="tiny-pill">{{ ucfirst($carton->status) }}</span>@endif</td></tr>
 @empty<tr><td colspan="7" class="empty-msg">No cartons allocated. Complete a packing job, then select its cartons below.</td></tr>@endforelse
@@ -105,7 +105,7 @@
 @else<p class="muted">This shipment is cancelled. Historical documents and events remain available.</p>
 @endif
 @if($canManage && in_array($shipment->status,['draft','ready'],true))
-<form method="POST" action="{{ route('shipments.cancel',$shipment->id) }}" class="form-actions" style="margin-top:20px" onsubmit="return confirm('Cancel shipment and return reserved cartons to packed stock?')">@csrf
+<form method="POST" action="{{ route('shipments.cancel',$shipment->id) }}" class="form-actions" style="margin-top:20px" data-confirm="Cancel shipment and return reserved cartons to packed stock?">@csrf
 <input type="hidden" name="confirm_cancel" value="1">
 <button class="secondary-button" type="submit">Cancel shipment and release cartons</button></form>
 @endif
@@ -148,7 +148,7 @@
 <label class="field"><span>Insurance ({{ $shipment->salesOrder->currency }})</span><input name="insurance_amount" type="number" min="0" step=".01" required value="0.00"></label></div>
 <label class="field"><span>Additional invoice note (optional)</span><textarea name="notes" rows="2" maxlength="2000"></textarea></label>
 <div class="notice"><span>●</span><div><strong>Immutable after issuance</strong><p>Review the shipment, prices, tax rate and charges carefully. The invoice cannot be edited or reissued until the future controlled amendment workflow is implemented.</p></div></div>
-<button class="primary-button" onclick="return confirm('Issue the commercial invoice now? Its contents cannot be edited afterwards.')">Issue commercial invoice</button></form>
+<button class="primary-button" data-confirm="Issue the commercial invoice now? Its contents cannot be edited afterwards.">Issue commercial invoice</button></form>
 @else<p class="form-hint">Link a confirmed customer order and mark the shipment ready before issuing a commercial invoice.</p>
 @endif
 </section>
