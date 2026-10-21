@@ -15,12 +15,16 @@ use App\Models\FinancePayrollRun;
 use App\Models\FinancePayrollSettlement;
 use App\Models\FinancePayrollReversal;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinancePartialBankReturn;
+use App\Models\FinanceMonetaryRevaluation;
 use App\Models\FinanceForeignBankOpening;
+use App\Models\FinanceFxRevaluation;
 use App\Models\FinanceBankLedgerCheck;
 use App\Models\FinanceBankProfile;
 use App\Models\FinancePayment;
 use App\Models\FinancePeriod;
 use App\Models\FinancePeriodEvent;
+use App\Models\FinancePeriodReopenRequest;
 use App\Models\FinancePostingRequest;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
@@ -107,7 +111,10 @@ class FinancePeriodControls
             [FinancePayrollSettlement::class,'status','pending','paid_on'],
             [FinancePayrollReversal::class,'posting_status','not_posted','created_at'],
             [FinanceTransactionReversal::class,'posting_status','not_posted','created_at'],
+            [FinancePartialBankReturn::class,'posting_status','not_posted','created_at'],
+            [FinanceMonetaryRevaluation::class,'posting_status','not_posted','valued_on'],
             [FinanceForeignBankOpening::class,'posting_status','not_posted','effective_on'],
+            [FinanceFxRevaluation::class,'posting_status','not_posted','valued_on'],
             [FinanceBalanceAdjustment::class,'posting_status','not_posted','created_at'],
             [FinanceOpeningBalance::class,'posting_status','not_posted','effective_on'],
         ];
@@ -147,6 +154,104 @@ class FinancePeriodControls
                 }
             }
         }
+    }
+
+    private function assertLatestClosure(FinancePeriod $period):void
+    {
+        if(FinancePeriod::query()->where('business_id',$period->business_id)
+            ->where('id','!=',$period->id)
+            ->whereDate('period_from','>',$period->period_to->toDateString())
+            ->whereIn('status',['pending','closed'])->exists()) {
+            throw ValidationException::withMessages(['period'=>
+                'Reopen later closed or closing periods first, from the most recent backwards. A past close cannot be amended while later periods remain locked.']);
+        }
+    }
+
+    public function requestReopen(FinancePeriod $period,int $actor,array $data):FinancePeriodReopenRequest
+    {
+        return DB::transaction(function()use($period,$actor,$data){
+            $business=Business::query()->whereKey($period->business_id)
+                ->lockForUpdate()->firstOrFail();
+            $period=FinancePeriod::query()->where('business_id',$business->id)
+                ->lockForUpdate()->findOrFail($period->id);
+            abort_unless($period->status==='closed' && $period->closed_at
+                && $period->close_hash && is_array($period->close_snapshot),422,
+                'Only a formally closed financial period with its original close evidence may be reopened.');
+            $this->assertLatestClosure($period);
+            if(FinancePeriodReopenRequest::query()->where('business_id',$business->id)
+                ->where('period_id',$period->id)->where('status','pending')->exists()) {
+                throw ValidationException::withMessages(['period'=>
+                    'A separate reviewer has already been asked to consider reopening this period.']);
+            }
+            $sourceHash=hash('sha256',json_encode($period->close_snapshot,JSON_THROW_ON_ERROR));
+            abort_unless(hash_equals($period->close_hash,$sourceHash),422,
+                'The original closed financial evidence changed unexpectedly.');
+            $case=FinancePeriodReopenRequest::create([
+                'business_id'=>$business->id,'period_id'=>$period->id,
+                'status'=>'pending','reason'=>$data['reason'],
+                'materiality_assessment'=>$data['materiality_assessment'],
+                'external_evidence'=>$data['external_evidence'],
+                'original_close_snapshot'=>$period->close_snapshot,
+                'original_close_hash'=>$period->close_hash,
+                'original_closed_at'=>$period->closed_at,
+                'requested_by'=>$actor,
+            ]);
+            $this->event($period,$actor,'reopening_requested',
+                $data['reason'].'; materiality: '.$data['materiality_assessment'],[
+                    'reopen_request_id'=>$case->id,
+                    'original_close_hash'=>$period->close_hash,
+                    'original_closed_at'=>$period->closed_at->toIso8601String(),
+                    'external_evidence'=>$data['external_evidence'],
+                ]);
+            return $case;
+        },3);
+    }
+
+    public function reviewReopen(FinancePeriodReopenRequest $case,bool $approve,
+        int $actor,string $notes):FinancePeriodReopenRequest
+    {
+        return DB::transaction(function()use($case,$approve,$actor,$notes){
+            $business=Business::query()->whereKey($case->business_id)
+                ->lockForUpdate()->firstOrFail();
+            $case=FinancePeriodReopenRequest::query()->where('business_id',$business->id)
+                ->lockForUpdate()->findOrFail($case->id);
+            abort_unless($case->status==='pending',422,
+                'This reopening request is no longer pending.');
+            abort_unless($case->requested_by!==$actor,422,
+                'An independent authorised owner or administrator must approve a period reopening.');
+            $period=FinancePeriod::query()->where('business_id',$business->id)
+                ->lockForUpdate()->findOrFail($case->period_id);
+            abort_unless($period->status==='closed'
+                && $period->close_hash===$case->original_close_hash
+                && $period->closed_at?->equalTo($case->original_closed_at)
+                && $period->close_snapshot==$case->original_close_snapshot
+                && hash('sha256',json_encode($case->original_close_snapshot,JSON_THROW_ON_ERROR))
+                    ===$case->original_close_hash,422,
+                'The frozen original closed financial evidence no longer agrees with this request.');
+            if($approve) $this->assertLatestClosure($period);
+            $case->update([
+                'status'=>$approve?'approved':'rejected',
+                'reviewed_by'=>$actor,'review_notes'=>$notes,'reviewed_at'=>now(),
+            ]);
+            if($approve) {
+                // Preserve the original close snapshot and its reviewer in
+                // immutable request/event history. The period can only close
+                // again through the normal independently reviewed workflow.
+                $period->update([
+                    'status'=>'open','requested_by'=>null,
+                    'reviewed_by'=>null,'closed_at'=>null,
+                ]);
+            }
+            $this->event($period,$actor,$approve?'reopened':'reopening_rejected',
+                $notes,[
+                    'reopen_request_id'=>$case->id,
+                    'original_close_hash'=>$case->original_close_hash,
+                    'original_closed_at'=>$case->original_closed_at->toIso8601String(),
+                    'reviewed_by'=>$actor,
+                    'approved'=>$approve,
+                ]);
+            return $case;
+        },3);
     }
 
     private function event(FinancePeriod $period,int $actor,string $action,

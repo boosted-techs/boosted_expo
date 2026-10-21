@@ -363,17 +363,17 @@ class FinanceInventoryCreditReportsTest extends TestCase
         $ctx=$this->context();
         $waste=app(FinanceSetup::class)->account($ctx['business']->id,'waste_loss');
         $waste->delete();
-        $this->assertDatabaseCount('finance_accounts',15);
+        $this->assertDatabaseCount('finance_accounts',17);
         $this->actingAs($ctx['owner'])->withSession([
             'active_business_id'=>$ctx['business']->id,
         ])->get(route('finance.index'))->assertOk()
             ->assertSee('Add missing finance accounts safely');
         $this->post(route('finance.setup'))->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertDatabaseCount('finance_accounts',16);
+        $this->assertDatabaseCount('finance_accounts',18);
         $this->assertSame(1,\App\Models\FinanceAccount::query()
             ->where('business_id',$ctx['business']->id)
             ->where('system_key','waste_loss')->count());
         $this->post(route('finance.setup'))->assertRedirect()->assertSessionHasNoErrors();
-        $this->assertDatabaseCount('finance_accounts',16);
+        $this->assertDatabaseCount('finance_accounts',18);
     }
 }

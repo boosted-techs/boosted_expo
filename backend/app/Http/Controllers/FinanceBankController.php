@@ -8,8 +8,11 @@ use App\Models\FinancePayment;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinancePayrollSettlement;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinancePartialBankReturn;
 use App\Models\FinanceBankLedgerCheck;
 use App\Services\FinanceBankLedgerProofs;
+use App\Services\FinanceBankAuthenticity;
+use App\Models\FinanceBankStatementAttestation;
 use App\Services\FinanceBankReconciliation;
 use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
@@ -88,6 +91,18 @@ class FinanceBankController extends Controller
             ->where('cash_account_id',$statement->account_id)
             ->where('posting_status','posted')->where('currency',$statement->currency)
             ->latest()->limit(250)->get();
+        $partials=FinancePartialBankReturn::query()
+            ->where('business_id',$statement->business_id)
+            ->where('cash_account_id',$statement->account_id)
+            ->where('posting_status','posted')->where('currency',$statement->currency)
+            ->latest()->limit(250)->get();
+        $bankAttestation=FinanceBankStatementAttestation::query()
+            ->where('business_id',$statement->business_id)
+            ->where('statement_id',$statement->id)->first();
+        $isBankAuthenticated=$bankAttestation
+            && app(FinanceBankAuthenticity::class)->current($statement);
+        $canUploadBankSignature=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'finance.bank.auth.verify');
         $ledgerCheck=FinanceBankLedgerCheck::query()->where('business_id',$statement->business_id)
             ->where('statement_id',$statement->id)->first();
         $isLedgerCheckCurrent=$ledgerCheck
@@ -106,8 +121,9 @@ class FinanceBankController extends Controller
             ->count();
         return view('finance.bank.show',compact(
             'statement','lines','canMatch','canReview','payments','costs','payrollSettlements',
-            'reversals','ledgerCheck','ledgerPreview','isLedgerCheckCurrent',
-            'canProofSubmit','canProofReview','matched'
+            'reversals','partials','ledgerCheck','ledgerPreview','isLedgerCheckCurrent',
+            'canProofSubmit','canProofReview','matched',
+            'bankAttestation','isBankAuthenticated','canUploadBankSignature'
         ));
     }
     public function propose(Request $request,int $statement,int $line,
@@ -116,7 +132,7 @@ class FinanceBankController extends Controller
         $this->check($request,'finance.bank.match');
         $statement=$this->own($request,$statement);
         $data=$request->validate([
-            'candidate'=>['required','regex:/^(payment|shipment_cost|payroll_settlement|transaction_reversal):[1-9][0-9]*$/D'],
+            'candidate'=>['required','regex:/^(payment|shipment_cost|payroll_settlement|transaction_reversal|partial_bank_return):[1-9][0-9]*$/D'],
             'note'=>['required','string','min:10','max:1000'],
         ]);
         [$type,$sourceId]=explode(':',$data['candidate'],2);
@@ -144,6 +160,23 @@ class FinanceBankController extends Controller
         $bank->review($match,false,$data['note'],$request->user()->id);
         return back()->with('status','Incorrect match rejected. The statement line can be proposed again.');
     }
+    public function authenticateEvidence(Request $request,int $statement,
+        FinanceBankAuthenticity $auth):RedirectResponse
+    {
+        $this->check($request,'finance.bank.auth.verify');
+        $data=$request->validate([
+            'signed_attestation'=>['required','file','max:64'],
+            'signature_base64'=>['required','string','min:44','max:8192'],
+        ]);
+        $statement=$this->own($request,$statement);
+        $raw=file_get_contents($request->file('signed_attestation')->getRealPath());
+        abort_unless(is_string($raw),422,'Unable to read signed statement evidence.');
+        $auth->verifyAndRecord($statement,$raw,$data['signature_base64'],
+            $request->user()->id);
+        return back()->with('status',
+            'Detached digital signature verified against the independently provisioned trusted bank public key. The imported statement and bank identity commitment match. This does not authenticate any other CSV or initiate a bank transfer.');
+    }
+
     public function proposeLedgerProof(Request $request,int $statement,
         FinanceBankLedgerProofs $proofs):RedirectResponse
     {

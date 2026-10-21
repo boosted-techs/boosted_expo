@@ -112,6 +112,20 @@ class ShipmentContribution
                     ->where('source_id',$cost->id)->first();
                 if($journal) {
                     $baseAmount=$math->base((string)$cost->amount,(string)$journal->rate_to_base);
+                    foreach(\App\Models\FinancePartialBankReturn::query()
+                        ->where('business_id',$shipment->business_id)
+                        ->where('source_type','shipment_cost')->where('source_id',$cost->id)
+                        ->where('posting_status','posted')->get() as $return) {
+                        $partialJournal=FinanceJournal::query()->where('business_id',$shipment->business_id)
+                            ->where('source_type','partial_bank_return')
+                            ->where('source_id',$return->id)->with('lines.account')->firstOrFail();
+                        foreach($partialJournal->lines as $line) {
+                            if($line->account?->system_key==='shipment_cost') {
+                                $baseAmount=$baseAmount->plus((string)$line->base_debit)
+                                    ->minus((string)$line->base_credit);
+                            }
+                        }
+                    }
                     $postedCosts=$postedCosts->plus($baseAmount);
                 } else {
                     $missing[]=$cost->reference.': posted cost is missing its journal.';

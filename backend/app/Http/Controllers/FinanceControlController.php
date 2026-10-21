@@ -10,12 +10,14 @@ use App\Models\FinanceBankProfile;
 use App\Models\FinanceOpeningBalance;
 use App\Models\FinancePayrollRun;
 use App\Models\FinancePeriod;
+use App\Models\FinancePeriodReopenRequest;
 use App\Models\FinanceSupplierBill;
 use App\Models\FinanceExchangeRate;
 use App\Models\FinanceForeignBankOpening;
 use App\Services\FinanceForeignBankOpenings;
 use App\Services\FinanceBalanceAdjustments;
 use App\Services\FinanceBankProfiles;
+use App\Services\FinanceBankAuthenticity;
 use App\Services\FinanceOpeningBalances;
 use App\Services\FinancePeriodControls;
 use App\Support\BusinessPermissions;
@@ -50,6 +52,8 @@ class FinanceControlController extends Controller
             ->where('business_id',$business->id)->orderByDesc('id')->get();
         $foreignRates=FinanceExchangeRate::query()->where('business_id',$business->id)
             ->where('status','approved')->orderByDesc('effective_on')->limit(100)->get();
+        $reopenRequests=FinancePeriodReopenRequest::query()
+            ->where('business_id',$business->id)->orderByDesc('id')->get();
         $periods=FinancePeriod::query()->where('business_id',$business->id)
             ->orderByDesc('period_from')->get();
         $adjustments=FinanceBalanceAdjustment::query()->where('business_id',$business->id)
@@ -66,10 +70,13 @@ class FinanceControlController extends Controller
         $canOpen=$access->allows($membership,'finance.opening.prepare');
         $canPeriod=$access->allows($membership,'finance.periods.manage');
         $canPeriodReview=$access->allows($membership,'finance.periods.review');
+        $canReopen=$access->allows($membership,'finance.periods.reopen.request');
+        $canReopenReview=$access->allows($membership,'finance.periods.reopen.review');
         $canAdjust=$access->allows($membership,'finance.adjustments.prepare');
         return view('finance.controls',compact('business','accounts','opening','banks','periods',
             'adjustments','invoices','bills','canBank','canOpen','canPeriod','canPeriodReview','canAdjust',
-            'foreignBanks','foreignOpenings','foreignRates','canForeign'));
+            'foreignBanks','foreignOpenings','foreignRates','canForeign',
+            'reopenRequests','canReopen','canReopenReview'));
     }
 
     public function bank(Request $request,FinanceBankProfiles $service):RedirectResponse
@@ -85,6 +92,22 @@ class FinanceControlController extends Controller
         $service->create($this->business($request),$data,$request->user()->id);
         return back()->with('status',
             'Named bank ledger added. New receipts and statements must identify the bank account.');
+    }
+
+    public function bankAccountIdentifier(Request $request,int $bank,
+        FinanceBankAuthenticity $auth):RedirectResponse
+    {
+        $this->check($request,'finance.banks.manage');
+        $data=$request->validate([
+            'account_identifier'=>['required','string','min:6','max:100'],
+        ]);
+        $business=$this->business($request);
+        $profile=FinanceBankProfile::query()->where('business_id',$business->id)
+            ->findOrFail($bank);
+        $auth->setAccountIdentifier($business,$profile,$data['account_identifier'],
+            $request->user()->id);
+        return redirect()->route('finance.controls')->with('status',
+            'The bank account identity commitment has been saved as a one-way digest. The original reference is not stored. A trusted bank signature is still required for authentication.');
     }
 
     public function foreignOpening(Request $request,
@@ -124,6 +147,39 @@ class FinanceControlController extends Controller
         $service->prepare($this->business($request),$data,$request->user()->id);
         return redirect()->route('finance.controls')->with('status',
             'Opening balances prepared. A separate authorised reviewer must approve the journal.');
+    }
+
+    public function requestPeriodReopening(Request $request,int $period,
+        FinancePeriodControls $service):RedirectResponse
+    {
+        $this->check($request,'finance.periods.reopen.request');
+        $data=$request->validate([
+            'reason'=>['required','string','min:30','max:3000'],
+            'materiality_assessment'=>['required','string','min:30','max:3000'],
+            'external_evidence'=>['required','string','min:30','max:3000'],
+        ]);
+        $period=FinancePeriod::query()->where('business_id',$this->business($request)->id)
+            ->findOrFail($period);
+        $service->requestReopen($period,$request->user()->id,$data);
+        return redirect()->route('finance.controls')->with('status',
+            'Formal period-reopening request recorded with the original closing snapshot. No historical posting has changed; an independent owner must approve reopening.');
+    }
+
+    public function reviewPeriodReopening(Request $request,int $case,string $decision,
+        FinancePeriodControls $service):RedirectResponse
+    {
+        $this->check($request,'finance.periods.reopen.review');
+        abort_unless(in_array($decision,['approve','reject'],true),404);
+        $data=$request->validate([
+            'notes'=>['required','string','min:20','max:3000'],
+        ]);
+        $case=FinancePeriodReopenRequest::query()
+            ->where('business_id',$this->business($request)->id)->findOrFail($case);
+        $service->reviewReopen($case,$decision==='approve',
+            $request->user()->id,$data['notes']);
+        return redirect()->route('finance.controls')->with('status',$decision==='approve'
+            ?'The selected period has been formally reopened with a preserved audit trail. Complete the dated corrections, re-verify affected bank statements and request an independently approved fresh close.'
+            :'Reopening rejected; the original locked period remains unchanged.');
     }
 
     public function period(Request $request,FinancePeriodControls $service):RedirectResponse

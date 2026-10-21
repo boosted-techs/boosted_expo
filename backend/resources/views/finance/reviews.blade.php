@@ -7,7 +7,9 @@
 <a class="secondary-button" href="{{ route('finance.credits.index') }}">Credit notes</a>
 <a class="secondary-button" href="{{ route('finance.controls') }}">Opening, concessions & periods</a>
 <a class="secondary-button" href="{{ route('finance.payroll.index') }}">Payroll</a>
-<a class="secondary-button" href="{{ route('finance.transaction-reversals.index') }}">Payment corrections</a></div>
+<a class="secondary-button" href="{{ route('finance.transaction-reversals.index') }}">Payment corrections</a>
+<a class="secondary-button" href="{{ route('finance.fx-revaluations.index') }}">Foreign bank revaluation</a>
+<a class="secondary-button" href="{{ route('finance.monetary-revaluations.index') }}">Receivables & payables FX</a></div>
 <div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>The person proposing a posting cannot approve it; the approver cannot post it. Posted journals cannot be edited. An invoice may only be proposed for revenue recognition after shipment dispatch is recorded, and the reviewer must assess the agreed terms and transfer evidence. For foreign currencies, select an approved historical rate effective no later than the posting date.</p></div></div>
 @if($canSubmit)
 <section class="section-card"><h2>Source documents awaiting finance posting</h2>
@@ -26,6 +28,9 @@
  ['type'=>'payroll_reversal','name'=>'Corrective payroll reversals (no settled payroll)','rows'=>$payrollReversals],
  ['type'=>'transaction_reversal','name'=>'Controlled corrections of posted payment journals','rows'=>$transactionReversals],
  ['type'=>'foreign_bank_opening','name'=>'Historical foreign-currency bank opening journals','rows'=>$foreignBankOpenings],
+ ['type'=>'fx_revaluation','name'=>'Non-cash foreign bank FX revaluations','rows'=>$fxRevaluations],
+ ['type'=>'partial_bank_return','name'=>'Reviewed partial bank returns','rows'=>$partialReturns],
+ ['type'=>'monetary_revaluation','name'=>'Revalue foreign receivables and payables','rows'=>$monetaryRevaluations],
  ]; @endphp
 @foreach($sourceSections as $section)
 <h3 style="margin-top:24px">{{ $section['name'] }}</h3>
@@ -42,6 +47,8 @@
   'payroll_reversal'=>$source->run?->gross_total,
   'payroll_settlement'=>$source->amount,
   'foreign_bank_opening'=>$source->foreign_amount,
+  'fx_revaluation'=>(string)\Brick\Math\BigDecimal::of((string)$source->change_base)->abs()->toScale(2).' '.$business->base_currency,
+  'monetary_revaluation'=>(string)\Brick\Math\BigDecimal::of((string)$source->change_base)->abs()->toScale(2).' '.$business->base_currency,
   default=>$source->amount,
  };
  $eligible=$section['type']!=='commercial_invoice' ||
@@ -54,13 +61,12 @@
 @else Review already submitted @endif</summary>
 @if($eligible && !in_array($id,$hasPending))
 <form method="POST" action="{{ route('finance.reviews.request',['type'=>$section['type'],'source'=>$source->id]) }}" class="form-stack">@csrf
-<label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ now()->format('Y-m-d') }}" required max="{{ now()->format('Y-m-d') }}"></label>
-@if(in_array($section['type'],['credit_note','balance_adjustment','transaction_reversal'],true))
+<label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ in_array($section['type'],['fx_revaluation','monetary_revaluation'],true) ? $source->valued_on->format('Y-m-d') : (in_array($section['type'],['transaction_reversal','partial_bank_return'],true) && $source->return_bank_line_id ? ($section['type']==='transaction_reversal' ? $source->original_snapshot['bank_return_evidence']['return_transaction_on'] : $source->data_snapshot['return_date']) : now()->format('Y-m-d')) }}" required max="{{ now()->format('Y-m-d') }}"></label>
+@if(in_array($section['type'],['credit_note','balance_adjustment','transaction_reversal','partial_bank_return'],true))
 <p class="form-hint">This correction must preserve the exact original approved exchange rate. A second rate cannot be selected.</p>
-@elseif($section['type']==='foreign_bank_opening')
+@elseif(in_array($section['type'],['foreign_bank_opening','fx_revaluation','monetary_revaluation'],true))
 <input type="hidden" name="exchange_rate_id" value="{{ $source->exchange_rate_id }}">
-<p class="form-hint">Prepared historical bank rate: 1 {{ $currency }} = {{ $source->rate_to_base }} {{ $business->base_currency }} (approved rate reference #{{ $source->exchange_rate_id }}). This rate is fixed.</p>
-<p class="form-hint">The original approved posting rate is preserved for this correction; no new rate is selected.</p>
+<p class="form-hint">Prepared approved rate: 1 {{ $currency }} = {{ $source->rate_to_base }} {{ $business->base_currency }} (locked rate reference #{{ $source->exchange_rate_id }}). It cannot be changed. For revaluation, choose the exact valuation date rather than today's date.</p>
 @elseif($currency!==$business->base_currency)
 <label class="field"><span>Approved conversion rate for {{ $currency }} → {{ $business->base_currency }}</span>
 <select name="exchange_rate_id" required><option value="">Choose a locked historical rate</option>

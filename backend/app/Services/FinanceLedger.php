@@ -21,6 +21,30 @@ class FinanceLedger
     ):FinanceJournal {
         Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
         app(FinancePeriodControls::class)->assertWritable($business,$postedOn);
+        if($type==='monetary_revaluation') {
+            $value=\App\Models\FinanceMonetaryRevaluation::query()
+                ->where('business_id',$business->id)->findOrFail($sourceId);
+            $key=$value->source_type==='commercial_invoice'?'receivable':'payable';
+            abort_unless(in_array($value->source_type,['commercial_invoice','supplier_bill'],true)
+                && count($lines)===2
+                && collect($lines)->pluck('account')->unique()->count()===2
+                && collect($lines)->contains(fn($row)=>($row['account']??'')===$key)
+                && collect($lines)->every(fn($row)=>in_array($row['account']??'',
+                    [$key,'unrealized_fx_gain','unrealized_fx_loss'],true)),422,
+                'Document revaluation can modify only its receivable/payable and unrealised FX result.');
+        }
+        if($type==='fx_revaluation') {
+            $value=\App\Models\FinanceFxRevaluation::query()
+                ->where('business_id',$business->id)->findOrFail($sourceId);
+            $bank=\App\Models\FinanceAccount::query()->where('business_id',$business->id)
+                ->findOrFail($value->account_id);
+            $allowed=[$bank->system_key,'unrealized_fx_gain','unrealized_fx_loss'];
+            abort_unless(count($lines)===2
+                && collect($lines)->pluck('account')->unique()->count()===2
+                && collect($lines)->every(fn($row)=>in_array($row['account']??'', $allowed,true))
+                && collect($lines)->contains(fn($row)=>($row['account']??'')===$bank->system_key),422,
+                'Revaluation journals may affect one named foreign bank and the unrealised gain/loss only.');
+        }
         if(count($lines)<2) throw ValidationException::withMessages([
             'journal'=>'Every journal requires at least two balanced lines.',
         ]);
@@ -37,6 +61,12 @@ class FinanceLedger
                     throw ValidationException::withMessages(['journal'=>'Journal amounts must be nonnegative and complete.']);
                 }
             }
+            if(in_array($type,['fx_revaluation','monetary_revaluation'],true) &&
+                (!\Brick\Math\BigDecimal::of((string)$item['debit'])->isZero()
+                    || !\Brick\Math\BigDecimal::of((string)$item['credit'])->isZero())) {
+                throw ValidationException::withMessages(['journal'=>
+                    'Foreign exchange revaluation cannot create source-currency bank movements.']);
+            }
             $dr=$math->money((string)$item['debit']);
             $cr=$math->money((string)$item['credit']);
             $bdr=$math->money((string)$item['base_debit']);
@@ -45,7 +75,9 @@ class FinanceLedger
                 || ($bdr->isGreaterThan(0) && $bcr->isGreaterThan(0))) {
                 throw ValidationException::withMessages(['journal'=>'A journal line cannot be both a debit and a credit.']);
             }
-            if($dr->isZero() && $cr->isZero() && !in_array($key,['fx_gain','fx_loss'],true)) {
+            if($dr->isZero() && $cr->isZero()
+                && !in_array($type,['fx_revaluation','monetary_revaluation'],true)
+                && !in_array($key,['fx_gain','fx_loss','unrealized_fx_gain','unrealized_fx_loss'],true)) {
                 throw ValidationException::withMessages(['journal'=>'Base-only journal lines are limited to currency gains and losses.']);
             }
             if(($dr->isZero() && $cr->isZero() && $bdr->isZero() && $bcr->isZero())) {
@@ -54,7 +86,10 @@ class FinanceLedger
             $debit=$debit->plus($dr);$credit=$credit->plus($cr);
             $baseDebit=$baseDebit->plus($bdr);$baseCredit=$baseCredit->plus($bcr);
         }
-        if($debit->isLessThanOrEqualTo(0) || !$debit->isEqualTo($credit)
+        if((in_array($type,['fx_revaluation','monetary_revaluation'],true)
+                ?(!$debit->isZero() || !$credit->isZero())
+                :$debit->isLessThanOrEqualTo(0))
+            || !$debit->isEqualTo($credit)
             || $baseDebit->isLessThanOrEqualTo(0) || !$baseDebit->isEqualTo($baseCredit)) {
             throw ValidationException::withMessages([
                 'journal'=>'Financial journal must balance in both document and base currency.',

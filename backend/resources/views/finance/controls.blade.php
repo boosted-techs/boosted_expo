@@ -25,7 +25,22 @@
 <tr><td><strong>{{ $bank->label }}</strong></td><td>{{ $bank->institution }}</td><td>{{ $bank->currency }}</td><td>{{ $bank->masked_reference?:'Not recorded' }}</td>
 <td>{{ $bank->account?->code }} · {{ $bank->account?->name }}</td><td>{{ $bank->active?'Active':'Inactive' }}</td></tr>
 @empty<tr><td colspan="6" class="empty-msg">No named bank accounts yet. Older transactions use the original generic bank ledger.</td></tr>@endforelse
-</tbody></table></div></section>
+</tbody></table></div>
+@if($canBank && $banks->isNotEmpty())
+<h3>Enable bank-signed statement verification</h3>
+<p class="form-hint">Bank signature authentication requires a signing key independently verified and provisioned by Boosted's platform administrators. Match a bank-issued signed account identifier to this ledger; the full account reference is never stored, only a keyed, one-way identity commitment. This does not connect to internet banking or initiate payments.</p>
+@foreach($banks as $bank)
+<details class="finance-details"><summary><strong>{{ $bank->label }}</strong> · {{ $bank->institution }}
+· {{ $bank->account_identifier_sha256?'Bank identity commitment saved':'Full bank identity not yet configured' }}</summary>
+<form method="POST" action="{{ route('finance.controls.banks.identifier',$bank->id) }}" class="form-stack form-narrow">@csrf
+<label class="field"><span>Actual bank account identifier (not saved in plaintext)</span>
+<input name="account_identifier" autocomplete="off" minlength="6" maxlength="100" required type="password"
+placeholder="Enter bank-issued full account identifier"></label>
+<button class="secondary-button">Save hashed bank identity for signed statement matching</button>
+</form></details>
+@endforeach
+@endif
+</section>
 <section class="section-card"><h2>Foreign-currency bank opening balances</h2>
 <p class="muted">Record historical funds in their actual bank-account currency and lock the approved exchange rate used to translate them into the company's base currency. This adds a reviewed bank asset and offsetting opening equity — never a bank transfer. Only an account with no existing ledger activity can receive this one-time opening entry.</p>
 @if($canForeign && $foreignBanks->isNotEmpty())
@@ -112,9 +127,47 @@ placeholder="State the original bank statement, valuation date, exact currency b
 <label class="field"><span>Independent close approval note</span><input name="reason" required minlength="10" maxlength="2000"></label><button class="primary-button">Approve and lock period</button></form>
 <form method="POST" action="{{ route('finance.controls.periods.review',['period'=>$period->id,'action'=>'reject']) }}" class="form-stack">@csrf
 <label class="field"><span>Why is closure rejected?</span><input name="reason" required minlength="10" maxlength="2000"></label><button class="secondary-button">Reject closing request</button></form></div>
-@endif</div>
+@endif
+@php $pendingReopen=$reopenRequests->first(fn($r)=>$r->period_id===$period->id && $r->status==='pending'); @endphp
+@if($period->status==='closed' && $canReopen && !$pendingReopen)
+<details class="finance-details"><summary>Request a formally audited reopening</summary>
+<p class="form-hint">This does not reopen the period by itself. A different authorised owner must independently approve. Reopen periods in reverse chronological order, latest first. The previous closing snapshot will remain permanently recorded.</p>
+<form method="POST" action="{{ route('finance.controls.periods.reopening.request',$period->id) }}" class="form-stack form-narrow">@csrf
+<label class="field"><span>Specific earlier-period error or return requiring correction</span>
+<textarea name="reason" minlength="30" maxlength="3000" rows="2" required></textarea></label>
+<label class="field"><span>Materiality and financial reporting impact assessment</span>
+<textarea name="materiality_assessment" minlength="30" maxlength="3000" rows="2" required></textarea></label>
+<label class="field"><span>Bank statement, auditor reference or independently reviewed supporting evidence</span>
+<textarea name="external_evidence" minlength="30" maxlength="3000" rows="2" required></textarea></label>
+<button class="secondary-button">Request independent reopening review</button>
+</form></details>
+@endif
+@if($pendingReopen)
+<div class="record"><div><strong>Reopening requested · approval pending</strong>
+<small>{{ $pendingReopen->reason }}</small></div><span class="tiny-pill">Original close retained</span></div>
+@if($canReopenReview && $pendingReopen->requested_by!==auth()->id())
+<div class="form-columns">
+<form method="POST" action="{{ route('finance.controls.periods.reopening.review',['case'=>$pendingReopen->id,'decision'=>'approve']) }}" class="form-stack">@csrf
+<label class="field"><span>Independent written approval and restatement requirements</span>
+<input name="notes" required minlength="20" maxlength="3000" placeholder="Reviewed original close, correction and materiality evidence"></label>
+<button class="primary-button">Approve documented reopening</button></form>
+<form method="POST" action="{{ route('finance.controls.periods.reopening.review',['case'=>$pendingReopen->id,'decision'=>'reject']) }}" class="form-stack">@csrf
+<label class="field"><span>Reason reopening is refused</span>
+<input name="notes" required minlength="20" maxlength="3000" placeholder="Explain why supporting evidence is insufficient"></label>
+<button class="secondary-button">Reject request; keep period closed</button></form>
+</div>
+@endif
+@endif
+</div>
 @empty<p class="empty-msg">No accounting periods created yet.</p>@endforelse
-<p class="form-hint">This release intentionally provides no reopen button. A formally closed period is not silently reopened or altered.</p>
+<h3>Historical close and reopening audit</h3>
+@forelse($reopenRequests as $history)
+<div class="record"><div><strong>Period #{{ $history->period_id }} · {{ ucfirst($history->status) }}</strong>
+<small>{{ $history->reason }} · Original close hash {{ substr($history->original_close_hash,0,14) }}…</small>
+<small>{{ $history->materiality_assessment }}</small></div>
+<span class="tiny-pill">{{ $history->reviewed_at?->format('d M Y H:i')?:'Awaiting independent review' }}</span></div>
+@empty<p class="empty-msg">No prior-period reopening requests recorded.</p>@endforelse
+<p class="form-hint">No financial period is reopened automatically. Reopening and closing are independently authorised and recorded. Previously issued statutory statements may require professional restatement, amended filings or auditor approval outside this software.
 </section>
 <section class="section-card"><h2>4. Customer & supplier balance adjustments</h2>
 <p class="muted">A partial concession changes the amount still owed, and uses the original approved exchange rate. It cannot be used when payments already exist. Customer adjustments are limited to zero-tax invoices; supplier adjustments require produce that has not been packed or written off.</p>

@@ -685,3 +685,93 @@ To verify locally from the backend:
 Remaining: real bank-feed authentication and ownership validation, refunds/returns of bank-matched transfers, statutory tax/VAT corrections, year-end retained earnings, periodic foreign-currency revaluation, independently verified bank adjustments, supplier credit/refund accounting, payroll tax and bank API settlement, and production-specific security and concurrency review.
 
 No Git commit, push, production deployment, customer refund, salary disbursement, real bank transfer or tax payment was initiated in this phase.
+
+
+## October 2026: reviewed reconciled-bank returns and non-cash FX revaluation
+
+This phase adds additive migration `2026_10_20_000023_create_bank_returns_and_fx_revaluations.php`, new finance approval source `fx_revaluation`, and new company chart accounts `7130 Unrealised Foreign Exchange Gain` and `7140 Unrealised Foreign Exchange Loss`.
+
+Changes are **local only**. No previous accounting journals, imported bank statements, financial documents, payroll records, labels, user data or earlier migrations were replaced or deleted. The existing finance setup process safely adds the two new chart accounts when an authorised owner runs **Finance Dashboard > Add missing finance accounts** for a previously onboarded business.
+
+### Correction of a previously reconciled bank transaction
+
+A posted customer/supplier payment, shipment cost or staff settlement that has an active confirmed bank match cannot be casually reversed or removed. To prepare a correction involving a genuine bank return:
+
+1. Finish independent matching and reconcile the **original bank statement**. The original account must be a company-owned, single-currency **named bank**, not the generic mixed-currency legacy ledger.
+2. Import the **actual, separate returned transaction** from a bank statement for that same named account using Bank Reconciliation. The return must be of opposite direction, the exact original amount, at least as recent as the original bank transaction, and not matched or reserved elsewhere. The return statement stays open until the correction can be posted and matched.
+3. Open **Finance & Ledger > Payment Corrections**, select the original posted transaction, select the eligible separately imported return statement line, and document the real-world correction and bank evidence. The original bank match, the return line and its parent statement file hash are frozen into the correction's audit snapshot. The return line is reserved to prevent it being applied to another payment.
+4. Submit the correction to the same independent requester/reviewer/poster finance queue. The journal must be dated on the **actual imported bank-return transaction date**. It cannot be backdated into a closed or pending period. The prepared source, matching status and return evidence are rechecked at every stage.
+5. Post the reversal only after approval. The original source, matching history, and journal remain intact. A new journal swaps every original debit/credit and preserves original FX settlement effects. Staff can now match the reserved bank-return line to the *posted correction*, obtain a second independent bank-match review, mark the return statement reconciled, and run the independent book-balance proof. Both original and returned bank movements remain visible.
+
+A pending original bank match, an unfinished original statement, another account or currency, mismatched direction or amount, changed return evidence, previously reserved/matched return, and cross-business IDs are rejected. Without an imported return line, the existing direct correction route continues to operate only for posted transactions with **no original active bank match**.
+
+**This is internal bookkeeping supported by staff-imported CSV evidence, not a bank-authenticated refund or provider transfer.** It does not return funds, recover salary, disburse money, verify beneficiary ownership, contact payment providers or certify banking statements. Partial returns, fees netted out of refunds, a refund dated inside a closed period, legacy mixed-bank migration, and recovery of funds require separate reviewed accounting rules and implementation.
+
+### Foreign bank periodic revaluation
+
+**Finance & Ledger > FX Revaluation** allows an accountant to prepare an independent review of one *positive foreign-currency bank asset* at a supported date and an already approved exchange rate effective no later than that date. The system recomputes the original foreign bank units and the previous *base-currency carrying amount* from all posted transactions, including earlier FX revaluation journals; it calculates the new translated base value and any resulting unrealised gain or loss. It freezes the source journal fingerprint, bank profile, date, approved rate and documented valuation evidence.
+
+After independent finance approval, the journal adjusts the bank's base-currency asset valuation against **Unrealised FX Gain** or **Unrealised FX Loss**, with **zero movement in the original bank currency** on both journal lines. Ordinary journal rules still require nonzero balanced original and base amounts; only this narrow reviewed revaluation category permits a two-line base-only journal. No bank feed or payment is invoked. Financial statements separate unrealised from realised gains/losses. The original currency balance remains untouched.
+
+Only one valuation per named bank per date is allowed; it must occur no earlier than that bank's most recent posted journal, in an open accounting period. The valuation is rejected if another bank journal changes the approved snapshot before posting. Any previously independently verified bank-to-ledger proof whose ledger fingerprint changes must be reviewed again, but zero-unit revaluation entries **never appear as fake imported bank movements**.
+
+**Unsupported:** zero/negative foreign balances and overdrafts, historical revaluations before newer transactions, FX trading/conversions, exchange-rate fair value hedges, multi-currency bank ledgers, receivables and payables revaluation, subsequent reversal/amendment of a posted revaluation, automated daily mark-to-market or statutory financial statements. These require separate policies and workflows.
+
+### Review and QA
+
+- Finance Dashboard: business owners ensure unrealised gain/loss chart accounts are activated.
+- FX Revaluation: prepare company-bank source amount/previous valuation/approved rate.
+- Posting Approvals: the new FX journal follows independent approval as with opening balances and payment corrections.
+- Payment Corrections: an already reconciled bank receipt requires an eligible imported opposite-side return line before correction preparation.
+- Bank Reconciliation: independently match and verify both preserved bank movements; book-only FX revaluation entries are excluded from transaction matching but retained in balance-evidence hashes.
+
+For local verification:
+
+    cd /opt/homebrew/var/www/boosted_expo/backend
+    php artisan migrate
+    php artisan view:cache
+    php artisan test --compact
+
+No Git commit or push, production deployment, bank transfer, customer refund, payroll payment, currency exchange or tax remittance was initiated in this phase.
+
+
+## Finance phase — partial bank returns, document FX, bank signed evidence and period reopening (21 October 2026)
+
+Local additive migrations:
+- 2026_10_21_000001_create_finance_partial_returns_and_monetary_revaluations
+- 2026_10_21_000002_create_bank_statement_attestations
+- 2026_10_21_000003_create_finance_period_reopen_requests
+
+No previous journal, original bank statement, original approved accounting close, account balances or earlier migrations were reset, deleted or rewritten.
+
+### Multiple partial refunds / bank returns
+
+Finance & Ledger > Payment Corrections now lets a finance accountant register separately evidenced, incremental refunds against a previously posted customer receipt, supplier payment or shipment cost. The original transaction must have a confirmed bank match on a reconciled named bank statement. Each partial refund is supported by its own separately imported open statement line with the exact actual returned amount, the opposite payment direction, the same original bank and currency, and a return transaction date no earlier than the original bank event. The ERP enforces unique return-line reservations, at most one return awaiting approval per source, and total returns no larger than the original payment. Each proposal preserves signed source evidence and gets its own independently reviewed and posted reversing journal, in the actual bank-return period. Original approved bank transactions and documents remain available. Subsequent repayments may satisfy a reopened customer receivable or supplier payable; partially returned shipment costs adjust expense reporting. Payroll returns remain deliberately outside this flow pending legal and statutory repayment policies.
+
+A return dated in an earlier already-closed period is NOT silently backdated; a formal period reopening must be approved first. An original transaction from a closed period can be referenced by a legitimate later-dated return in an open period without modifying original historical figures.
+
+### Foreign-currency customer invoices and supplier bills
+
+Finance & Ledger > Receivables & Payables FX lets an authorised accountant value individually selected posted, outstanding foreign-currency commercial invoices or supplier bills with an already approved historical FX rate. The ERP reconstructs foreign units and current base-currency carrying values from original approved journals, settlements, full and partial corrections, concessions and earlier document revaluations. A hashed source snapshot is compared again at independent approval/posting. The resulting two-line journal adjusts only the document receivable/payable and the appropriate unrealised FX account in base currency, with zero original currency movement. Later actual partial or final payments consume the latest carrying value and proportionally reclassify previously unrealised FX into realised FX. Fully paid balances must return to zero without a phantom receivable/payable. The original invoice or supplier agreement is not rewritten.
+
+Not covered without additional separately controlled accounting policy: hedging, forwards, overdrafts, FX market execution, statutory exchange-rate certification, nonmonetary inventory fair value, payroll recoveries and multi-currency banks.
+
+### Conditional bank-issued cryptographic statement proof
+
+Under Accounting Controls > Named Banks an owner can register the official full account identifier; the ERP stores only a keyed hash-based identity commitment, not its plaintext account reference. Bank Reconciliation > Statement has a bank-issued detached digital signature verification panel. A bank-issued JSON attestation must bind an official issuer/key, bank account identifier, original uploaded CSV SHA-256, currency, dates, opening/closing balances, debit/credit totals, bank reference and issuer signing time. Cryptographic validation requires a platform-provisioned signing public key whose real bank ownership was independently verified out-of-band. A user-supplied signing key can NEVER establish their own bank authenticity. The signed attestation and signature are encrypted at rest. A missing or revoked trust anchor, modified statement or invalid signature is rejected; unauthenticated uploads remain clearly labelled. Bank-to-ledger agreement still requires separate independent proof.
+
+Live dependency: NO actual bank signer, real bank API credentials, regulated account consent or official statement signing documentation has been supplied for this project. The implementation supports a bank-issued signed evidence protocol and has offline cryptographic tests, but cannot authenticate a live bank statement unless an actual institution supports and onboards this protocol. If the institution uses read-only authenticated APIs instead, a bank-specific connector with its documented OAuth/mTLS/signing, key rotation, restricted credentials and bank sandbox acceptance is required. Do not call a manually uploaded bank CSV bank-authenticated.
+
+### Formal audited reopening and re-close of closed periods
+
+Accounting Controls > Accounting Periods provides a separately approved reopening request for a period already closed. The accountant states the specific error and legal accounting evidence, materiality assessment and bank/auditor references. The request freezes the original approved close snapshot, its SHA-256 and close timestamp. A different authorised owner/admin reviews and accepts/rejects the request; latest closed periods must be reopened first if later months are already locked. An approved request reopens the original period for dated adjustments, but does not rewrite, erase or disguise the original closing evidence. After posting, all affected bank statements must again have independent matching and book-balance proof; the normal independent period-closing approval then creates the revised close. All original and revised approvals remain auditable. An accountant or auditor still needs to decide whether previously filed financial statements or tax filings must be formally restated or amended; the ERP does not automatically submit amendments.
+
+### Verification
+
+    cd /opt/homebrew/var/www/boosted_expo/backend
+    php artisan migrate
+    php artisan view:cache
+    php artisan test --compact
+    php artisan route:list --path=finance
+
+Everything in this phase is local only. No commit or push, production deployment, actual bank transfer, customer refund, payroll disbursement, forex order or tax remittance was initiated.

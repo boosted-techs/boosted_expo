@@ -73,6 +73,8 @@
         ['Bank reconciliation','finance.bank.index','finance.bank.view'],
         ['Opening, banks and period controls','finance.controls','finance.controls.view'],
         ['Payment corrections','finance.transaction-reversals.index','finance.payment.reversal.prepare'],
+        ['Foreign bank revaluation','finance.fx-revaluations.index','finance.fx.revaluation.view'],
+        ['Receivables & Payables FX','finance.monetary-revaluations.index','finance.monetary.revaluation.view'],
         ['Staff payroll','finance.payroll.index','finance.payroll.view'],
       ],
       'staff' => [

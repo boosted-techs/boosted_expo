@@ -64,6 +64,12 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'finance.payroll.view'))
     <a href="{{ route('finance.payroll.index') }}" class="{{ request()->routeIs('finance.payroll.*')?'active':'' }}"><span class="nav-dot"></span>Staff Payroll</a>
     @endif
+    @if($access->allows($membership, 'finance.monetary.revaluation.view'))
+    <a href="{{ route('finance.monetary-revaluations.index') }}" class="{{ request()->routeIs('finance.monetary-revaluations.*')?'active':'' }}"><span class="nav-dot"></span>Receivables & Payables FX</a>
+    @endif
+    @if($access->allows($membership, 'finance.fx.revaluation.view'))
+    <a href="{{ route('finance.fx-revaluations.index') }}" class="{{ request()->routeIs('finance.fx-revaluations.*')?'active':'' }}"><span class="nav-dot"></span>FX Revaluation</a>
+    @endif
     @if($access->allows($membership, 'finance.payment.reversal.prepare'))
     <a href="{{ route('finance.transaction-reversals.index') }}" class="{{ request()->routeIs('finance.transaction-reversals.*')?'active':'' }}"><span class="nav-dot"></span>Payment Corrections</a>
     @endif

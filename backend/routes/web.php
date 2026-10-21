@@ -37,6 +37,8 @@ use App\Http\Controllers\FinanceReportController;
 use App\Http\Controllers\FinanceControlController;
 use App\Http\Controllers\FinancePayrollController;
 use App\Http\Controllers\FinanceTransactionReversalController;
+use App\Http\Controllers\FinanceFxRevaluationController;
+use App\Http\Controllers\FinanceMonetaryRevaluationController;
 use App\Support\BusinessPermissions;
 use Illuminate\Support\Facades\Route;
 
@@ -65,6 +67,16 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('business')->group(function () {
+        // Outstanding foreign invoice/bill valuation; never a bank movement.
+        Route::get('/finance/monetary-revaluations',[FinanceMonetaryRevaluationController::class,'index'])
+            ->name('finance.monetary-revaluations.index');
+        Route::post('/finance/monetary-revaluations',[FinanceMonetaryRevaluationController::class,'prepare'])
+            ->name('finance.monetary-revaluations.prepare');
+        // Foreign-currency non-cash asset revaluation and financial approvals.
+        Route::get('/finance/fx-revaluations',[FinanceFxRevaluationController::class,'index'])
+            ->name('finance.fx-revaluations.index');
+        Route::post('/finance/fx-revaluations',[FinanceFxRevaluationController::class,'prepare'])
+            ->name('finance.fx-revaluations.prepare');
         // Audit-preserving corrections, foreign bank openings and book-balance proof.
         Route::get('/finance/transaction-corrections', [FinanceTransactionReversalController::class,'index'])
             ->name('finance.transaction-reversals.index');
@@ -72,6 +84,9 @@ Route::middleware('auth')->group(function () {
             [FinanceTransactionReversalController::class,'prepare'])
             ->whereIn('type',['payment','shipment_cost','payroll_settlement'])
             ->whereNumber('id')->name('finance.transaction-reversals.prepare');
+        Route::post('/finance/controls/banks/{bank}/identifier',
+            [FinanceControlController::class,'bankAccountIdentifier'])
+            ->whereNumber('bank')->name('finance.controls.banks.identifier');
         Route::post('/finance/controls/foreign-opening', [FinanceControlController::class,'foreignOpening'])
             ->name('finance.controls.foreign-opening.store');
         Route::post('/finance/bank/{statement}/book-proof',
@@ -86,6 +101,13 @@ Route::middleware('auth')->group(function () {
             ->name('finance.controls.banks.store');
         Route::post('/finance/controls/opening', [FinanceControlController::class,'opening'])
             ->name('finance.controls.opening.store');
+        Route::post('/finance/controls/periods/{period}/request-reopening',
+            [FinanceControlController::class,'requestPeriodReopening'])
+            ->whereNumber('period')->name('finance.controls.periods.reopening.request');
+        Route::post('/finance/controls/reopening/{case}/{decision}',
+            [FinanceControlController::class,'reviewPeriodReopening'])
+            ->whereNumber('case')->whereIn('decision',['approve','reject'])
+            ->name('finance.controls.periods.reopening.review');
         Route::post('/finance/controls/periods', [FinanceControlController::class,'period'])
             ->name('finance.controls.periods.store');
         Route::post('/finance/controls/periods/{period}/submit', [FinanceControlController::class,'submitPeriod'])
@@ -118,6 +140,9 @@ Route::middleware('auth')->group(function () {
             ->whereNumber('match')->name('finance.bank.confirm');
         Route::post('/finance/bank/matches/{match}/reject', [FinanceBankController::class,'reject'])
             ->whereNumber('match')->name('finance.bank.reject');
+        Route::post('/finance/bank/{statement}/authenticate',
+            [FinanceBankController::class,'authenticateEvidence'])
+            ->whereNumber('statement')->name('finance.bank.authenticate');
         Route::post('/finance/bank/{statement}/complete', [FinanceBankController::class,'complete'])
             ->whereNumber('statement')->name('finance.bank.complete');
 

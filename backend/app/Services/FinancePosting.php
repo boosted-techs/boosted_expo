@@ -20,13 +20,16 @@ use App\Models\FinancePayrollSettlement;
 use App\Models\FinancePayrollReversal;
 use App\Models\FinanceTransactionReversal;
 use App\Models\FinanceForeignBankOpening;
+use App\Models\FinanceFxRevaluation;
+use App\Models\FinancePartialBankReturn;
+use App\Models\FinanceMonetaryRevaluation;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class FinancePosting
 {
-    private function source(int $businessId,string $type,int $id):CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening
+    private function source(int $businessId,string $type,int $id):CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening|FinanceFxRevaluation|FinancePartialBankReturn|FinanceMonetaryRevaluation
     {
         $model=match($type) {
             'commercial_invoice'=>CommercialInvoice::class,
@@ -42,18 +45,24 @@ class FinancePosting
             'payroll_reversal'=>FinancePayrollReversal::class,
             'transaction_reversal'=>FinanceTransactionReversal::class,
             'foreign_bank_opening'=>FinanceForeignBankOpening::class,
+            'fx_revaluation'=>FinanceFxRevaluation::class,
+            'partial_bank_return'=>FinancePartialBankReturn::class,
+            'monetary_revaluation'=>FinanceMonetaryRevaluation::class,
             default=>abort(422,'This financial document type is not supported.'),
         };
         return $model::query()->where('business_id',$businessId)->lockForUpdate()->findOrFail($id);
     }
 
-    private function state(CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening $record):string
+    private function state(CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening|FinanceFxRevaluation|FinancePartialBankReturn|FinanceMonetaryRevaluation $record):string
     {
         return $record instanceof CommercialInvoice || $record instanceof FinanceSupplierBill
             || $record instanceof FinanceInventoryRelief || $record instanceof FinanceCreditNote
             || $record instanceof FinanceOpeningBalance || $record instanceof FinanceBalanceAdjustment
             || $record instanceof FinancePayrollRun || $record instanceof FinancePayrollReversal
             || $record instanceof FinanceTransactionReversal || $record instanceof FinanceForeignBankOpening
+            || $record instanceof FinanceFxRevaluation
+            || $record instanceof FinancePartialBankReturn
+            || $record instanceof FinanceMonetaryRevaluation
             ? $record->posting_status : $record->status;
     }
 
@@ -82,7 +91,40 @@ class FinancePosting
             if($type==='inventory_relief') {
                 app(FinanceInventoryValuation::class)->validateBeforePost($source);
             }
-            if($type==='transaction_reversal') {
+            if($type==='partial_bank_return') {
+                if(($data['exchange_rate_id']??null)!==null
+                    || $data['posting_on']!==$source->data_snapshot['return_date']) {
+                    throw ValidationException::withMessages(['posting_on'=>
+                        'Post this return on its actual bank event date, in an open financial period, using the source journal FX rate.']);
+                }
+                app(FinancePartialBankReturns::class)->lines($source);
+                $original=FinanceJournal::query()->where('business_id',$business->id)
+                    ->findOrFail($source->original_journal_id);
+                $fx=(string)$original->rate_to_base;
+            } elseif($type==='monetary_revaluation') {
+                if(($data['exchange_rate_id']??null)!==$source->exchange_rate_id
+                    || $data['posting_on']!==$source->valued_on->toDateString()) {
+                    throw ValidationException::withMessages(['posting_on'=>
+                        'The monetary-item revaluation must be posted on its original approved valuation date with its frozen rate.']);
+                }
+                app(FinanceMonetaryRevaluations::class)->lines($source);
+                $fx=app(FinanceRates::class)->rate($business,$currency,
+                    $source->exchange_rate_id,$data['posting_on']);
+            } elseif($type==='fx_revaluation') {
+                if(($data['exchange_rate_id']??null)!==$source->exchange_rate_id
+                    || $data['posting_on']!==$source->valued_on->toDateString()) {
+                    throw ValidationException::withMessages(['posting_on'=>
+                        'Revaluation must be posted on its exact valuation date with the locked approved rate.']);
+                }
+                app(FinanceFxRevaluations::class)->lines($source);
+                $fx=app(FinanceRates::class)->rate($business,$currency,
+                    $source->exchange_rate_id,$data['posting_on']);
+            } elseif($type==='transaction_reversal') {
+                if($source->return_bank_line_id!==null
+                    && $data['posting_on']!==$source->original_snapshot['bank_return_evidence']['return_transaction_on']) {
+                    throw ValidationException::withMessages(['posting_on'=>
+                        'A bank-matched return must be posted on the actual returned bank transaction date. Closed periods remain locked.']);
+                }
                 if(($data['exchange_rate_id']??null)!==null) abort(422,
                     'A payment reversal must reuse its original journal FX rate.');
                 $original=app(FinanceTransactionCorrections::class)->original($source);
@@ -136,8 +178,13 @@ class FinancePosting
                 'payroll_run'=>$source->period_to->toDateString(),
                 'payroll_settlement'=>$source->paid_on->toDateString(),
                 'payroll_reversal'=>$source->created_at->toDateString(),
-                'transaction_reversal'=>$source->created_at->toDateString(),
+                'transaction_reversal'=>$source->return_bank_line_id!==null
+                    ?$source->original_snapshot['bank_return_evidence']['return_transaction_on']
+                    :$source->created_at->toDateString(),
                 'foreign_bank_opening'=>$source->effective_on->toDateString(),
+                'fx_revaluation'=>$source->valued_on->toDateString(),
+                'monetary_revaluation'=>$source->valued_on->toDateString(),
+                'partial_bank_return'=>$source->data_snapshot['return_date'],
             };
             if($data['posting_on']<$date) throw ValidationException::withMessages([
                 'posting_on'=>'The journal date cannot precede the documented business event.',
@@ -181,6 +228,9 @@ class FinancePosting
             if($request->source_type==='payroll_reversal') app(FinancePayrollCorrections::class)->lines($source);
             if($request->source_type==='transaction_reversal') app(FinanceTransactionCorrections::class)->lines($source);
             if($request->source_type==='foreign_bank_opening') app(FinanceForeignBankOpenings::class)->lines($source);
+            if($request->source_type==='fx_revaluation') app(FinanceFxRevaluations::class)->lines($source);
+            if($request->source_type==='monetary_revaluation') app(FinanceMonetaryRevaluations::class)->lines($source);
+            if($request->source_type==='partial_bank_return') app(FinancePartialBankReturns::class)->lines($source);
             abort_unless($this->state($source)===(
                 in_array($request->source_type,['payment','shipment_cost','payroll_settlement'],true)?'pending':'not_posted'),
                 422,'The source record has changed.');
@@ -220,7 +270,33 @@ class FinancePosting
                 $source->shipment->status,['dispatched','delivered'],true)) {
                 abort(422,'Shipment dispatch status has changed. Re-review recognition evidence.');
             }
-            if($request->source_type==='transaction_reversal') {
+            if($request->source_type==='partial_bank_return') {
+                abort_unless($request->exchange_rate_id===null
+                    && $request->posting_on->toDateString()===$source->data_snapshot['return_date'],422,
+                    'Partial bank returns must post on the imported bank date with original locked FX.');
+                app(FinancePartialBankReturns::class)->lines($source);
+                $original=FinanceJournal::query()->where('business_id',$business->id)
+                    ->findOrFail($source->original_journal_id);
+                $rate=(string)$original->rate_to_base;
+            } elseif($request->source_type==='monetary_revaluation') {
+                abort_unless($request->exchange_rate_id===$source->exchange_rate_id
+                    && $request->posting_on->toDateString()===$source->valued_on->toDateString(),422,
+                    'Document revaluation must use the original dated, approved FX reference.');
+                app(FinanceMonetaryRevaluations::class)->lines($source);
+                $rate=app(FinanceRates::class)->rate($business,$source->currency,
+                    $source->exchange_rate_id,$request->posting_on->toDateString());
+            } elseif($request->source_type==='fx_revaluation') {
+                abort_unless($request->exchange_rate_id===$source->exchange_rate_id
+                    && $request->posting_on->toDateString()===$source->valued_on->toDateString(),
+                    422,'The revaluation cannot be posted outside its original valuation date.');
+                app(FinanceFxRevaluations::class)->lines($source);
+                $rate=app(FinanceRates::class)->rate($business,$source->currency,
+                    $source->exchange_rate_id,$request->posting_on->toDateString());
+            } elseif($request->source_type==='transaction_reversal') {
+                if($source->return_bank_line_id!==null) abort_unless(
+                    $request->posting_on->toDateString()===
+                    $source->original_snapshot['bank_return_evidence']['return_transaction_on'],422,
+                    'Bank return must be posted on the actual transaction date.');
                 abort_unless($request->exchange_rate_id===null,422,
                     'Payment reversals must reuse the exact original FX rate.');
                 $original=app(FinanceTransactionCorrections::class)->original($source);
@@ -263,6 +339,9 @@ class FinancePosting
                 'payroll_reversal'=>app(FinancePayrollCorrections::class)->lines($source),
                 'transaction_reversal'=>app(FinanceTransactionCorrections::class)->lines($source),
                 'foreign_bank_opening'=>app(FinanceForeignBankOpenings::class)->lines($source),
+                'fx_revaluation'=>app(FinanceFxRevaluations::class)->lines($source),
+                'monetary_revaluation'=>app(FinanceMonetaryRevaluations::class)->lines($source),
+                'partial_bank_return'=>app(FinancePartialBankReturns::class)->lines($source),
             };
             $journal=app(FinanceLedger::class)->record(
                 $business,$request->source_type,$source->id,$source->currency,$rate,
@@ -281,6 +360,11 @@ class FinancePosting
                 $source->update(['posting_status'=>'posted','posted_at'=>now()]);
             } elseif($source instanceof FinanceTransactionReversal) {
                 app(FinanceTransactionCorrections::class)->finalize($source);
+            } elseif($source instanceof FinancePartialBankReturn
+                || $source instanceof FinanceMonetaryRevaluation) {
+                $source->update(['posting_status'=>'posted','posted_at'=>now()]);
+            } elseif($source instanceof FinanceFxRevaluation) {
+                $source->update(['posting_status'=>'posted','posted_at'=>now()]);
             } elseif($source instanceof FinanceForeignBankOpening) {
                 $source->update(['posting_status'=>'posted','posted_at'=>now()]);
             } elseif($source instanceof FinancePayrollReversal) {
@@ -312,6 +396,9 @@ class FinancePosting
             'payroll_reversal'=>'Correction reversing payroll accrual '.$source->reference,
             'transaction_reversal'=>'Review-approved payment correction '.$source->reference,
             'foreign_bank_opening'=>'Foreign bank opening '.$source->reference,
+            'fx_revaluation'=>'Non-cash foreign bank revaluation '.$source->reference,
+            'monetary_revaluation'=>'Non-cash foreign receivable/payable revaluation '.$source->reference,
+            'partial_bank_return'=>'Partially returned bank transaction '.$source->reference,
         };
     }
 
@@ -356,27 +443,35 @@ class FinancePosting
         $journal=FinanceJournal::query()->where('business_id',$business->id)
             ->where('source_type',$payment->direction==='in'?'commercial_invoice':'supplier_bill')
             ->where('source_id',$original->id)->firstOrFail();
-        // For the final instalment consume any residual base-currency rounding difference.
-        $postedBase=BigDecimal::zero();
-        $postedAmount=BigDecimal::zero();
-        $relation=$payment->direction==='in'?'commercial_invoice_id':'supplier_bill_id';
-        foreach(FinancePayment::query()->where('business_id',$business->id)
-            ->where($relation,$original->id)->where('status','posted')
-            ->get(['amount','settled_base_amount']) as $prior) {
-            $postedAmount=$postedAmount->plus((string)$prior->amount);
-            $postedBase=$postedBase->plus((string)$prior->settled_base_amount);
+        // Consume the CURRENT carrying value, not the original exchange rate.
+        // This matters after an approved receivable/payable FX revaluation and
+        // after partial bank returns, which reopen a portion of the balance.
+        $remaining=app(FinanceDocuments::class)->outstanding($original,false);
+        if($remaining->isLessThanOrEqualTo(0)||$amount->isGreaterThan($remaining)) {
+            throw ValidationException::withMessages(['amount'=>
+                'The posted document balance has changed. Payment exceeds the remaining confirmed amount.']);
         }
-        $originalTotal=BigDecimal::of((string)($payment->direction==='in'?$original->grand_total:$original->total));
-        $adjustment=FinanceBalanceAdjustment::query()->where('business_id',$business->id)
-            ->where($relation,$original->id)->where('posting_status','posted')->first();
-        if($adjustment) $originalTotal=$originalTotal->minus((string)$adjustment->amount);
-        if($postedAmount->plus($amount)->isGreaterThan($originalTotal)) {
-            throw ValidationException::withMessages(['amount'=>'Payment exceeds the outstanding balance.']);
+        $unrealizedToReclass=BigDecimal::zero();
+        if($original->currency===$business->base_currency) {
+            $settled=$amount;
+        } else {
+            $position=app(FinanceMonetaryRevaluations::class)->position($business,
+                $payment->direction==='in'?'commercial_invoice':'supplier_bill',$original->id);
+            abort_unless($remaining->isEqualTo($position['foreign_balance']),422,
+                'Foreign document units and posted ledger carrying amount disagree.');
+            if($payment->payment_on->toDateString()<$position['latest_journal_on']) {
+                throw ValidationException::withMessages(['payment_on'=>
+                    'A newly posted payment cannot precede the latest journal that valued this document.']);
+            }
+            $carrying=BigDecimal::of($position['previous_base']);
+            $unrealized=BigDecimal::of($position['unrealized_open']);
+            $settled=$amount->isEqualTo($remaining)?$carrying
+                :$math->money($carrying->multipliedBy($amount)
+                    ->dividedBy($remaining,14,\Brick\Math\RoundingMode::HalfUp));
+            $unrealizedToReclass=$amount->isEqualTo($remaining)?$unrealized
+                :$math->money($unrealized->multipliedBy($amount)
+                    ->dividedBy($remaining,14,\Brick\Math\RoundingMode::HalfUp));
         }
-        $originalBase=$math->base($originalTotal,(string)$journal->rate_to_base);
-        $settled=$postedAmount->plus($amount)->isEqualTo($originalTotal)
-            ?$originalBase->minus($postedBase)
-            :$math->base($amount,(string)$journal->rate_to_base);
         $payment->update(['settled_base_amount'=>(string)$settled]);
         $cashAccount=$payment->cashAccount;
         abort_unless($cashAccount?->business_id===$business->id,422);
@@ -398,6 +493,21 @@ class FinancePosting
             $lines[]=$ledger->line('fx_gain','0','0','0',(string)$difference,'Realised exchange-rate gain');
         } elseif($difference->isLessThan(0)) {
             $lines[]=$ledger->line('fx_loss','0','0',(string)$difference->negated(),'0','Realised exchange-rate loss');
+        }
+        // On settlement reclassify the accrued unrealised FX for the portion
+        // paid into realised FX without changing total earnings or bank funds.
+        if($unrealizedToReclass->isGreaterThan(0)) {
+            $reclass=(string)$unrealizedToReclass->toScale(2);
+            $lines[]=$ledger->line('unrealized_fx_gain','0','0',$reclass,'0',
+                'Transfer settled portion of unrealised gain to realised income');
+            $lines[]=$ledger->line('fx_gain','0','0','0',$reclass,
+                'Realised portion of previously accrued foreign-currency gain');
+        } elseif($unrealizedToReclass->isLessThan(0)) {
+            $reclass=(string)$unrealizedToReclass->abs()->toScale(2);
+            $lines[]=$ledger->line('unrealized_fx_loss','0','0','0',$reclass,
+                'Release settled portion of previously accrued unrealised loss');
+            $lines[]=$ledger->line('fx_loss','0','0',$reclass,'0',
+                'Realised portion of previously accrued foreign-currency loss');
         }
         return $lines;
     }

@@ -54,15 +54,20 @@ class FinanceTransactionCorrections
 
     private function assertEligible(
         Business $business,FinancePayment|FinanceShipmentCost|FinancePayrollSettlement $source,
-        string $type,int $excludedReversalId=0
+        string $type,int $excludedReversalId=0,?int $returnLineId=null
     ):FinanceJournal {
         abort_unless($source->business_id===$business->id && $source->status==='posted',422,
             'Only a posted transaction that has not been reversed may be corrected.');
-        if(FinanceBankMatch::query()->where('business_id',$business->id)
-            ->where('source_type',$type)->where('source_id',$source->id)
-            ->whereIn('status',['pending','confirmed'])->exists()) {
+        // A confirmed source match may only be corrected by pairing an
+        // independently imported opposite-direction bank return. A pending
+        // match and any mismatched, shared-bank or reused return remain blocked.
+        app(FinanceBankReturns::class)->evidence($business,$type,$source->id,
+            $source->cash_account_id,$source->currency,(string)$source->amount,
+            $returnLineId,$excludedReversalId?:null);
+        if(\App\Models\FinancePartialBankReturn::query()->where('business_id',$business->id)
+            ->where('source_type',$type)->where('source_id',$source->id)->exists()) {
             throw ValidationException::withMessages(['reversal'=>
-                'An imported bank statement already has an active match for this transaction. It must be resolved through a controlled bank correction before a reversal is possible.']);
+                'This payment already has partial bank returns. Use a separately evidenced partial return for the remaining amount rather than a full original-journal reversal.']);
         }
         if(FinanceTransactionReversal::query()->where('business_id',$business->id)
             ->where('source_type',$type)->where('source_id',$source->id)
@@ -93,14 +98,19 @@ class FinanceTransactionCorrections
     }
 
     public function prepare(Business $business,string $type,int $id,
-        string $reason,string $externalEvidence,int $actor):FinanceTransactionReversal
+        string $reason,string $externalEvidence,int $actor,
+        ?int $returnBankLineId=null):FinanceTransactionReversal
     {
-        return DB::transaction(function()use($business,$type,$id,$reason,$externalEvidence,$actor){
+        return DB::transaction(function()use($business,$type,$id,$reason,$externalEvidence,$actor,$returnBankLineId){
             Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
             app(FinancePeriodControls::class)->assertWritable($business,now()->toDateString());
             $source=$this->source($business->id,$type,$id);
-            $original=$this->assertEligible($business,$source,$type);
+            $original=$this->assertEligible($business,$source,$type,0,$returnBankLineId);
+            $bankReturn=app(FinanceBankReturns::class)->evidence(
+                $business,$type,$source->id,$source->cash_account_id,$source->currency,
+                (string)$source->amount,$returnBankLineId);
             $snapshot=$this->snapshot($original);
+            $snapshot['bank_return_evidence']=$bankReturn;
             $snapshot['cash_account_id']=$source->cash_account_id;
             $snapshot['amount']=(string)$source->amount;
             $snapshot['external_reference']=(string)$source->external_reference;
@@ -114,6 +124,8 @@ class FinanceTransactionCorrections
                 'business_id'=>$business->id,'reference'=>'PMREV-'.Str::upper((string)Str::ulid()),
                 'source_type'=>$type,'source_id'=>$id,
                 'original_journal_id'=>$original->id,'cash_account_id'=>$source->cash_account_id,
+                'original_bank_match_id'=>$bankReturn['original_match_id']??null,
+                'return_bank_line_id'=>$bankReturn['return_line_id']??null,
                 'currency'=>$source->currency,'amount'=>$source->amount,
                 'reason'=>$reason,'external_evidence'=>$externalEvidence,
                 'original_snapshot'=>$snapshot,
@@ -127,11 +139,20 @@ class FinanceTransactionCorrections
     {
         $business=Business::query()->findOrFail($reversal->business_id);
         $source=$this->source($business->id,$reversal->source_type,$reversal->source_id);
-        $original=$this->assertEligible($business,$source,$reversal->source_type,$reversal->id);
+        $original=$this->assertEligible($business,$source,$reversal->source_type,
+            $reversal->id,$reversal->return_bank_line_id);
         abort_unless($original->id===$reversal->original_journal_id,422,
             'Source journal has changed.');
         $snapshot=$this->snapshot($original);
+        $bankReturn=app(FinanceBankReturns::class)->evidence($business,
+            $reversal->source_type,$source->id,$source->cash_account_id,
+            $source->currency,(string)$source->amount,
+            $reversal->return_bank_line_id,$reversal->id);
+        $snapshot['bank_return_evidence']=$bankReturn;
         $snapshot['cash_account_id']=$source->cash_account_id;
+        abort_unless($reversal->original_bank_match_id===($bankReturn['original_match_id']??null)
+            && $reversal->return_bank_line_id===($bankReturn['return_line_id']??null),422,
+            'The reserved bank refund statement line or original bank match changed.');
         $snapshot['amount']=(string)$source->amount;
         $snapshot['external_reference']=(string)$source->external_reference;
         $snapshot['original_status']='posted';

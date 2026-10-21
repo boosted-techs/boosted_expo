@@ -11,6 +11,7 @@ use App\Models\FinancePayment;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinancePayrollSettlement;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinancePartialBankReturn;
 use Brick\Math\BigDecimal;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -118,17 +119,18 @@ class FinanceBankReconciliation
     }
 
     private function candidate(FinanceBankStatementLine $line,string $type,int $id)
-        :FinancePayment|FinanceShipmentCost|FinancePayrollSettlement|FinanceTransactionReversal
+        :FinancePayment|FinanceShipmentCost|FinancePayrollSettlement|FinanceTransactionReversal|FinancePartialBankReturn
     {
         $statement=$line->statement;
         $class=match($type) {
             'payment'=>FinancePayment::class,'shipment_cost'=>FinanceShipmentCost::class,
             'payroll_settlement'=>FinancePayrollSettlement::class,
             'transaction_reversal'=>FinanceTransactionReversal::class,
+            'partial_bank_return'=>FinancePartialBankReturn::class,
             default=>abort(422,'Unsupported reconciliation type.'),
         };
         $record=$class::query()->where('business_id',$line->business_id)
-            ->when($type==='transaction_reversal',
+            ->when(in_array($type,['transaction_reversal','partial_bank_return'],true),
                 fn($query)=>$query->where('posting_status','posted'),
                 fn($query)=>$query->whereIn('status',['posted','reversed']))
             ->lockForUpdate()->findOrFail($id);
@@ -141,9 +143,34 @@ class FinanceBankReconciliation
                 ->where('posting_status','posted')->exists(),422,
                 'A reversed bank source must have an immutable approved correction journal.');
         }
-        if($record instanceof FinanceTransactionReversal) {
+        $reserved=FinanceTransactionReversal::query()->where('business_id',$line->business_id)
+            ->where('return_bank_line_id',$line->id)->first();
+        $partialReserved=FinancePartialBankReturn::query()->where('business_id',$line->business_id)
+            ->where('return_bank_line_id',$line->id)->first();
+        if($partialReserved && !($record instanceof FinancePartialBankReturn
+            && $partialReserved->id===$record->id)) {
+            throw ValidationException::withMessages(['source'=>
+                'This return line is reserved for its specific partial bank correction.']);
+        }
+        if($reserved && !($record instanceof FinanceTransactionReversal
+            && $reserved->id===$record->id)) {
+            throw ValidationException::withMessages(['source'=>
+                'This imported bank return line is reserved for its specific approved correction.']);
+        }
+        if($record instanceof FinancePartialBankReturn
+            && $record->return_bank_line_id!==$line->id) {
+            throw ValidationException::withMessages(['source'=>
+                'A posted partial bank return is bound to its specific imported statement line.']);
+        }
+        if($record instanceof FinanceTransactionReversal || $record instanceof FinancePartialBankReturn) {
+            if($record->return_bank_line_id!==null && $record->return_bank_line_id!==$line->id) {
+                throw ValidationException::withMessages(['source'=>
+                    'This approved correction is reserved for a different, independently imported bank-return line.']);
+            }
             $originalBank=array_values(array_filter(
-                $record->original_snapshot['lines']??[],
+                ($record instanceof FinanceTransactionReversal
+                    ?($record->original_snapshot['lines']??[])
+                    :($record->data_snapshot['original_lines']??[])),
                 fn($row)=>(int)$row['account_id']===$record->cash_account_id
             ));
             abort_unless(count($originalBank)===1,422,'The original bank movement is not unique.');

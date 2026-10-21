@@ -14,6 +14,25 @@
 <form method="POST" action="{{ route('finance.bank.complete',$statement->id) }}" style="margin-top:12px">@csrf<button class="primary-button">Close fully reconciled statement</button></form>
 @endif
 </section>
+<section class="section-card"><h2>Bank-issued digital signature</h2>
+<p class="muted">Ordinary CSV uploads remain unverified. This separate control is available only when Boosted has independently validated and provisioned the official bank's public signing key and the bank supplies a matching signed JSON statement attestation.</p>
+<div class="record"><div><strong>{{ $isBankAuthenticated?'Verified bank-signed statement':'Bank issuer signature not verified' }}</strong>
+<small>{{ $bankAttestation?'Issuer: '.$bankAttestation->issuer_id.' · Key ID: '.$bankAttestation->issuer_key_id.' · Checked '. $bankAttestation->verified_at->format('d M Y H:i') : 'No trusted bank-issued cryptographic attestation is recorded for this uploaded statement.' }}</small>
+</div><span class="tiny-pill">{{ $isBankAuthenticated?'SIGNED EVIDENCE VALID':'UNAUTHENTICATED CSV' }}</span></div>
+@if($bankAttestation && !$isBankAuthenticated)
+<p class="form-hint">A previous signature record no longer validates against its trust anchor or statement metadata. It must not be treated as authenticated evidence.</p>
+@endif
+@if(!$bankAttestation && $canUploadBankSignature)
+<form method="POST" action="{{ route('finance.bank.authenticate',$statement->id) }}" enctype="multipart/form-data" class="form-stack form-narrow">@csrf
+<label class="field"><span>Bank-issued signed JSON attestation</span>
+<input type="file" name="signed_attestation" accept=".json,.txt,application/json" required></label>
+<label class="field"><span>Bank-issued detached signature (base64)</span>
+<textarea name="signature_base64" minlength="44" maxlength="8192" rows="3" required
+placeholder="Paste the detached signature issued by the trusted bank or bank statement provider"></textarea></label>
+<button class="secondary-button">Verify official bank signature against registered issuer</button></form>
+@endif
+<p class="form-hint">No bank is preconnected. A successful cryptographic match authenticates only this bank-issued signed evidence relative to its provisioned trust anchor. Independent book-balance review remains separately required. No online bank transfer or account access is involved.</p>
+</section>
 @if($statement->status==='reconciled')
 <section class="section-card"><h2>Independent bank-to-ledger balance proof</h2>
 <p class="muted">Matching vouchers to uploaded statement lines does not automatically prove the book balance. This second control compares the bank statement opening/closing values with posted ledger movements in the original bank currency, checks that every posted movement in this period has a confirmed matching bank line, and freezes its evidence for separate review.</p>
@@ -83,6 +102,19 @@ $ledgerCheck->prepared_by!==auth()->id())
 <option value="shipment_cost:{{ $cost->id }}">Cost {{ $cost->reference }} · {{ $cost->currency }} {{ $cost->amount }}</option>@endif @endforeach
 @foreach($payrollSettlements as $settlement)@if($line->direction==='debit' && \Brick\Math\BigDecimal::of((string)$settlement->amount)->isEqualTo((string)$line->amount))
 <option value="payroll_settlement:{{ $settlement->id }}">Payroll {{ $settlement->reference }} · {{ $settlement->currency }} {{ $settlement->amount }}</option>@endif @endforeach
+@foreach($partials as $partial)
+@php
+$originalLine=collect($partial->data_snapshot['original_lines']??[])
+    ->firstWhere('account_id',$statement->account_id);
+$opposite=$originalLine
+    ?(\Brick\Math\BigDecimal::of((string)$originalLine['debit'])->isGreaterThan(0)
+        ?'debit':'credit'):null;
+@endphp
+@if($opposite===$line->direction && $partial->return_bank_line_id===$line->id
+ && \Brick\Math\BigDecimal::of((string)$partial->amount)->isEqualTo((string)$line->amount))
+<option value="partial_bank_return:{{ $partial->id }}">Partial return {{ $partial->reference }} · {{ $partial->currency }} {{ $partial->amount }}</option>
+@endif
+@endforeach
 @foreach($reversals as $reversal)
 @php
 $bankEntry=collect($reversal->original_snapshot['lines']??[])

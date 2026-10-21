@@ -253,6 +253,15 @@ class FinanceController extends Controller
         $transactionReversals=\App\Models\FinanceTransactionReversal::query()
             ->where('business_id',$business->id)->where('posting_status','not_posted')
             ->latest()->limit(100)->get();
+        $partialReturns=\App\Models\FinancePartialBankReturn::query()
+            ->where('business_id',$business->id)->where('posting_status','not_posted')
+            ->latest()->limit(100)->get();
+        $monetaryRevaluations=\App\Models\FinanceMonetaryRevaluation::query()
+            ->where('business_id',$business->id)->where('posting_status','not_posted')
+            ->latest()->limit(100)->get();
+        $fxRevaluations=\App\Models\FinanceFxRevaluation::query()
+            ->where('business_id',$business->id)->where('posting_status','not_posted')
+            ->latest()->limit(100)->get();
         $foreignBankOpenings=\App\Models\FinanceForeignBankOpening::query()
             ->where('business_id',$business->id)->where('posting_status','not_posted')
             ->latest()->limit(100)->get();
@@ -263,7 +272,8 @@ class FinanceController extends Controller
             'business','requests','rates','invoices','bills','payments','costs',
             'canSubmit','canApprove','canPost','hasPending','reliefs','creditNotes',
             'openingBalances','balanceAdjustments','payrollRuns','payrollSettlements','payrollReversals',
-            'transactionReversals','foreignBankOpenings'
+            'transactionReversals','foreignBankOpenings','fxRevaluations',
+            'partialReturns','monetaryRevaluations'
         ));
     }
 
@@ -275,6 +285,8 @@ class FinanceController extends Controller
             'exchange_rate_id'=>['nullable','integer'],
             'basis_notes'=>['required','string','min:20','max:3000'],
         ]);
+        $data['exchange_rate_id']=isset($data['exchange_rate_id'])
+            ?(int)$data['exchange_rate_id']:null;
         $posting->request($this->business($request),$type,$source,$data,$request->user()->id);
         return redirect()->route('finance.reviews')->with('status',
             'Posting submitted for independent finance approval.');

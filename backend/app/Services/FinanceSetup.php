@@ -24,6 +24,8 @@ class FinanceSetup
         ['6300','Staff Payroll Expense','expense','payroll_expense'],
         ['7110','Realised Foreign Exchange Gain','income','fx_gain'],
         ['7120','Realised Foreign Exchange Loss','expense','fx_loss'],
+        ['7130','Unrealised Foreign Exchange Gain','income','unrealized_fx_gain'],
+        ['7140','Unrealised Foreign Exchange Loss','expense','unrealized_fx_loss'],
     ];
 
     public function activate(Business $business):int

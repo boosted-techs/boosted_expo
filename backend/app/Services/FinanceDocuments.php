@@ -6,6 +6,7 @@ use App\Models\Business;
 use App\Models\CommercialInvoice;
 use App\Models\ExportShipment;
 use App\Models\FinancePayment;
+use App\Models\FinancePartialBankReturn;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
 use App\Models\PurchaseOrder;
@@ -66,8 +67,16 @@ class FinanceDocuments
         $statuses=$includePending?['pending','posted']:['posted'];
         $allocated=BigDecimal::zero();
         foreach(FinancePayment::query()->where('business_id',$source->business_id)
-            ->where($relation,$source->id)->whereIn('status',$statuses)->pluck('amount') as $amount) {
-            $allocated=$allocated->plus((string)$amount);
+            ->where($relation,$source->id)->whereIn('status',$statuses)
+            ->get(['id','amount','status']) as $payment) {
+            $allocated=$allocated->plus((string)$payment->amount);
+            if($payment->status==='posted') {
+                foreach(FinancePartialBankReturn::query()->where('business_id',$source->business_id)
+                    ->where('source_type','payment')->where('source_id',$payment->id)
+                    ->where('posting_status','posted')->pluck('amount') as $returned) {
+                    $allocated=$allocated->minus((string)$returned);
+                }
+            }
         }
         return $base->minus($allocated);
     }
@@ -99,6 +108,16 @@ class FinanceDocuments
                     ->lockForUpdate()->findOrFail($data['supplier_bill_id']);
                 abort_unless($document->posting_status==='posted',422,
                     'The supplier bill must be approved and posted before making payments.');
+            }
+            if(\App\Models\FinancePartialBankReturn::query()
+                ->where('business_id',$business->id)
+                ->where('source_type','payment')
+                ->whereIn('source_id',FinancePayment::query()->where('business_id',$business->id)
+                    ->where($type==='in'?'commercial_invoice_id':'supplier_bill_id',$document->id)
+                    ->select('id'))
+                ->where('posting_status','not_posted')->exists()) {
+                throw ValidationException::withMessages(['document'=>
+                    'A bank return on this document is awaiting finance posting. Complete it before recording new payments.']);
             }
             if(\App\Models\FinanceBalanceAdjustment::query()
                 ->where('business_id',$business->id)

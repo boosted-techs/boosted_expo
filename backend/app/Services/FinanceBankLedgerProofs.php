@@ -62,7 +62,10 @@ class FinanceBankLedgerProofs
             if($date<$from) {
                 $opening=$opening->plus($native);
                 $baseOpening=$baseOpening->plus($base);
-            } else {
+            } elseif(!$native->isZero()) {
+                // FX revaluation changes only the base-currency book valuation.
+                // It must NEVER appear as an invented bank transfer in the
+                // original account currency or require a bank-statement row.
                 $movements[]=[
                     'journal_id'=>$line->journal_id,'source_type'=>$line->source_type,
                     'source_id'=>$line->source_id,'amount'=>(string)$native->abs()->toScale(2),
