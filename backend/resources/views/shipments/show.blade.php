@@ -176,6 +176,54 @@
 @endif
 </section>
 @endif
+@if($canViewDocs)
+<section class="section-card">
+<h2>Export clearance and permit references</h2>
+<div class="notice"><span>●</span><div><strong>Internal records are not government approvals</strong>
+<p>Save references from the actual issuing authority, and arrange official portal or document checks separately. The ERP does not issue a phytosanitary certificate, file a customs declaration, or claim an authority approved it. Validity, destination rules and original evidence must be verified by responsible staff.</p></div></div>
+@if($canGenerate && $shipment->status!=='cancelled')
+<form method="POST" action="{{ route('shipments.clearance.submit',$shipment->id) }}" class="form-stack form-narrow">@csrf
+<label class="field"><span>Document type</span><select name="document_kind" required>
+@foreach($clearanceKinds as $kind=>$label)<option value="{{ $kind }}">{{ $label }}</option>@endforeach
+</select></label>
+<div class="form-columns">
+<label class="field"><span>Issuing authority shown on document</span><input name="authority_name" required minlength="3" maxlength="180" placeholder="Name on original certificate"></label>
+<label class="field"><span>Official reference number on document</span><input name="external_reference" required minlength="3" maxlength="180"></label>
+</div>
+<label class="field"><span>Expiration date (if applicable)</span><input type="date" name="valid_until"></label>
+<label class="field"><span>Evidence and official verification steps</span><textarea name="source_evidence" required rows="3" minlength="30" maxlength="3000" placeholder="Identify the original document, issuing authority, inspection findings and where the reference may be verified independently."></textarea></label>
+<button class="secondary-button">Submit document for separate internal review</button></form>
+@endif
+<h3>Recorded external documents</h3>
+@forelse($clearanceChecks as $check)
+<div class="record"><div><strong>{{ $clearanceKinds[$check->document_kind]??$check->document_kind }}</strong>
+<small>{{ $check->authority_name }} · {{ $check->external_reference }}</small>
+<small>{{ str_replace('_',' ',ucfirst($check->status)) }}@if($check->valid_until) · Expires {{ $check->valid_until->format('d M Y') }}@endif</small>
+<small>{{ $check->source_evidence }}</small>
+@if($check->review_note)<small>Review: {{ $check->review_note }}</small>@endif
+</div>
+@if($check->status==='pending_review' && $canCheckClearance && $check->submitted_by!==auth()->id())
+<div class="form-stack">
+@foreach(['accept'=>'Mark internally checked','reject'=>'Reject'] as $decision=>$label)
+<form method="POST" action="{{ route('shipments.clearance.review',['shipment'=>$shipment->id,'record'=>$check->id,'action'=>$decision]) }}" class="form-stack">@csrf
+<label class="field"><span>Independent review and external source-check note</span>
+<input name="note" minlength="20" maxlength="2000" required placeholder="What original reference or authority website did you check?"></label>
+<button class="secondary-button">{{ $label }}</button></form>
+@endforeach
+</div>
+@endif</div>
+@empty<p class="empty-msg">No export clearance references recorded for this shipment.</p>@endforelse
+</section>
+@endif
+<section class="section-card"><h2>Carrier notifications</h2>
+<p class="muted">Only externally signed notifications from independently provisioned carrier accounts are shown. These are audit evidence; official airwaybill tracing and any manual dispatch/delivery updates still require review.</p>
+@forelse($providerCarrierEvents as $event)
+<div class="record"><div><strong>{{ str_replace('_',' ',ucfirst($event->event_type)) }}</strong>
+<small>AWB: {{ $event->external_reference }} · {{ $event->occurred_at->format('d M Y H:i') }}</small></div>
+<span class="tiny-pill">{{ str_replace('_',' ',ucfirst($event->review_status)) }}</span></div>
+@empty<p class="empty-msg">No carrier provider updates received.</p>@endforelse
+@if(auth()->user() && $canManage)<a class="action-link" href="{{ route('integrations.index') }}">Review provider updates</a>@endif
+</section>
 <section class="section-card"><h2>Activity history</h2>
 @foreach($shipment->events->sortByDesc('id') as $event)
 <div class="record"><div><strong>{{ ucwords(str_replace('_',' ',$event->action)) }}</strong>

@@ -813,3 +813,30 @@ Development data and SQLite have been preserved. Migrations
 production deployment or external money movement was performed.
 
 Phase 2 final regression: **130 passing tests, 2,627 assertions on both SQLite and disposable PostgreSQL**. The warehouse view distinguishes physical unpacked stock from usable/quality-cleared quantity; held lots are excluded from the dashboard and reorder threshold calculations. See deploy/PHASE2_OPERATIONS_RUNBOOK.md for the full handover and remaining external gates.
+
+
+## Phase 3 — Provider notifications, print agents and export clearance (22 October 2026)
+
+The ERP now has tenant-isolated, authenticated external provider event intake
+for payment and carrier messages, with strict signed-callback verification,
+idempotency and evidence review that never posts a financial journal or
+changes an export shipment's physical status. Platform operators must provision
+real provider accounts and signing secrets after independently validated
+onboarding; no accounts or fake credentials have been enabled.
+
+A local Zebra print agent and authenticated print-job queue support previously
+generated, hash-verified original ZPL files. Workstation credentials are shown
+once and stored hash-only, leases and statuses are audited, and a revoked
+workstation cannot receive new work. Socket delivery is not physical print
+verification. See deploy/zebra_agent/README.md.
+
+Shipments now include references for phytosanitary, origin, customs, airwaybill
+and other export documents, with expiry and an independent internal review.
+No actual statutory issuance or government authority verification is implied.
+The complete operational and activation requirements are documented in
+deploy/PHASE3_INTEGRATIONS_RUNBOOK.md.
+
+Phase 3 migration: 2026_10_22_000001_create_phase_three_integrations.
+The full SQLite and disposable PostgreSQL regression both passed **138
+tests / 2,713 assertions**. Everything remains local; no commit, push,
+live provider payment, document filing or production deployment was done.

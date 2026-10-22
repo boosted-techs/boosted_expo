@@ -27,6 +27,11 @@ return Application::configure(basePath: dirname(__DIR__))
             prepend: [TrustConfiguredProxies::class],
             append: [ProductionSecurity::class, RequirePrivilegedMfa::class],
         );
+        // These endpoints authenticate requests with per-tenant provisioned
+        // HMAC signing or a bearer device credential, not browser cookies.
+        $middleware->validateCsrfTokens(except:[
+            'integrations/webhook/*','print-agent/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

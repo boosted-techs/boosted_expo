@@ -43,6 +43,9 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'invoices.view'))
     <a href="{{ route('commercial-invoices.index') }}" class="{{ request()->routeIs('commercial-invoices.*')?'active':'' }}"><span class="nav-dot"></span>Commercial Invoices</a>
     @endif
+    @if($access->allows($membership, 'integrations.view'))
+    <a href="{{ route('integrations.index') }}" class="{{ request()->routeIs('integrations.*')?'active':'' }}"><span class="nav-dot"></span>Provider Updates</a>
+    @endif
     @if($access->allows($membership, 'finance.view'))
     <a href="{{ route('finance.index') }}" class="{{ request()->routeIs('finance.*')?'active':'' }}"><span class="nav-dot"></span>Finance & Ledger</a>
     @endif
@@ -101,6 +104,9 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'documents.view'))
     <a href="{{ route('export-documents.index') }}" class="{{ request()->routeIs('export-documents.*')?'active':'' }}"><span class="nav-dot"></span>Export Documents</a>
     <a href="{{ route('document-templates.index') }}" class="{{ request()->routeIs('document-templates.*')?'active':'' }}"><span class="nav-dot"></span>Document Templates</a>
+    @endif
+    @if($access->allows($membership, 'labels.view'))
+    <a href="{{ route('labels.printers') }}" class="{{ request()->routeIs('labels.printers*')?'active':'' }}"><span class="nav-dot"></span>Print Workstations</a>
     @endif
     @if($access->allows($membership, 'labels.view'))
     <a href="{{ route('labels.index') }}" class="{{ request()->routeIs('labels.*')?'active':'' }}"><span class="nav-dot"></span>Sticker Templates</a>

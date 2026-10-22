@@ -46,10 +46,30 @@ use App\Http\Controllers\FinancePayrollController;
 use App\Http\Controllers\FinanceTransactionReversalController;
 use App\Http\Controllers\FinanceFxRevaluationController;
 use App\Http\Controllers\FinanceMonetaryRevaluationController;
+use App\Http\Controllers\ExternalProviderController;
+use App\Http\Controllers\LabelPrintAgentController;
+use App\Http\Controllers\ExportClearanceController;
 use App\Support\BusinessPermissions;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => redirect()->route('workspace'));
+// Provider callbacks have no browser session; authentication is HMAC with a
+// separately provisioned per-business signing secret. Never accept arbitrary
+// caller-supplied public keys as proof of bank or carrier identity.
+Route::post('/integrations/webhook/{kind}/{provider}',
+    [ExternalProviderController::class,'webhook'])
+    ->whereIn('kind',['payment','carrier'])
+    ->where('provider','[a-z][a-z0-9_-]{2,59}')
+    ->middleware('throttle:120,1')->name('integrations.webhook');
+
+// A print agent is authenticated by a long, locally stored bearer token.
+// No browser CSRF session or direct server-to-printer network connection.
+Route::post('/print-agent/{agent}/next',[LabelPrintAgentController::class,'poll'])
+    ->whereNumber('agent')->middleware('throttle:60,1')->name('print-agent.next');
+Route::post('/print-agent/{agent}/jobs/{job}/ack',
+    [LabelPrintAgentController::class,'ack'])->whereNumber('agent')
+    ->whereNumber('job')->middleware('throttle:120,1')->name('print-agent.ack');
+
 Route::get('/q/{token}', [PublicQrController::class, 'show'])->middleware('throttle:120,1')->name('qr.public');
 Route::get('/q/{token}/photo', [PublicQrController::class, 'photo'])->middleware('throttle:120,1')->name('qr.photo');
 Route::get('/buyer-order/{token}',[BuyerOrderPortalController::class,'show'])
@@ -189,6 +209,30 @@ Route::middleware('auth')->group(function () {
             ->whereNumber('account')->name('finance.reports.ledger');
 
         // Finance requests, independent approval and immutable balanced postings.
+        Route::get('/labels/printers',[LabelPrintAgentController::class,'index'])
+            ->name('labels.printers');
+        Route::post('/labels/printers',[LabelPrintAgentController::class,'create'])
+            ->name('labels.printers.create');
+        Route::post('/labels/printers/{agent}/revoke',
+            [LabelPrintAgentController::class,'revoke'])->whereNumber('agent')
+            ->name('labels.printers.revoke');
+        Route::post('/labels/printers/jobs',[LabelPrintAgentController::class,'submit'])
+            ->name('labels.printers.jobs');
+
+        Route::post('/shipments/{shipment}/clearance',[ExportClearanceController::class,'submit'])
+            ->whereNumber('shipment')->name('shipments.clearance.submit');
+        Route::post('/shipments/{shipment}/clearance/{record}/{action}',
+            [ExportClearanceController::class,'review'])
+            ->whereNumber('shipment')->whereNumber('record')
+            ->whereIn('action',['accept','reject'])->name('shipments.clearance.review');
+
+        Route::get('/integrations',[ExternalProviderController::class,'index'])
+            ->name('integrations.index');
+        Route::post('/integrations/events/{event}/{action}',
+            [ExternalProviderController::class,'review'])
+            ->whereNumber('event')->whereIn('action',['accept','reject'])
+            ->name('integrations.events.review');
+
         Route::get('/finance', [FinanceController::class,'dashboard'])->name('finance.index');
         Route::post('/finance/setup', [FinanceController::class,'setup'])->name('finance.setup');
         Route::get('/finance/rates', [FinanceController::class,'rates'])->name('finance.rates');

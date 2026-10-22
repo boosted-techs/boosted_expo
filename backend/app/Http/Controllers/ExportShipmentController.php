@@ -158,6 +158,15 @@ class ExportShipmentController extends Controller
         $canSeeInvoice=app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'),'invoices.view'
         );
+        $clearanceChecks=\App\Models\ExportClearanceCheck::query()
+            ->where('business_id',$businessId)->where('shipment_id',$shipment->id)
+            ->orderByDesc('id')->limit(35)->get();
+        $providerCarrierEvents=\App\Models\ExternalProviderEvent::query()
+            ->where('business_id',$businessId)->where('shipment_id',$shipment->id)
+            ->where('kind','carrier')->orderByDesc('id')->limit(20)->get();
+        $clearanceKinds=\App\Services\ExportClearanceRegister::TYPES;
+        $canCheckClearance=in_array(
+            $request->attributes->get('membership')->role,['owner','admin'],true);
         $approvalService=app(\App\Services\ShipmentDispatchApproval::class);
         $approvalRequired=$approvalService->required($businessId);
         $dispatchReview=$approvalRequired && $shipment->status==='ready'
@@ -182,7 +191,8 @@ class ExportShipmentController extends Controller
         return view('shipments.show',compact(
             'shipment','available','canManage','canDispatch','canGenerate',
             'canViewDocs','documentTemplates','canInvoice','canSeeInvoice',
-            'approvalRequired','dispatchReview','canReviewDispatch'
+            'approvalRequired','dispatchReview','canReviewDispatch',
+            'clearanceChecks','providerCarrierEvents','clearanceKinds','canCheckClearance'
         ));
     }
 

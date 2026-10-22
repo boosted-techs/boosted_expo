@@ -2,7 +2,7 @@
 @section('title', 'Sticker Templates')
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">TEMPLATES & PRINTING</span><h1>Sticker templates</h1><p>Create exporter-specific Zebra stickers with selectable text, Code 128 barcodes and QR identities.</p></div></div>
-<div class="notice"><span>●</span><div><strong>Template configuration — first release</strong><p>This supports selected text fields, label dimensions, QR codes and barcodes in native Zebra ZPL. Logo placement, drag-and-drop layouts, document tables, flight/AWB binding, direct device printing and PDF fallback will follow in the full template studio.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Template configuration — first release</strong><p>Configure text fields, label dimensions, QR codes and barcodes in Zebra ZPL. You can download the label or queue it for an authenticated local print workstation. Logo placement, drag-and-drop design and PDF fallback are separate future studio features.</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('cartons.index') }}">Packed cartons</a><a class="secondary-button" href="{{ route('labels.history') }}">Generation history</a></div>
 <section class="section-card"><h2>Saved templates</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Template</th><th>Label size</th><th>QR type</th><th>Barcode</th><th>Version</th>@if($canManage)<th></th>@endif</tr></thead><tbody>
