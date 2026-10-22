@@ -10,6 +10,9 @@
 @foreach(['kg','g','tonne','pcs','box','crate','bunch','sack','litre'] as $unit)<option value="{{ $unit }}" @selected(old('base_unit',$product->base_unit)===$unit)>{{ $unit }}</option>@endforeach
 </select></label>
 <label class="field"><span>Description</span><textarea name="description" rows="4" maxlength="3000">{{ old('description',$product->description) }}</textarea></label>
+<label class="field"><span>Low-stock warning threshold ({{ $product->base_unit }})</span>
+<input name="reorder_point" type="number" min="0" step="0.001" max="999999999" value="{{ old('reorder_point',$product->reorder_point) }}">
+<small>Optional warning for total unpacked stock of this product. Does not automatically create a purchase.</small></label>
 <input type="hidden" name="active" value="0"><label class="check-row"><input type="checkbox" name="active" value="1" @checked(old('active',$product->active))> Product is active</label>
 <div class="form-actions"><button type="submit" class="primary-button">Save changes</button><a class="secondary-button" href="{{ route('products.index') }}">Cancel</a></div>
 </form>

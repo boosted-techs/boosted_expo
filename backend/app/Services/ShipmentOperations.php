@@ -97,6 +97,11 @@ class ShipmentOperations
                         'carton_ids'=>'Carton '.$carton->carton_code.' is allocated to another shipment.',
                     ]);
                 }
+                if ($carton->contents()->whereHas('batch',
+                    fn($q)=>$q->where('is_quarantined',true))->exists()) {
+                    throw ValidationException::withMessages(['carton_ids'=>
+                        'Carton '.$carton->carton_code.' contains quality-held produce and cannot be allocated.']);
+                }
                 if ($carton->status !== 'packed' || $carton->packingJob?->status !== 'completed') {
                     throw ValidationException::withMessages([
                         'carton_ids'=>'Carton '.$carton->carton_code.' must be packed and its packing job completed.',
@@ -126,6 +131,17 @@ class ShipmentOperations
             ]);
             return $added;
         },3);
+    }
+
+    private function assertNoHeldProduce(ExportShipment $shipment):void
+    {
+        $cartonIds=$shipment->allocations()->pluck('carton_id');
+        if(Carton::query()->where('business_id',$shipment->business_id)
+            ->whereIn('id',$cartonIds)->whereHas('contents.batch',
+                fn($q)=>$q->where('is_quarantined',true))->exists()){
+            throw ValidationException::withMessages(['carton_ids'=>
+                'This shipment contains produce under quality hold. A responsible reviewer must resolve the batch hold before dispatch.']);
+        }
     }
 
     public function release(ExportShipment $shipment, int $cartonId, int $userId): void
@@ -177,6 +193,7 @@ class ShipmentOperations
                     ->lockForUpdate()->findOrFail($shipment->sales_order_id);
                 app(SalesFulfillment::class)->assertCapacity($order,[]);
             }
+            $this->assertNoHeldProduce($shipment);
             $shipment->update(['status'=>'ready']);
             $this->event($shipment,$userId,'marked_ready',['carton_count'=>$allocations->count()]);
         });
@@ -201,6 +218,8 @@ class ShipmentOperations
         DB::transaction(function () use ($shipment,$actualDeparture,$userId) {
             $shipment=$this->lock($shipment);
             abort_unless($shipment->status==='ready',422,'Mark the shipment ready before dispatch.');
+            $this->assertNoHeldProduce($shipment);
+            app(ShipmentDispatchApproval::class)->assertDispatchAllowed($shipment,$userId);
             $allocations=$shipment->allocations()->orderBy('carton_id')
                 ->lockForUpdate()->get();
             if ($allocations->isEmpty()) {

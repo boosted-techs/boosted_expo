@@ -45,4 +45,29 @@
 <div class="record"><div><strong>{{ $invoice->reference }}</strong><small>{{ $invoice->currency }} {{ $invoice->grand_total }} · {{ $invoice->shipment?->reference }}</small></div><a href="{{ route('commercial-invoices.show',$invoice->id) }}" class="action-link">Open invoice</a></div>
 @empty<p class="empty-msg">No commercial invoices issued yet. Issue an invoice against an eligible shipment, not against unshipped order quantities.</p>@endforelse
 </section>
+@if($canShare)
+<section class="section-card"><h2>Private buyer order tracking</h2>
+<p class="muted">Email a read-only, time-limited tracking link directly to the buyer's registered email address. The link shows only this order, prices and manually recorded shipment milestones. It does not reveal internal costs or finance records.</p>
+<div class="record"><strong>Registered buyer email</strong><span>{{ $order->customer->email?:'No buyer email on file' }}</span></div>
+<form method="POST" action="{{ route('sales-orders.buyer-link.share',$order->id) }}" class="form-actions">@csrf
+<button class="primary-button" @disabled(!filter_var($order->customer->email,FILTER_VALIDATE_EMAIL))>Email private tracking link</button></form>
+@forelse($buyerLinks as $link)
+<div class="record"><div><strong>{{ $link->buyer_email }}</strong>
+<small>Issued {{ $link->created_at->format('d M Y') }} · Expires {{ $link->expires_at->format('d M Y') }}
+@if($link->revoked_at)
+· Revoked
+@endif
+@if($link->expires_at->isPast())
+· Expired
+@endif
+</small></div>
+@if(!$link->revoked_at && $link->expires_at->isFuture())
+<form method="POST" action="{{ route('sales-orders.buyer-link.revoke',[
+'order'=>$order->id,'link'=>$link->id]) }}">@csrf
+<button class="secondary-button">Revoke</button></form>
+@endif
+</div>
+@empty<p class="empty-msg">No tracking invitations have been issued.</p>@endforelse
+</section>
+@endif
 @endsection

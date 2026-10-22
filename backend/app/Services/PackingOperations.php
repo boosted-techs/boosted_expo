@@ -93,6 +93,10 @@ class PackingOperations
             abort_unless($batches->count() === count($qtyByBatch), 404);
 
             foreach ($qtyByBatch as $batchId => $quantity) {
+                if ($batches[$batchId]->is_quarantined) {
+                    throw ValidationException::withMessages(['contents'=>
+                        'Batch '.$batches[$batchId]->batch_code.' is on a quality hold and cannot be packed.']);
+                }
                 $this->enough($batches[$batchId], $quantity, 'contents');
             }
 

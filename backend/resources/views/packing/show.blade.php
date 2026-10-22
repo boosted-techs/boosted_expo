@@ -5,7 +5,7 @@
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('packing.index') }}">All packing jobs</a><a class="secondary-button" href="{{ route('cartons.index') }}">Packed cartons</a></div>
 <section class="section-card"><h2>Available source batches</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Origin</th><th>Available to pack</th></tr></thead><tbody>
-@forelse($batches as $entry)<tr><td><strong>{{ $entry['batch']->batch_code }}</strong></td><td>{{ $entry['batch']->source_reference ?: 'Not specified' }}</td><td>{{ $entry['available'] }} {{ $job->product->base_unit }}</td></tr>
+@forelse($batches as $entry)<tr><td><strong>{{ $entry['batch']->batch_code }}</strong></td><td>{{ $entry['batch']->source_reference ?: 'Not specified' }}</td><td>{{ $entry['available'] }} {{ $job->product->base_unit }} @if($entry['batch']->is_quarantined)<strong>· QUALITY HOLD</strong>@endif</td></tr>
 @empty<tr><td colspan="3" class="empty-msg">No produce has been received for this product yet. <a class="action-link" href="{{ route('receiving.index') }}">View receiving</a>.</td></tr>@endforelse
 </tbody></table></div>
 <p class="form-hint">Only accepted goods enter available stock. Packing and sorting losses deduct stock from their exact source batches.</p>
@@ -18,7 +18,7 @@
 <input type="hidden" name="packing_key" value="{{ $cartonKey }}">
 <div id="batch-lines">
 <div class="batch-line form-columns">
-<label class="field"><span>Source batch</span><select name="contents[0][batch_id]" required><option value="">Select batch</option>@foreach($batches as $entry)@if(\Brick\Math\BigDecimal::of($entry['available'])->isGreaterThan(0))<option value="{{ $entry['batch']->id }}">{{ $entry['batch']->batch_code }} · {{ $entry['available'] }} available</option>@endif @endforeach</select></label>
+<label class="field"><span>Source batch</span><select name="contents[0][batch_id]" required><option value="">Select batch</option>@foreach($batches as $entry)@if(!$entry['batch']->is_quarantined && \Brick\Math\BigDecimal::of($entry['available'])->isGreaterThan(0))<option value="{{ $entry['batch']->id }}">{{ $entry['batch']->batch_code }} · {{ $entry['available'] }} available</option>@endif @endforeach</select></label>
 <label class="field"><span>Quantity ({{ $job->product->base_unit }})</span><input name="contents[0][quantity]" type="number" min="0.001" step="0.001" required></label>
 </div></div>
 <button type="button" class="secondary-button" id="more-batch">Add another source batch</button>
@@ -31,7 +31,7 @@
 <button class="primary-button">Complete & save carton</button></form>
 <template id="batch-line-template">
 <div class="batch-line form-columns">
-<label class="field"><span>Source batch</span><select name="contents[__INDEX__][batch_id]" required><option value="">Select batch</option>@foreach($batches as $entry)@if(\Brick\Math\BigDecimal::of($entry['available'])->isGreaterThan(0))<option value="{{ $entry['batch']->id }}">{{ $entry['batch']->batch_code }}</option>@endif @endforeach</select></label>
+<label class="field"><span>Source batch</span><select name="contents[__INDEX__][batch_id]" required><option value="">Select batch</option>@foreach($batches as $entry)@if(!$entry['batch']->is_quarantined && \Brick\Math\BigDecimal::of($entry['available'])->isGreaterThan(0))<option value="{{ $entry['batch']->id }}">{{ $entry['batch']->batch_code }}</option>@endif @endforeach</select></label>
 <label class="field"><span>Quantity</span><input name="contents[__INDEX__][quantity]" type="number" min="0.001" step="0.001" required></label>
 <button type="button" class="text-button remove-batch">Remove batch</button>
 </div></template>
@@ -62,5 +62,5 @@
 <form method="POST" action="{{ route('packing.complete',$job->id) }}" data-confirm="Complete and lock this packing job?">@csrf<button class="primary-button">Complete packing job</button></form></section>
 @endif
 @if($job->status==='completed')<div class="notice"><span>●</span><div><strong>Packing completed</strong><p>Recorded cartons remain available for the future export-allocation workflow. No shipment or payment has been created.</p></div></div>@endif
-<script src="/assets/packing-ui.js.js" defer></script>
+<script src="/assets/packing-ui.js" defer></script>
 @endsection

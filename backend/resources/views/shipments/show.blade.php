@@ -87,7 +87,30 @@
 @if($canManage)
 <form method="POST" action="{{ route('shipments.reopen',$shipment->id) }}">@csrf<button class="secondary-button">Reopen for editing</button></form>
 @endif</div>
-@if($canDispatch)
+@if($approvalRequired)
+<div class="notice"><span>●</span><div><strong>Independent dispatch sign-off required</strong>
+<p>This business requires management approval for these exact flight and carton details before departure can be recorded.</p></div></div>
+@if(!$dispatchReview && $canManage)
+<form method="POST" action="{{ route('shipments.approval.submit',$shipment->id) }}" class="form-actions">@csrf
+<button class="secondary-button">Request dispatch approval</button></form>
+@elseif($dispatchReview)
+<div class="record"><strong>Management review</strong><span>{{ ucfirst($dispatchReview->status) }}</span></div>
+@if($dispatchReview->review_note)<p class="muted">{{ $dispatchReview->review_note }}</p>@endif
+@if($dispatchReview->status==='pending' && $canReviewDispatch && $dispatchReview->requested_by!==auth()->id())
+@foreach(['approve'=>'Approve this dispatch','reject'=>'Reject dispatch'] as $decision=>$label)
+<form class="form-stack" method="POST" action="{{ route('shipments.approval.review',['shipment'=>$shipment->id,'decision'=>$decision]) }}">@csrf
+<label class="field"><span>Independent review note</span>
+<textarea name="reason" minlength="20" maxlength="1000" required rows="2" placeholder="Explain the documents and cargo details verified"></textarea></label>
+<button class="{{ $decision==='approve'?'primary-button':'secondary-button' }}">{{ $label }}</button>
+</form>
+@endforeach
+@endif
+@if($dispatchReview->status==='rejected')
+<p class="form-hint">Reopen the shipment, resolve the review issues and mark it ready again to request fresh approval.</p>
+@endif
+@endif
+@endif
+@if($canDispatch && (!$approvalRequired || $dispatchReview?->status==='approved'))
 <form method="POST" action="{{ route('shipments.dispatch',$shipment->id) }}" class="form-stack" style="margin-top:17px">@csrf
 <label class="field"><span>Actual departure date and time</span><input name="actual_departure_at" type="datetime-local" required value="{{ now($business->timezone)->format('Y-m-d\TH:i') }}"><small>Use the local time recorded by the carrier or exporter.</small></label>
 <label class="check-row"><input type="checkbox" name="confirm_dispatch" value="1" required> I confirm that the physical cartons have been handed over for dispatch.</label>

@@ -25,5 +25,5 @@
 </form>
 @if($customers->isEmpty() || $products->isEmpty())<p class="notice-message">Add an active customer and product before recording a request.</p>@endif
 </section>
-<script src="/assets/sales-request-ui.js.js" defer></script>
+<script src="/assets/sales-request-ui.js" defer></script>
 @endsection

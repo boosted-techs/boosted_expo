@@ -86,9 +86,40 @@ class GoodsReceiptController extends Controller
             ->where('level','batch')->where('public_enabled',true)
             ->whereIn('record_id',$batchIds)
             ->pluck('record_id')->mapWithKeys(fn ($id) => [$id => true]);
-        $canPublish = app(\App\Support\BusinessPermissions::class)->allows(
-            $request->attributes->get('membership'),'traceability.publish');
+        $access=app(\App\Support\BusinessPermissions::class);
+        $membership=$request->attributes->get('membership');
+        $canPublish=$access->allows($membership,'traceability.publish');
+        $canHold=$access->allows($membership,'stock.quality.hold');
+        $canRelease=$access->allows($membership,'stock.quality.release');
 
-        return view('receiving.stock',compact('batches','balanceByBatch','publicByBatch','canPublish'));
+        // Sum exact signed movements in source-product units, across all
+        // batches; a low-stock alert is not a per-batch threshold.
+        $productBalance=[];
+        \App\Models\StockMovement::query()
+            ->join('stock_batches as source_batch',function($join){
+                $join->on('source_batch.id','=','stock_movements.batch_id')
+                    ->on('source_batch.business_id','=','stock_movements.business_id');
+            })
+            ->where('stock_movements.business_id',$businessId)
+            ->where('source_batch.is_quarantined',false)
+            ->select(['source_batch.product_id','stock_movements.quantity','stock_movements.id'])
+            ->orderBy('stock_movements.id')
+            ->chunk(500,function($lines)use(&$productBalance){
+                foreach($lines as $line){
+                    $key=(int)$line->product_id;
+                    $productBalance[$key]=($productBalance[$key]??\Brick\Math\BigDecimal::zero())
+                        ->plus((string)$line->quantity);
+                }
+            });
+        $lowStock=[];
+        foreach(\App\Models\Product::query()->where('business_id',$businessId)
+            ->where('active',true)->whereNotNull('reorder_point')->orderBy('name')->get() as $product){
+            $balance=$productBalance[$product->id]??\Brick\Math\BigDecimal::zero();
+            if($balance->isLessThan((string)$product->reorder_point)){
+                $lowStock[]=['product'=>$product,'available'=>(string)$balance];
+            }
+        }
+        return view('receiving.stock',compact('batches','balanceByBatch','publicByBatch',
+            'canPublish','canHold','canRelease','lowStock'));
     }
 }

@@ -7,7 +7,7 @@
 <title>@yield('title', 'Overview') · Boosted Export ERP</title>
 <link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
 <link rel="manifest" href="/manifest.webmanifest">
-<script src="/assets/theme-init.js.js"></script>
+<script src="/assets/theme-init.js"></script>
 </head>
 <body>
 @php
@@ -108,6 +108,9 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'catalogue.view'))
     <a href="{{ route('products.index') }}" class="{{ request()->routeIs('products.*')?'active':'' }}"><span class="nav-dot"></span>Product Catalogue</a>
     @endif
+    @if($access->allows($membership, 'staff.clock'))
+    <a href="{{ route('staff.index') }}" class="{{ request()->routeIs('staff.*')?'active':'' }}"><span class="nav-dot"></span>Shifts & Attendance</a>
+    @endif
     @if($access->allows($membership, 'team.view'))
     <a href="{{ route('team.index') }}" class="{{ request()->routeIs('team.*')?'active':'' }}"><span class="nav-dot"></span>Team & Access</a>
     @endif
@@ -140,5 +143,5 @@ $sections = config('expo.sections');
 </main>
 </div></div>
 <div class="scrim" id="scrim" hidden></div>
-<script src="/assets/console-ui.js.js" defer></script>
+<script src="/assets/console-ui.js" defer></script>
 </body></html>

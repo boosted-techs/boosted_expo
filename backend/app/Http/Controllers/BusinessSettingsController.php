@@ -15,7 +15,10 @@ class BusinessSettingsController extends Controller
         abort_unless($access->allows($request->attributes->get('membership'), 'business.settings'), 403);
         $business = $request->attributes->get('activeBusiness');
 
-        return view('businesses.settings', compact('business'));
+        $policy=\App\Models\BusinessOperatingPolicy::query()
+            ->where('business_id',$business->id)->first();
+        $canChangePolicy=$request->attributes->get('membership')->role==='owner';
+        return view('businesses.settings', compact('business','policy','canChangePolicy'));
     }
 
     public function update(Request $request, BusinessPermissions $access): RedirectResponse

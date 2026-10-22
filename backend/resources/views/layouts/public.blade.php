@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>@yield('title', 'Sign in') · Boosted Export ERP</title>
 <link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
-<script src="/assets/theme-init.js.js"></script>
+<script src="/assets/theme-init.js"></script>
 </head><body>
 <div class="auth-shell">
   <aside class="auth-side">

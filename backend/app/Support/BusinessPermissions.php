@@ -6,37 +6,41 @@ use App\Models\BusinessMembership;
 
 class BusinessPermissions
 {
-    // This first release uses conservative predefined grants. A business-managed
-    // approval and role-policy editor will be added after operational workflows.
+    // Conservative predefined role grants: company owners configure specific
+    // operating approvals, but finance separation cannot be disabled.
     private const ROLE_GRANTS = [
         'owner' => ['*'],
         'admin' => ['*'],
         'sales' => [
+            'staff.clock',
             'section.overview','section.sales','catalogue.view',
             'customers.view','customers.manage','shipments.view','documents.view',
             'sales.view','sales.manage','sales.orders.view','invoices.view',
         ],
         'buyer' => [
+            'staff.clock',
             'section.overview','section.purchasing','catalogue.view',
             'suppliers.view','suppliers.manage','procurement.view','stock.view',
             'procurement.create','purchases.view','purchases.create','receipts.view',
         ],
         'warehouse' => [
+            'staff.clock',
             'section.overview','section.operations','catalogue.view',
             'purchases.view','receipts.view','receipts.post',
-            'stock.view','packing.view','packing.manage','cartons.view',
+            'stock.view','stock.quality.hold','packing.view','packing.manage','cartons.view',
             'labels.view','labels.generate','traceability.publish',
             'shipments.view','shipments.manage',
             'documents.view','documents.generate',
             'sales.orders.view',
         ],
-        'packing' => ['section.overview','section.operations','catalogue.view','receipts.view',
-            'stock.view','packing.view','packing.manage','cartons.view','labels.view','labels.generate'],
-        'logistics' => ['section.overview','section.exports','catalogue.view','receipts.view',
+        'packing' => ['staff.clock','section.overview','section.operations','catalogue.view','receipts.view',
+            'stock.view','stock.quality.hold','packing.view','packing.manage','cartons.view','labels.view','labels.generate'],
+        'logistics' => ['staff.clock','section.overview','section.exports','catalogue.view','receipts.view',
             'stock.view','packing.view','cartons.view','labels.view','labels.generate',
             'shipments.view','shipments.manage','shipments.dispatch',
             'documents.view','documents.generate','sales.orders.view'],
         'accountant' => [
+            'staff.clock',
             'section.overview','section.finance','catalogue.view',
             'customers.view','suppliers.view','procurement.view','purchases.view','receipts.view',
             'stock.view','packing.view','cartons.view','shipments.view','documents.view',
@@ -57,7 +61,7 @@ class BusinessPermissions
             'finance.adjustments.prepare','finance.payroll.view','finance.payroll.prepare',
             'finance.payroll.settle','finance.payroll.correct',
         ],
-        'hr' => ['section.overview','section.staff','finance.payroll.view','finance.payroll.prepare'],
+        'hr' => ['staff.clock','staff.manage','staff.view','section.overview','section.staff','finance.payroll.view','finance.payroll.prepare'],
         'viewer' => ['section.overview','catalogue.view'],
     ];
 

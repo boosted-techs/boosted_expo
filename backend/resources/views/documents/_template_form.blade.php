@@ -32,4 +32,4 @@
 </div></div>
 <p class="form-hint">Documents retain a full snapshot of the selected carton data and template settings when issued. Later changes to templates do not alter previously issued paperwork.</p>
 </div>
-<script src="/assets/document-template-ui.js.js" defer></script>
+<script src="/assets/document-template-ui.js" defer></script>

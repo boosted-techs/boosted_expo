@@ -158,6 +158,12 @@ class ExportShipmentController extends Controller
         $canSeeInvoice=app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'),'invoices.view'
         );
+        $approvalService=app(\App\Services\ShipmentDispatchApproval::class);
+        $approvalRequired=$approvalService->required($businessId);
+        $dispatchReview=$approvalRequired && $shipment->status==='ready'
+            ?$approvalService->latest($shipment):null;
+        $canReviewDispatch=in_array(
+            $request->attributes->get('membership')->role,['owner','admin'],true);
         if ($canManage && $shipment->status==='draft') {
             $search=trim((string)$request->query('carton_search',''));
             $available=Carton::query()->where('business_id',$businessId)
@@ -165,6 +171,8 @@ class ExportShipmentController extends Controller
                 ->where('status','packed')
                 ->whereHas('packingJob',fn ($q)=>$q->where('status','completed'))
                 ->whereDoesntHave('shipmentAllocation')
+                ->whereDoesntHave('contents.batch',
+                    fn($q)=>$q->where('is_quarantined',true))
                 ->with('packingJob.product')
                 ->orderBy('id')->limit(100)->get();
         }
@@ -173,7 +181,8 @@ class ExportShipmentController extends Controller
             ->orderBy('type')->orderBy('name')->get();
         return view('shipments.show',compact(
             'shipment','available','canManage','canDispatch','canGenerate',
-            'canViewDocs','documentTemplates','canInvoice','canSeeInvoice'
+            'canViewDocs','documentTemplates','canInvoice','canSeeInvoice',
+            'approvalRequired','dispatchReview','canReviewDispatch'
         ));
     }
 

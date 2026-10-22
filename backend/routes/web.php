@@ -2,6 +2,11 @@
 
 use App\Http\Controllers\BusinessSelectionController;
 use App\Http\Controllers\BusinessSettingsController;
+use App\Http\Controllers\OperatingPolicyController;
+use App\Http\Controllers\ShipmentApprovalController;
+use App\Http\Controllers\StockQualityController;
+use App\Http\Controllers\BuyerOrderPortalController;
+use App\Http\Controllers\TeamAccessController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\PlatformBusinessController;
 use App\Http\Controllers\ProductController;
@@ -12,6 +17,7 @@ use App\Http\Controllers\PublicQrController;
 use App\Http\Controllers\SessionController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\StaffController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplyRequestController;
@@ -46,6 +52,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', fn () => redirect()->route('workspace'));
 Route::get('/q/{token}', [PublicQrController::class, 'show'])->middleware('throttle:120,1')->name('qr.public');
 Route::get('/q/{token}/photo', [PublicQrController::class, 'photo'])->middleware('throttle:120,1')->name('qr.photo');
+Route::get('/buyer-order/{token}',[BuyerOrderPortalController::class,'show'])
+    ->middleware('throttle:20,1')->name('buyer-order.show');
 Route::get('/supplier-offer/{token}', [SupplierReplyController::class, 'show'])->middleware('throttle:60,1')->name('supplier-offer.show');
 Route::post('/supplier-offer/{token}', [SupplierReplyController::class, 'store'])->middleware('throttle:10,1')->name('supplier-offer.store');
 
@@ -225,6 +233,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/sales-quotes/{quote}/pdf', [SalesQuotationController::class,'pdf'])
             ->whereNumber('quote')->name('sales-quotes.pdf');
         Route::get('/sales-orders', [SalesOrderController::class,'index'])->name('sales-orders.index');
+        Route::post('/sales-orders/{order}/buyer-link',[BuyerOrderPortalController::class,'share'])
+            ->whereNumber('order')->middleware('throttle:5,1')
+            ->name('sales-orders.buyer-link.share');
+        Route::post('/sales-orders/{order}/buyer-link/{link}/revoke',
+            [BuyerOrderPortalController::class,'revoke'])
+            ->whereNumber('order')->whereNumber('link')
+            ->name('sales-orders.buyer-link.revoke');
         Route::get('/sales-orders/{order}', [SalesOrderController::class,'show'])
             ->whereNumber('order')->name('sales-orders.show');
         Route::post('/sales-orders/{order}/shipments/{shipment}', [SalesOrderController::class,'link'])
@@ -267,6 +282,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/receiving/purchase/{purchase}', [GoodsReceiptController::class, 'create'])->whereNumber('purchase')->name('receiving.create');
         Route::post('/receiving/purchase/{purchase}', [GoodsReceiptController::class, 'store'])->whereNumber('purchase')->name('receiving.store');
         Route::get('/stock', [GoodsReceiptController::class, 'stock'])->name('stock.index');
+        Route::post('/stock/{batch}/quality/{action}',[StockQualityController::class,'change'])
+            ->whereNumber('batch')->whereIn('action',['hold','release'])
+            ->name('stock.quality.change');
         Route::put('/stock/{batch}/qr', [CartonController::class, 'batchVisibility'])
             ->whereNumber('batch')->name('stock.qr.visibility');
 
@@ -316,6 +334,12 @@ Route::middleware('auth')->group(function () {
             ->whereNumber('shipment')->name('shipments.ready');
         Route::post('/shipments/{shipment}/reopen', [ExportShipmentController::class,'reopen'])
             ->whereNumber('shipment')->name('shipments.reopen');
+        Route::post('/shipments/{shipment}/dispatch-review',
+            [ShipmentApprovalController::class,'submit'])->whereNumber('shipment')
+            ->name('shipments.approval.submit');
+        Route::post('/shipments/{shipment}/dispatch-review/{decision}',
+            [ShipmentApprovalController::class,'review'])->whereNumber('shipment')
+            ->whereIn('decision',['approve','reject'])->name('shipments.approval.review');
         Route::post('/shipments/{shipment}/dispatch', [ExportShipmentController::class,'dispatch'])
             ->whereNumber('shipment')->name('shipments.dispatch');
         Route::post('/shipments/{shipment}/arrival', [ExportShipmentController::class,'arrive'])
@@ -347,7 +371,11 @@ Route::middleware('auth')->group(function () {
                 request()->attributes->get('membership'), $sections[$section][2],
             ), 403);
 
-            return view('workspace', compact('section', 'sections'));
+            $metrics = $section === 'overview'
+                ? app(\App\Services\WorkspaceMetrics::class)
+                    ->overview(request()->attributes->get('membership'))
+                : [];
+            return view('workspace', compact('section', 'sections', 'metrics'));
         })->name('workspace');
 
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');
@@ -367,8 +395,22 @@ Route::middleware('auth')->group(function () {
         Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->whereNumber('product')->name('products.edit');
         Route::put('/products/{product}', [ProductController::class, 'update'])->whereNumber('product')->name('products.update');
 
+        Route::get('/staff', [StaffController::class,'index'])->name('staff.index');
+        Route::post('/staff/shifts', [StaffController::class,'schedule'])->name('staff.schedule');
+        Route::post('/staff/shifts/{shift}/cancel', [StaffController::class,'cancel'])
+            ->whereNumber('shift')->name('staff.cancel');
+        Route::post('/staff/clock-in', [StaffController::class,'clockIn'])
+            ->middleware('throttle:10,1')->name('staff.clock-in');
+        Route::post('/staff/attendance/{attendance}/clock-out', [StaffController::class,'clockOut'])
+            ->whereNumber('attendance')->middleware('throttle:10,1')->name('staff.clock-out');
+
         Route::get('/team', [TeamController::class, 'index'])->name('team.index');
+        Route::put('/team/members/{member}',[TeamAccessController::class,'update'])
+            ->whereNumber('member')->name('team.members.update');
         Route::post('/team/invitations', [TeamController::class, 'invite'])->middleware('throttle:10,1')->name('team.invite');
+
+        Route::post('/business-settings/policies',[OperatingPolicyController::class,'update'])
+            ->name('business.policies.update');
 
         Route::get('/business-settings', [BusinessSettingsController::class, 'index'])->name('business.settings');
         Route::put('/business-settings', [BusinessSettingsController::class, 'update'])->name('business.settings.update');

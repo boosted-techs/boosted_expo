@@ -41,6 +41,7 @@ class ProductController extends Controller
             'description' => ['nullable', 'string', 'max:3000'],
             'base_unit' => ['required', Rule::in(['kg', 'g', 'tonne', 'pcs', 'box', 'crate', 'bunch', 'sack', 'litre'])],
             'active' => ['sometimes', 'boolean'],
+            'reorder_point' => ['nullable','numeric','min:0','decimal:0,3','max:999999999'],
         ]);
     }
 

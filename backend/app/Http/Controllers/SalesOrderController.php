@@ -35,7 +35,14 @@ class SalesOrderController extends Controller
             ->whereNull('sales_order_id')->orderByDesc('id')->get();
         $canLink=app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'),'shipments.manage');
-        return view('sales.orders.show',compact('order','summary','draftShipments','canLink'));
+        $canShare=app(BusinessPermissions::class)->allows(
+            $request->attributes->get('membership'),'sales.manage');
+        $buyerLinks=$canShare?\App\Models\BuyerOrderLink::query()
+            ->where('business_id',$order->business_id)
+            ->where('sales_order_id',$order->id)
+            ->orderByDesc('id')->limit(10)->get():collect();
+        return view('sales.orders.show',compact(
+            'order','summary','draftShipments','canLink','canShare','buyerLinks'));
     }
     public function link(Request $request,int $order,int $shipment,SalesFulfillment $fulfillment):RedirectResponse {
         $this->check($request,'shipments.manage');

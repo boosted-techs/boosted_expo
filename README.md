@@ -790,3 +790,26 @@ Phase 1 implementation is complete for the features that can be developed locall
 - Composer/npm dependency audits and reproducible frontend dependency lockfile.
 
 **Release remains gated.** The current Mac environment is local/debug/SQLite with log-only mail and no real R2/offsite/provider credentials. Provision production DNS/HTTPS host, dedicated database, private Redis, real SMTP, private R2 and offsite disaster-recovery bucket, incident monitoring and backup-key escrow. Complete a rehearsal of existing SQLite-to-PostgreSQL DATA migration, real provider smoke tests, load/concurrency testing, independent penetration testing and financial acceptance. The production preflight deliberately refuses the local environment. No secret, live bank integration, real transfer, Git commit/push or production deployment was performed.
+
+## Phase 2 — operational completeness (21 October 2026)
+
+Implemented and locally tested in the Boosted Export ERP repository:
+tenant/role-scoped real overview metrics; staff shift scheduling, self-service
+check-in/out and attendance events; audited staff role/suspension changes;
+business-owner-configurable independent dispatch sign-off, with readiness
+snapshot verification and rejection/reopen lifecycle; warehouse quarantine and
+independent quality release, inventory-aware reorder warnings; and private,
+expiring/revocable buyer order tracking links. The existing secure supplier
+quotation links remain in use. No payroll, money or inventory changes occur
+automatically through attendance, buyer links or dispatch approvals.
+
+Full Phase 2 operating procedures, authorisation rules, real-world QA checklist
+and release limitations are in deploy/PHASE2_OPERATIONS_RUNBOOK.md. Frontend
+static-script asset paths were also corrected from *.js.js to *.js following
+the previous CSP migration.
+
+Development data and SQLite have been preserved. Migrations
+2026_10_21_000005–000007 are additive; no commit, push, live mail,
+production deployment or external money movement was performed.
+
+Phase 2 final regression: **130 passing tests, 2,627 assertions on both SQLite and disposable PostgreSQL**. The warehouse view distinguishes physical unpacked stock from usable/quality-cleared quantity; held lots are excluded from the dashboard and reorder threshold calculations. See deploy/PHASE2_OPERATIONS_RUNBOOK.md for the full handover and remaining external gates.

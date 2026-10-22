@@ -33,7 +33,8 @@ class ProductionSecurity
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'DENY');
-        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $response->headers->set('Referrer-Policy', $request->is('buyer-order/*')
+            ?'no-referrer':'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
         $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
         $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
@@ -54,7 +55,7 @@ class ProductionSecurity
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000');
         }
 
-        if ($request->user()) {
+        if ($request->user() || $request->is('buyer-order/*')) {
             $response->headers->set('Cache-Control', 'private, no-store');
         }
 

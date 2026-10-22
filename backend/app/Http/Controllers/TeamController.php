@@ -24,7 +24,12 @@ class TeamController extends Controller
             fn (string $role) => $access->canInviteRole($request->attributes->get('membership'), $role),
         ));
 
-        return view('team.index', compact('business', 'members', 'pending', 'roles'));
+        $canManage=in_array($request->attributes->get('membership')->role,['owner','admin'],true);
+        $actorRole=$request->attributes->get('membership')->role;
+        $audit=\App\Models\TeamMembershipEvent::query()->where('business_id',$business->id)
+            ->latest('id')->limit(20)->get();
+        return view('team.index', compact('business', 'members', 'pending', 'roles',
+            'canManage','actorRole','audit'));
     }
 
     public function invite(Request $request, BusinessPermissions $access, InviteBusinessUser $invites): RedirectResponse

@@ -3,11 +3,17 @@
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">EXPORT OPERATIONS</span><h1>{{ $sections[$section][0] }}</h1><p>{{ $sections[$section][1] }}</p></div><div class="page-mark">EXP / 01</div></div>
 @if($section === 'overview')
-  <div class="notice"><span>●</span><div><strong>Workspace foundation is ready</strong><p>Purchasing, receiving, packing and shipment documentation have working tools. Dashboard totals remain placeholders until reporting and accounting are connected.</p></div></div>
+  <div class="notice"><span>●</span><div><strong>Operations overview</strong><p>These are current figures from your business records. Each figure is shown only when your role permits access to the underlying records.</p></div></div>
   <div class="stats">
-    @foreach([['Open customer orders', 'Sales'], ['Produce awaiting packing', 'Operations'], ['Upcoming shipments', 'Exports'], ['Outstanding approvals', 'Management']] as $card)
-      <article class="stat"><span>{{ $card[0] }}</span><strong>—</strong><small>{{ $card[1] }} · not connected</small></article>
-    @endforeach
+    @forelse($metrics as $card)
+      <a class="stat" href="{{ route($card['route']) }}">
+        <span>{{ $card['label'] }}</span>
+        <strong>{{ number_format($card['value']) }}</strong>
+        <small>{{ $card['detail'] }} ↗</small>
+      </a>
+    @empty
+      <article class="stat"><span>Welcome</span><strong>✓</strong><small>Your permitted tools are available below.</small></article>
+    @endforelse
   </div>
   <div class="grid-2">
     <section class="panel"><div class="panel-head"><div><span class="eyebrow">YOUR WORK</span><h2>Daily operations</h2></div></div><div class="task-grid">
@@ -23,6 +29,7 @@
       ['Finance reports','finance.reports.index','finance.reports.view'],
       ['Accounting controls','finance.controls','finance.controls.view'],
       ['Payroll runs','finance.payroll.index','finance.payroll.view'],
+      ['Shifts & attendance','staff.index','staff.clock'],
       ['Suppliers','suppliers.index','suppliers.view'],
       ['Purchases','purchases.index','purchases.view'],
       ['Receive produce','receiving.index','receipts.view'],
@@ -78,7 +85,11 @@
         ['Staff payroll','finance.payroll.index','finance.payroll.view'],
       ],
       'staff' => [
+        ['Shifts and attendance','staff.index','staff.clock'],
         ['Prepare payroll','finance.payroll.index','finance.payroll.view'],
+      ],
+      'settings' => [
+        ['Company preferences and approvals','business.settings','business.settings'],
       ],
       'exports' => [
         ['Export shipments','shipments.index','shipments.view'],
@@ -94,7 +105,8 @@
     $workingCards = [
       'sales'=>[0,1,2],'purchasing'=>[0,1,2],
       'operations'=>[0,1,2],'exports'=>[0,1,2],
-      'finance'=>[0,1],'staff'=>[2],'templates'=>[0,1,2],
+      'finance'=>[0,1],'staff'=>[0,2],'templates'=>[0,1,2],
+      'settings'=>[1],
     ][$section] ?? [];
   @endphp
   @if(count($workingLinks))
