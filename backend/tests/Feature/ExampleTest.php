@@ -14,6 +14,6 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/');
 
-        $response->assertRedirect(route('workspace'));
+        $response->assertOk()->assertSee('Every export has a story');
     }
 }

@@ -1,14 +1,15 @@
 # Boosted Export ERP
 
 Independent, multi-business agricultural-export ERP developed by Boosted Technologies.
-**Development project only — not ready for production or real-money transactions.**
+**Hosting and public website are live at https://boostedone.online. Client financial/export operations still require business acceptance and review of the open findings in [the deployment audit](deploy/PRODUCTION_AUDIT_2026-10-24.md).**
 This project does not share a codebase or database with Boosted+ POS.
 
 ## Local development
 
 Laravel 13 / PHP 8.4 with a responsive Blade frontend and a distinct export-green
-variant of Boosted+ POS's design palette. SQLite is currently used locally; a
-production PostgreSQL/Redis installation and full hosting/security hardening are planned.
+variant of Boosted+ POS's design palette. SQLite is used locally. Production uses dedicated PostgreSQL and Redis containers
+inside an isolated rootless Docker service; hosting controls and remaining findings
+are documented in the deployment audit.
 
 Run on the connected Mac:
 
@@ -23,7 +24,13 @@ refuses to create a second platform administrator. Platform admins create export
 and invite each company's owner. Company owners invite their own staff. There are
 no public self-registration routes or default passwords.
 
-## Operational areas implemented
+## Current feature inventory
+
+The [export-business roadmap](deploy/EXPORT_BUSINESS_ROADMAP_2026-10-27.md#14-delivery-sequence-and-exit-criteria) records current working/partial/missing scope and delivery gates. Phase 0 is implemented locally: suspended supplier links are blocked, older finance candidates are searchable and paginated, and owners control permitted business currencies. The suite passes 201 tests with 3,230 assertions. Later stages remain open, beginning with priority sticker printing and installation at login.
+
+### Existing operational modules
+
+These modules have working functionality; their presence does not imply completion of every ERP workflow in the roadmap.
 
 - Company onboarding, memberships, sign-in, invitations and predefined roles.
 - Product catalogue, CSV/XLSX preview/import/export and basic media management.
@@ -840,3 +847,30 @@ Phase 3 migration: 2026_10_22_000001_create_phase_three_integrations.
 The full SQLite and disposable PostgreSQL regression both passed **138
 tests / 2,713 assertions**. Everything remains local; no commit, push,
 live provider payment, document filing or production deployment was done.
+
+
+## Phase 4 — staging acceptance and controlled release safeguards (22 October 2026)
+
+The local project now includes role-separated per-company release acceptance
+campaigns (12 mandatory checks), independent management review, an immutable
+acceptance event history, read-only per-company finance/stock/document integrity
+audits and a fail-closed expo:release-gate production diagnostic. The release
+is bound to BOTH a reviewed immutable source archive and a separately approved
+frontend build SHA-256. Every active company on a shared ERP deployment must
+accept those fingerprints, and all active-company integrity checks must pass.
+
+Read-only or local opt-in commands:
+php artisan expo:data-audit BUSINESS_ID --json,
+php artisan expo:build-fingerprint --json,
+php artisan expo:release-gate BUSINESS_ID --sha=SHA256 --live --json.
+Run sh deploy/scripts/phase4_staging_rehearsal.sh for disposable SQLite and
+PostgreSQL regressions. phase4_build_candidate.sh intentionally refuses
+dirty/uncommitted source. Full release/runbook details and real provider,
+security, finance and data cutover prerequisites are in
+deploy/PHASE4_RELEASE_RUNBOOK.md.
+
+**Not deployed:** Live hosting, authorised external audits, real-data cutover,
+bank/carrier providers, physical printers and official government integrations
+remain independent prerequisites before any production release.
+
+Phase 4 final locally verified regression: **149 passing tests, 2,811 assertions** on both SQLite and a fresh, disposed PostgreSQL test database. The production preflight and dirty-tree packaging safety checks remain deliberately blocking on this Mac. No deployment or commit has occurred.

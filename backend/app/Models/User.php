@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\BoostedOnePasswordResetNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -26,6 +27,11 @@ class User extends Authenticatable
             'mfa_recovery_codes' => 'encrypted:array',
             'mfa_enabled_at' => 'datetime',
         ];
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new BoostedOnePasswordResetNotification($token));
     }
 
     public function memberships(): HasMany

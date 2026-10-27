@@ -45,7 +45,7 @@ h1{color:#2c5b3d;font-size:23px;margin:12px 0 3px}.brand{font-size:17px;font-wei
 <tr><td>{{ $carton['reference'] }}</td><td>{{ $carton['product'] }}</td><td>{{ $carton['net_weight_kg'] }}</td><td>{{ implode(', ', $carton['batch_codes']) }}</td></tr>
 @endforeach</tbody></table>
 @if($invoice['notes'])<div class="note"><strong>Remarks</strong><br>{{ $invoice['notes'] }}</div>@endif
-<div class="foot">Prepared using Boosted Export ERP from the confirmed sales order and shipment allocation at issuance.
+<div class="foot">Prepared using Boosted One ERP from the confirmed sales order and shipment allocation at issuance.
 This commercial invoice is not proof of payment, customs clearance, VAT compliance, or certification of origin.
 Tax rates, tariffs, customs values and any statutory particulars must be checked by the exporter before use.</div>
 </body></html>

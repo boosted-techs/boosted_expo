@@ -22,7 +22,8 @@ server {
 
     add_header X-Content-Type-Options "nosniff" always;
     add_header Strict-Transport-Security "max-age=31536000" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # Laravel sets route-specific Referrer-Policy, including no-referrer on
+    # bearer-token buyer URLs. Do not override it with a conflicting header.
 
     # The Laravel /up endpoint is liveness only. Use private expo:preflight
     # and expo:monitor for database/cache/recent-backup readiness.
@@ -53,13 +54,17 @@ server {
     location ~ /\. {
         deny all;
     }
-    location ~ \.php$ {
-        try_files $uri =404;
+    # Only Laravel's checked front controller is executable. Never let an
+    # accidentally uploaded PHP file under public/ become a script endpoint.
+    location = /index.php {
         include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
         fastcgi_param HTTPS on;
         fastcgi_param HTTP_HOST $host;
         fastcgi_read_timeout 60s;
         fastcgi_pass unix:/run/php/php8.4-fpm.sock;
+    }
+    location ~ \.php$ {
+        return 404;
     }
 }

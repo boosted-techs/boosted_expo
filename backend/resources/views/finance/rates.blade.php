@@ -7,7 +7,7 @@
 @if($canPropose)
 <section class="section-card form-narrow"><h2>Propose exchange rate</h2>
 <form method="POST" action="{{ route('finance.rates.propose') }}" class="form-stack">@csrf
-<div class="form-columns"><label class="field"><span>Foreign currency (3 letters)</span><input name="currency" required maxlength="3" minlength="3" placeholder="USD" value="{{ old('currency') }}"></label>
+<div class="form-columns"><label class="field"><span>Foreign currency (3 letters)</span><x-currency-select :value="old('currency')" /></label>
 <label class="field"><span>1 currency unit equals how many {{ $business->base_currency }}?</span><input name="rate_to_base" type="number" required min="0.0000000001" step="0.0000000001" value="{{ old('rate_to_base') }}" placeholder="e.g. 3650.50"></label></div>
 <label class="field"><span>Effective date</span><input type="date" name="effective_on" value="{{ old('effective_on',now()->format('Y-m-d')) }}" required max="{{ now()->format('Y-m-d') }}"></label>
 <label class="field"><span>Rate source / reference</span><input name="source_note" required minlength="8" maxlength="250" value="{{ old('source_note') }}" placeholder="e.g. Bank quote, reference and captured time"></label>

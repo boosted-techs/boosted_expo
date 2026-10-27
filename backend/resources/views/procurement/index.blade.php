@@ -17,7 +17,7 @@
 <p class="muted">One product per request in this version. You can invite several suppliers to respond.</p>
 <form method="POST" action="{{ route('supply-requests.store') }}" class="form-stack">@csrf
 <label class="field"><span>Product</span><select name="product_id" required><option value="">Choose a product</option>@foreach($products as $p)<option value="{{ $p->id }}" @selected(old('product_id')==$p->id)>{{ $p->name }} ({{ $p->base_unit }})</option>@endforeach</select></label>
-<div class="form-columns"><label class="field"><span>Required quantity</span><input name="quantity" type="number" min="0.001" step="0.001" value="{{ old('quantity') }}" required></label><label class="field"><span>Quotation currency</span><input name="currency" minlength="3" maxlength="3" value="{{ old('currency','UGX') }}" required></label></div>
+<div class="form-columns"><label class="field"><span>Required quantity</span><input name="quantity" type="number" min="0.001" step="0.001" value="{{ old('quantity') }}" required></label><label class="field"><span>Quotation currency</span><x-currency-select :value="old('currency','UGX')" /></label></div>
 <div class="form-columns"><label class="field"><span>Needed by (optional)</span><input name="needed_on" type="date" value="{{ old('needed_on') }}"></label><label class="field"><span>Responses close</span><input name="response_deadline" type="datetime-local" required value="{{ old('response_deadline') }}"></label></div>
 <label class="field"><span>Information for suppliers</span><textarea name="notes" rows="3" maxlength="2000">{{ old('notes') }}</textarea></label>
 <button class="primary-button">Create request</button>

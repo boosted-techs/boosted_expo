@@ -3,6 +3,7 @@
 @section('content')
 <span class="eyebrow">BOOSTED PLATFORM</span>
 <h1>Exporting businesses</h1>
+<p><a href="{{ route('platform.billing.index') }}">Manage onboarding requests, subscriptions and invoices →</a></p>
 <p class="subhead">Only a Boosted platform administrator can add a company and invite its first owner.</p>
 <section class="section-card">
  <h2>Register a business</h2>

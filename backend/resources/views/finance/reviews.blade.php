@@ -14,6 +14,7 @@
 @if($canSubmit)
 <section class="section-card"><h2>Source documents awaiting finance posting</h2>
 <p class="muted">Submitting a document here does not affect the ledger. Enter a meaningful audit explanation and, where applicable, the exact approved exchange rate.</p>
+@include('finance._record-search', ['field' => 'source_search', 'page' => 'page', 'label' => 'Find source document by reference'])
 @php $sourceSections=[
  ['type'=>'commercial_invoice','name'=>'Commercial invoices (revenue recognition)','rows'=>$invoices],
  ['type'=>'supplier_bill','name'=>'Supplier bills (accepted produce and payables)','rows'=>$bills],
@@ -83,6 +84,7 @@
 @endif
 </details>
 @empty<p class="empty-msg">No outstanding documents in this category.</p>@endforelse
+{{ $section['rows']->links() }}
 @endforeach
 </section>
 @endif

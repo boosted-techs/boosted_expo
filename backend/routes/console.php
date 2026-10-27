@@ -16,6 +16,12 @@ if (config('expo_operations.monitor_schedule') === true) {
         ->onOneServer()->withoutOverlapping(10);
 }
 
+// Opt in explicitly when production scheduler and mail transport are ready.
+if (config('expo_operations.billing_schedule') === true) {
+    Schedule::command('boostedone:billing-cycle')->dailyAt('08:00')
+        ->timezone('Africa/Kampala')->onOneServer()->withoutOverlapping(30);
+}
+
 Artisan::command('expo:bootstrap-admin', function () {
     if (User::query()->where('is_platform_admin', true)->exists()) {
         $this->error('A platform administrator already exists. Existing admin management requires an authorised process.');

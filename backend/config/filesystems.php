@@ -1,5 +1,7 @@
 <?php
 
+$r2EncryptionKey = env('R2_SSEC_KEY_BASE64');
+
 return [
 
     /*
@@ -78,6 +80,12 @@ return [
         // Cloudflare R2 private object storage. Supply credentials through environment variables.
         'r2' => [
             'driver' => 's3',
+            'root' => env('R2_ROOT', 'boostedone/production/media'),
+            'visibility' => 'private',
+            'options' => $r2EncryptionKey ? [
+                'SSECustomerAlgorithm' => 'AES256',
+                'SSECustomerKey' => base64_decode($r2EncryptionKey, true),
+            ] : [],
             'key' => env('R2_ACCESS_KEY_ID'),
             'secret' => env('R2_SECRET_ACCESS_KEY'),
             'region' => 'auto',

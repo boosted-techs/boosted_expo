@@ -113,7 +113,7 @@ body { font-family: DejaVu Sans, Arial, sans-serif; color: #1e3028; font-size: 1
 @endif
 <div class="footer">
 Document {{ $document['document']['number'] }} · Revision {{ $document['document']['version'] }} ·
-Prepared through Boosted Export ERP.<br>
+Prepared through Boosted One ERP.<br>
 Figures reflect the cartons allocated when this document was issued.
 Verify all details against actual weights, airline acceptance and applicable export regulations.
 This document is not a certificate of origin, phytosanitary certificate, customs clearance, or commercial invoice.

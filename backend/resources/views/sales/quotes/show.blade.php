@@ -13,7 +13,7 @@
 <section class="section-card"><h2>Quotation pricing & terms</h2>
 <p class="muted">Set a quantity and price for each product. The system calculates line totals, discount and tax. Confirm the applicable rate with your accountant before sharing.</p>
 <form method="POST" action="{{ route('sales-quotes.update',$quote->id) }}" class="form-stack">@csrf @method('PUT')
-<div class="form-columns"><label class="field"><span>Quotation currency</span><input name="currency" required minlength="3" maxlength="3" value="{{ old('currency',$quote->currency) }}"></label>
+<div class="form-columns"><label class="field"><span>Quotation currency</span><x-currency-select :value="old('currency', $quote->currency)" /></label>
 <label class="field"><span>Valid until</span><input type="date" name="valid_until" value="{{ old('valid_until',$quote->valid_until?->format('Y-m-d')) }}"></label></div>
 <label class="field"><span>Agreed delivery term</span><select name="incoterm"><option value="">Not agreed</option>
 @foreach(['EXW','FCA','CPT','CIP','DAP','DPU','DDP'] as $term)<option value="{{ $term }}" @selected(old('incoterm',$quote->incoterm)===$term)>{{ $term }}</option>@endforeach

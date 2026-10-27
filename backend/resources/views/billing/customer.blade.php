@@ -1,0 +1,5 @@
+@extends('layouts.console')
+@section('title','Subscription')
+@section('content')
+<h1>Boosted One subscription</h1><p>These are the charges issued to your business by Boosted Technologies, separate from your own customer invoices.</p><section class="section-card"><h2>Agreements</h2>@forelse($subscriptions as $s)<div class="record"><strong>{{ $s->plan->name }}</strong><small>{{ $s->billing_cycle }} · UGX {{ number_format($s->price_ugx) }} · {{ $s->status }} · Paid through {{ $s->paid_through?->format('d M Y') ?? 'Pending' }}</small></div>@empty<p>No agreement yet.</p>@endforelse</section><section class="section-card"><h2>Invoices</h2>@forelse($invoices as $i)<div class="record"><a href="{{ route('business.billing.invoice',$i) }}">{{ $i->invoice_number }}</a><small>UGX {{ number_format($i->total_ugx) }} · {{ $i->status }}</small></div>@empty<p>No invoices yet.</p>@endforelse</section>
+@endsection

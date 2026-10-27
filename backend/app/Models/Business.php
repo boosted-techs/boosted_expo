@@ -10,11 +10,12 @@ class Business extends Model
     protected $fillable = [
         'name', 'code', 'country_code', 'base_currency', 'timezone',
         'default_qr_level', 'is_active',
+        'enabled_currencies',
     ];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'enabled_currencies' => 'array'];
     }
 
     public function memberships(): HasMany

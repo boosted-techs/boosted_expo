@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Business;
 use App\Services\InviteBusinessUser;
+use App\Support\BusinessCurrencies;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,12 +22,12 @@ class PlatformBusinessController extends Controller
 
     public function store(Request $request, InviteBusinessUser $invites): RedirectResponse
     {
-        $request->merge(['code' => strtoupper(trim((string) $request->input('code')))]);
+        $request->merge(['code' => strtoupper(trim((string) $request->input('code'))), 'base_currency' => strtoupper(trim((string) $request->input('base_currency')))]);
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:150'],
             'code' => ['required', 'alpha_dash', 'max:50', Rule::unique('businesses', 'code')],
             'country_code' => ['required', 'alpha', 'size:2'],
-            'base_currency' => ['required', 'alpha', 'size:3'],
+            'base_currency' => ['required', 'string', Rule::in(array_keys(app(BusinessCurrencies::class)->catalogue()))],
             'timezone' => ['required', 'timezone'],
             'default_qr_level' => ['required', Rule::in(['product', 'batch', 'carton'])],
             'owner_email' => ['required', 'email', 'max:255'],

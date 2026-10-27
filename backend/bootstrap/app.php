@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'business' => ResolveActiveBusiness::class,
             'platform' => EnsurePlatformAdmin::class,
+            'billing' => \App\Http\Middleware\EnforceBillingEntitlement::class,
         ]);
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/workspace');

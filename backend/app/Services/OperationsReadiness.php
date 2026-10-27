@@ -108,8 +108,8 @@ class OperationsReadiness
             && !str_starts_with($dir,dirname($repo).'/');
         $this->check('offsite_backup_target',$external && $dir!==false && is_writable($dir),
             'Use an accessible backup directory outside the ERP source tree, protected by filesystem permissions.');
-        $this->check('recent_verified_backup',$this->availableBackup(),
-            'Create an encrypted backup and verify recovery within the configured maximum age.');
+        $this->check('recent_encrypted_archive',$this->availableBackup(),
+            'Require a recent encrypted archive; its age/size alone cannot prove independent restoration, which needs an accepted drill.');
         $offsite=config('filesystems.disks.expo_backup_offsite',[]);
         $enabled=config('expo_operations.offsite_enabled')===true;
         $offsiteEndpoint=(string)($offsite['endpoint']??'');
@@ -134,9 +134,9 @@ class OperationsReadiness
             extension_loaded('sodium')&&extension_loaded('zip'),
             'Use authenticated encryption and ZIP extensions for recoverable backups.');
         $env=base_path('.env');
-        $permissions=file_exists($env)?(fileperms($env)&0007):0;
+        $permissions=file_exists($env)?(fileperms($env)&0077):0;
         $this->check('secrets_file_permissions',$permissions===0,
-            '.env must not grant permissions to other Unix users.');
+            'Keep .env owner-readable only; do not grant group or other Unix users permissions.');
         $free=@disk_free_space(storage_path());
         $this->check('disk_capacity',$free!==false
             &&($free/(1024*1024*1024))>=(float)config('expo_operations.min_free_disk_gb',2),

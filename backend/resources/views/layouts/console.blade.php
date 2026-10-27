@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#37664b">
 <meta name="robots" content="noindex,nofollow">
-<title>@yield('title', 'Overview') · Boosted Export ERP</title>
+<title>@yield('title', 'Overview') · Boosted One</title>
 <link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
 <link rel="manifest" href="/manifest.webmanifest">
 <script src="/assets/theme-init.js"></script>
@@ -20,7 +20,7 @@ $sections = config('expo.sections');
 <aside class="sidebar" id="sidebar">
   <a class="brand" href="{{ route('workspace') }}">
     <span class="brand-icon">B<span>↗</span></span>
-    <span><strong>Boosted Export</strong><small>EXPORT ERP</small></span>
+    <span><strong>Boosted One</strong><small>EXPORT ERP</small></span>
   </a>
   <p class="nav-label">WORKSPACE</p>
   <nav aria-label="Main navigation">
@@ -42,6 +42,9 @@ $sections = config('expo.sections');
     @endif
     @if($access->allows($membership, 'invoices.view'))
     <a href="{{ route('commercial-invoices.index') }}" class="{{ request()->routeIs('commercial-invoices.*')?'active':'' }}"><span class="nav-dot"></span>Commercial Invoices</a>
+    @endif
+    @if($access->allows($membership, 'release.acceptance.view'))
+    <a href="{{ route('release.acceptance.index') }}" class="{{ request()->routeIs('release.acceptance.*')?'active':'' }}"><span class="nav-dot"></span>Release Acceptance</a>
     @endif
     @if($access->allows($membership, 'integrations.view'))
     <a href="{{ route('integrations.index') }}" class="{{ request()->routeIs('integrations.*')?'active':'' }}"><span class="nav-dot"></span>Provider Updates</a>
@@ -120,6 +123,9 @@ $sections = config('expo.sections');
     @if($access->allows($membership, 'team.view'))
     <a href="{{ route('team.index') }}" class="{{ request()->routeIs('team.*')?'active':'' }}"><span class="nav-dot"></span>Team & Access</a>
     @endif
+    @if(in_array($membership->role,['owner','admin','accountant'],true))
+    <a href="{{ route('business.billing') }}" class="{{ request()->routeIs('business.billing*')?'active':'' }}"><span class="nav-dot"></span>My Subscription</a>
+    @endif
     @if($access->allows($membership, 'business.settings'))
     <a href="{{ route('business.settings') }}" class="{{ request()->routeIs('business.settings*')?'active':'' }}"><span class="nav-dot"></span>Company Preferences</a>
     @endif
@@ -133,7 +139,7 @@ $sections = config('expo.sections');
 <div class="main">
 <header class="topbar">
   <button class="mobile-menu" id="menu-btn" aria-label="Open navigation" aria-expanded="false">☰</button>
-  <div class="crumb">Boosted Export <span>/</span> <strong>@yield('title', 'Overview')</strong></div>
+  <div class="crumb">Boosted One <span>/</span> <strong>@yield('title', 'Overview')</strong></div>
   <div class="top-actions">
     @if(config('app.env')!=='production')<span class="preview-pill">Development</span>@endif
     <button id="theme-btn" class="icon-button" aria-label="Toggle light and dark theme" title="Change theme">◐</button>

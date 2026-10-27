@@ -4,6 +4,13 @@
 <div class="page-intro"><div><span class="eyebrow">BANK STATEMENT REVIEW</span><h1>{{ $statement->reference }}</h1><p>{{ $statement->currency }} · {{ $statement->period_from->format('d M Y') }} to {{ $statement->period_to->format('d M Y') }} · {{ ucfirst($statement->status) }}</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.bank.index') }}">All statements</a><a class="secondary-button" href="{{ route('finance.documents') }}">Posted payment records</a></div>
 <div class="notice"><span>●</span><div><strong>Every line needs an independently confirmed match</strong><p>Choose a posted payment, shipment cost or payroll settlement for each bank line. The system requires the same currency, account, direction and exact amount. Transactions are not verified automatically.</p></div></div>
+<section class="section-card"><h2>Find matching transactions</h2>
+@include('finance._record-search', ['field' => 'candidate_search', 'page' => 'page', 'label' => 'Find transaction by record or payment reference'])
+<p class="form-hint">Candidates match the account, currency and amounts of the bank lines on this page. Browse older candidates below when needed.</p>
+@foreach(['Payments' => $payments, 'Shipment costs' => $costs, 'Payroll settlements' => $payrollSettlements, 'Corrections' => $reversals, 'Partial returns' => $partials] as $candidateLabel => $candidateRows)
+@if($candidateRows->hasPages())<p>{{ $candidateLabel }} · {{ $candidateRows->total() }} candidates</p>{{ $candidateRows->links() }}@endif
+@endforeach
+</section>
 <section class="section-card"><h2>Statement details</h2>
 <div class="record"><strong>Currency</strong><span>{{ $statement->currency }}</span></div>
 <div class="record"><strong>Opening → Closing</strong><span>{{ $statement->opening_balance }} → {{ $statement->closing_balance }}</span></div>

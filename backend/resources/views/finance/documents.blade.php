@@ -8,6 +8,7 @@
 <div class="split-panels">
 <section class="section-card"><h2>Supplier bill from received produce</h2>
 <p class="muted">The calculated supplier bill uses the accepted quantities and agreed purchase-order unit price. One complete-receipt bill is supported per purchase order.</p>
+@include('finance._record-search', ['field' => 'purchase_search', 'page' => 'purchase_page', 'label' => 'Find unbilled purchase by reference or supplier'])
 @if($purchases->isEmpty())<p class="empty-msg">No fully received, unbilled purchases available.</p>@endif
 @foreach($purchases as $purchase)
 <details class="finance-details"><summary><strong>{{ $purchase->reference }}</strong> · {{ $purchase->product->name }} · {{ $purchase->currency }} {{ $purchase->estimated_total }}</summary>
@@ -19,9 +20,12 @@
 <button class="secondary-button">Prepare supplier bill</button>
 </form></details>
 @endforeach
+{{ $purchases->links() }}
 </section>
 <section class="section-card"><h2>Customer receipt (manual evidence)</h2>
 <p class="muted">Allocate a receipt to one already-posted commercial invoice. Each amount must use that invoice's currency.</p>
+@include('finance._record-search', ['field' => 'invoice_search', 'page' => 'invoice_page', 'label' => 'Find outstanding invoice by reference or customer'])
+{{ $invoices->links() }}
 <form method="POST" action="{{ route('finance.payments.store') }}" class="form-stack">@csrf
 <input type="hidden" name="direction" value="in"><input type="hidden" name="idempotency_key" value="{{ $paymentKey }}">
 <label class="field"><span>Posted invoice / outstanding balance</span><select name="commercial_invoice_id" required><option value="">Choose an invoice</option>
@@ -42,6 +46,8 @@
 </section>
 <section class="section-card"><h2>Supplier payment (manual evidence)</h2>
 <p class="muted">Allocate a payment to an approved and posted supplier bill.</p>
+@include('finance._record-search', ['field' => 'bill_search', 'page' => 'payable_page', 'label' => 'Find outstanding bill by reference or supplier'])
+{{ $payableBills->links() }}
 <form method="POST" action="{{ route('finance.payments.store') }}" class="form-stack">@csrf
 <input type="hidden" name="direction" value="out"><input type="hidden" name="idempotency_key" value="{{ $supplierPaymentKey }}">
 <label class="field"><span>Posted supplier bill / balance</span><select name="supplier_bill_id" required><option value="">Choose bill</option>
@@ -60,12 +66,14 @@
 <button class="primary-button">Record supplier payment for review</button></form>
 </section>
 <section class="section-card"><h2>Record a paid shipment cost</h2><p class="muted">Use for expenses you have supporting payment evidence for. This is a manually recorded payment, not bank feed confirmation.</p>
+@include('finance._record-search', ['field' => 'shipment_search', 'page' => 'shipment_page', 'label' => 'Find shipment by reference or AWB'])
+{{ $shipments->links() }}
 <form method="POST" action="{{ route('finance.costs.store') }}" class="form-stack">@csrf
 <label class="field"><span>Shipment</span><select name="shipment_id" required><option value="">Choose shipment</option>@foreach($shipments as $shipment)<option value="{{ $shipment->id }}">{{ $shipment->reference }} · {{ $shipment->destination_country }}</option>@endforeach</select></label>
 <div class="form-columns"><label class="field"><span>Cost category</span><select name="category">
 @foreach(['freight'=>'Air freight','packing_material'=>'Packing materials','ground_transport'=>'Ground transport','handling'=>'Cargo handling','airline_fees'=>'Airline charges','inspection'=>'Inspection','other'=>'Other'] as $key=>$name)
 <option value="{{ $key }}">{{ $name }}</option>@endforeach</select></label>
-<label class="field"><span>Currency</span><input name="currency" minlength="3" maxlength="3" value="{{ $business->base_currency }}" required></label></div>
+<label class="field"><span>Currency</span><x-currency-select :value="old('currency', $business->base_currency)" /></label></div>
 <label class="field"><span>Expense description</span><input name="description" maxlength="250" minlength="5" required></label>
 <div class="form-columns"><label class="field"><span>Paid amount</span><input name="amount" type="number" min=".01" step=".01" required></label>
 <label class="field"><span>Paid via</span><select name="cash_account_key"><option value="bank">Bank / electronic</option><option value="cash">Cash</option></select></label></div>

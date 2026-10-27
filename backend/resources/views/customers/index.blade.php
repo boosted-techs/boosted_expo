@@ -13,7 +13,7 @@
 @if($canManage)
 <section class="section-card form-narrow"><h2>Add customer</h2><form action="{{ route('customers.store') }}" method="POST" class="form-stack">@csrf
 <div class="form-columns"><label class="field"><span>Customer name</span><input name="name" value="{{ old('name') }}" required maxlength="160"></label><label class="field"><span>Customer code</span><input name="customer_code" value="{{ old('customer_code') }}" placeholder="BUYER-001" required maxlength="50"></label></div>
-<div class="form-columns"><label class="field"><span>Country (2 letters)</span><input name="country_code" value="{{ old('country_code','AE') }}" minlength="2" maxlength="2" required></label><label class="field"><span>Trading currency</span><input name="currency" value="{{ old('currency','USD') }}" minlength="3" maxlength="3" required></label></div>
+<div class="form-columns"><label class="field"><span>Country (2 letters)</span><input name="country_code" value="{{ old('country_code','AE') }}" minlength="2" maxlength="2" required></label><label class="field"><span>Trading currency</span><x-currency-select :value="old('currency','USD')" /></label></div>
 <label class="field"><span>City (optional)</span><input name="city" value="{{ old('city') }}" maxlength="100"></label>
 <div class="form-columns"><label class="field"><span>Email</span><input type="email" name="email" value="{{ old('email') }}"></label><label class="field"><span>Phone</span><input name="phone" value="{{ old('phone') }}" maxlength="50"></label></div>
 <label class="field"><span>Notes</span><textarea name="notes" rows="2" maxlength="2000">{{ old('notes') }}</textarea></label>

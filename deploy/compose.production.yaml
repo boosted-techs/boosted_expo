@@ -1,0 +1,112 @@
+name: boosted-one
+x-runtime: &runtime
+  image: boosted-one:${RELEASE_TAG:-20261024-1}
+  env_file: /srv/boosted-one/shared/app.env
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 80
+  cpus: 0.50
+  mem_limit: 384m
+  memswap_limit: 384m
+  tmpfs:
+    - /tmp:size=96m,mode=1777
+    - /var/www/html/bootstrap/cache:size=16m,uid=33,gid=33,mode=0700
+    - /var/run/apache2:size=4m,uid=33,gid=33,mode=0700
+    - /var/lock/apache2:size=4m,uid=33,gid=33,mode=0700
+  volumes:
+    - storage:/var/www/html/storage
+    - backups:/var/backups/boostedone
+    - /srv/boosted-one/shared/tls/ca.crt:/etc/boostedone/ca.crt:ro
+  networks: [private, outbound]
+  logging: &logging
+    driver: json-file
+    options: {max-size: 5m, max-file: '3'}
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+services:
+  web:
+    <<: *runtime
+    cpus: 0.75
+    mem_limit: 640m
+    memswap_limit: 640m
+    ports: ['127.0.0.1:3230:8080']
+    healthcheck:
+      test: ['CMD', 'php', '-r', 'exit(@file_get_contents("http://127.0.0.1:8080/up") === false ? 1 : 0);']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  worker:
+    <<: *runtime
+    command: ['php', 'artisan', 'queue:work', 'redis', '--sleep=2', '--tries=3', '--timeout=120', '--max-time=3600', '--memory=192', '--no-interaction']
+    stop_grace_period: 130s
+  scheduler:
+    <<: *runtime
+    command: ['php', 'artisan', 'schedule:work', '--no-interaction']
+    cpus: 0.25
+    mem_limit: 256m
+    memswap_limit: 256m
+  postgres:
+    image: boosted-one-postgres:20261024-1
+    user: postgres
+    env_file: /srv/boosted-one/shared/database.env
+    command: ['postgres', '-c', 'ssl=on', '-c', 'ssl_cert_file=/etc/boostedone/server.crt', '-c', 'ssl_key_file=/etc/boostedone/server.key', '-c', 'shared_buffers=128MB', '-c', 'max_connections=40', '-c', 'password_encryption=scram-sha-256']
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [private]
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - /srv/boosted-one/shared/tls/postgres:/etc/boostedone:ro
+      - /srv/boosted-one/shared/initdb:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /tmp:size=32m
+      - /var/run/postgresql:uid=999,gid=999,mode=0700,size=4m
+    cpus: 0.5
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 80
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U boostedone -d boostedone']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+  redis:
+    image: redis:7-bookworm
+    user: redis
+    command: ['redis-server', '/etc/boostedone/redis.conf']
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [private]
+    volumes:
+      - redis:/data
+      - /srv/boosted-one/shared/tls/redis:/etc/boostedone:ro
+    cpus: 0.25
+    mem_limit: 192m
+    memswap_limit: 192m
+    pids_limit: 32
+    healthcheck:
+      test: ['CMD-SHELL', 'REDISCLI_AUTH=$$(cat /etc/boostedone/password) redis-cli --tls --cacert /etc/boostedone/ca.crt -h redis -p 6380 ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+networks:
+  private:
+    internal: true
+    ipam:
+      config: [{subnet: 172.31.10.0/24}]
+  outbound:
+    ipam:
+      config: [{subnet: 172.30.10.0/24}]
+volumes:
+  storage: {}
+  backups: {}
+  postgres: {}
+  redis: {}

@@ -28,7 +28,7 @@ class WorkspaceTest extends TestCase
 
     public function test_overview_renders_for_member(): void
     {
-        $this->get('/workspace')->assertOk()->assertSee('Boosted Export ERP')
+        $this->get('/workspace')->assertOk()->assertSee('Boosted One')
             ->assertSee('Sample Exporter');
     }
 

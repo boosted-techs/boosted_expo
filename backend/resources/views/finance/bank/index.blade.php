@@ -18,7 +18,7 @@
 @else
 <p class="form-hint">No named bank account has been configured. Importing will use the previous shared bank ledger. <a href="{{ route('finance.controls') }}">Configure banks</a></p>
 @endif
-<div class="form-columns"><label class="field"><span>Statement currency</span><input name="currency" minlength="3" maxlength="3" required value="{{ old('currency',$business->base_currency) }}"></label>
+<div class="form-columns"><label class="field"><span>Statement currency</span><x-currency-select :value="old('currency', $business->base_currency)" :historical="true" /></label>
 <label class="field"><span>Start date</span><input name="period_from" type="date" required value="{{ old('period_from',now()->startOfMonth()->format('Y-m-d')) }}"></label>
 <label class="field"><span>End date</span><input name="period_to" type="date" required max="{{ now()->format('Y-m-d') }}" value="{{ old('period_to',now()->format('Y-m-d')) }}"></label></div>
 <div class="form-columns"><label class="field"><span>Opening balance</span><input name="opening_balance" type="number" step=".01" required value="{{ old('opening_balance','0.00') }}"></label>

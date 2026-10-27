@@ -15,7 +15,7 @@
 <form method="POST" action="{{ route('finance.controls.banks.store') }}" class="form-stack form-narrow">@csrf
 <div class="form-columns"><label class="field"><span>Account nickname</span><input name="label" required minlength="3" maxlength="100" placeholder="e.g. Export USD settlement"></label>
 <label class="field"><span>Bank or provider</span><input name="institution" required minlength="3" maxlength="100" placeholder="e.g. Business current account provider"></label></div>
-<div class="form-columns"><label class="field"><span>Account currency</span><input name="currency" minlength="3" maxlength="3" value="{{ $business->base_currency }}" required></label>
+<div class="form-columns"><label class="field"><span>Account currency</span><x-currency-select :value="old('currency', $business->base_currency)" /></label>
 <label class="field"><span>Masked reference (optional)</span><input name="masked_reference" maxlength="32" placeholder="****1234" autocomplete="off"></label></div>
 <button class="secondary-button">Add independent bank ledger</button>
 </form>
@@ -51,7 +51,7 @@ placeholder="Enter bank-issued full account identifier"></label>
 <option value="{{ $profile->id }}">{{ $profile->label }} · {{ $profile->currency }}</option>
 @endforeach</select></label>
 <label class="field"><span>Bank currency (match selected account)</span>
-<input name="currency" minlength="3" maxlength="3" required placeholder="e.g. USD"></label></div>
+<x-currency-select :value="old('currency')" /></label></div>
 <div class="form-columns">
 <label class="field"><span>Original foreign balance</span>
 <input type="number" name="foreign_amount" step=".01" min=".01" required></label>

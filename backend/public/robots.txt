@@ -1,2 +1,13 @@
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /platform/
+Disallow: /workspace
+Disallow: /security/
+Disallow: /my-subscription
+Disallow: /invite/
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /onboarding/request
+
+Sitemap: https://boostedone.online/sitemap.xml

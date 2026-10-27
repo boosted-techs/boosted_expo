@@ -13,5 +13,5 @@
 @foreach($fields as $field => $value)<div class="record"><strong>{{ $field }}</strong><span>{{ $value }}</span></div>@endforeach
 </div>
 <p class="form-hint">Information published by the exporting business. A QR code identifies the record but does not by itself certify product origin, safety or delivery.</p>
-<div class="public-footer">Powered by <strong>Boosted Export ERP</strong></div>
+<div class="public-footer">Powered by <strong>Boosted One ERP</strong></div>
 </main></body></html>
