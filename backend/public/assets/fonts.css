@@ -1,0 +1,26 @@
+/* Inter 4.1: https://github.com/rsms/inter/releases/tag/v4.1
+   Urbanist (existing wordmark only): https://github.com/google/fonts/tree/main/ofl/urbanist
+   Original SIL Open Font License notices are retained alongside the font files. */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/assets/fonts/inter-v4.1-variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/assets/fonts/inter-v4.1-variable-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: Urbanist;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/assets/fonts/urbanist-brand-variable.ttf') format('truetype');
+}

@@ -39,7 +39,7 @@ class PublicQrController extends Controller
                 ->join('products', function ($join) {
                     $join->on('products.id', '=', 'stock_batches.product_id')
                         ->on('products.business_id', '=', 'stock_batches.business_id');
-                })->select('stock_batches.batch_code','products.name')->first();
+                })->select('stock_batches.batch_code', 'products.name')->first();
             abort_unless($batch, 404);
             $title = $batch->name;
             $description = 'Produce batch information';
@@ -72,7 +72,7 @@ class PublicQrController extends Controller
             ->where('product_id', $qr->record_id)->orderBy('id')->first();
         abort_unless($photo, 404);
 
-        return response(Storage::disk('r2')->get($photo->thumbnail_key), 200, [
+        return response(Storage::disk($photo->storageDisk())->get($photo->thumbnail_key), 200, [
             'Content-Type' => 'image/webp',
             'Cache-Control' => 'public, max-age=60',
             'X-Content-Type-Options' => 'nosniff',

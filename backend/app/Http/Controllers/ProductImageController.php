@@ -9,7 +9,6 @@ use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
 class ProductImageController extends Controller
@@ -34,7 +33,7 @@ class ProductImageController extends Controller
     {
         $this->permitted($request, 'catalogue.manage');
         $product = $this->product($request, $product);
-        $request->validate(['photo' => ['required','image','mimes:jpeg,jpg,png,webp','max:4096']]);
+        $request->validate(['photo' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:4096']]);
         abort_if($product->images()->count() >= 4, 422, 'This product already has four images.');
         $images->store($product, $request->file('photo'));
 
@@ -44,10 +43,10 @@ class ProductImageController extends Controller
     public function show(Request $request, int $product, int $image, string $size = 'thumb'): Response
     {
         $this->permitted($request, 'catalogue.view');
-        abort_unless(in_array($size, ['thumb','full'], true), 404);
+        abort_unless(in_array($size, ['thumb', 'full'], true), 404);
         $product = $this->product($request, $product);
         $record = $this->image($product, $image);
-        $bytes = Storage::disk('r2')->get($size === 'thumb' ? $record->thumbnail_key : $record->original_key);
+        $bytes = Storage::disk($record->storageDisk())->get($size === 'thumb' ? $record->thumbnail_key : $record->original_key);
 
         return response($bytes, 200, [
             'Content-Type' => 'image/webp',
@@ -61,7 +60,7 @@ class ProductImageController extends Controller
         $this->permitted($request, 'catalogue.manage');
         $product = $this->product($request, $product);
         $record = $this->image($product, $image);
-        Storage::disk('r2')->delete([$record->original_key, $record->thumbnail_key]);
+        Storage::disk($record->storageDisk())->delete([$record->original_key, $record->thumbnail_key]);
         $record->delete();
 
         return back()->with('status', 'Product photograph removed.');

@@ -5,7 +5,8 @@
 <meta name="theme-color" content="#37664b">
 <meta name="robots" content="noindex,nofollow">
 <title>@yield('title', 'Overview') · Boosted One</title>
-<link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css?v={{ filemtime(public_path('assets/modules.css')) }}">
+<link rel="preload" href="/assets/fonts/inter-v4.1-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/expo.css?v={{ filemtime(public_path('assets/expo.css')) }}"><link rel="stylesheet" href="/assets/modules.css?v={{ filemtime(public_path('assets/modules.css')) }}">
 <x-pwa-meta />
 <script src="/assets/theme-init.js"></script>
 </head>

@@ -1,7 +1,8 @@
 <!doctype html><html lang="en" data-theme="light">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#37664b">
 <title>{{ $title }} · {{ $business->name }}</title>
-<link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
+<link rel="preload" href="/assets/fonts/inter-v4.1-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/expo.css?v={{ filemtime(public_path('assets/expo.css')) }}"><link rel="stylesheet" href="/assets/modules.css?v={{ filemtime(public_path('assets/modules.css')) }}">
 </head>
 <body class="public-qr-body"><main class="public-qr-card">
 <span class="eyebrow">PRODUCT TRACEABILITY</span>

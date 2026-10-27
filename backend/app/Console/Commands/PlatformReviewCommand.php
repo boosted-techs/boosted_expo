@@ -64,7 +64,7 @@ class PlatformReviewCommand extends Command
                 if ($this->option('measure-media')) {
                     ProductImage::query()->where('business_id', $business->id)->whereNull('stored_bytes')->eachById(function ($image) {
                         try {
-                            $bytes = Storage::disk('r2')->size($image->original_key) + Storage::disk('r2')->size($image->thumbnail_key);
+                            $bytes = Storage::disk($image->storageDisk())->size($image->original_key) + Storage::disk($image->storageDisk())->size($image->thumbnail_key);
                             $image->update(['stored_bytes' => $bytes]);
                         } catch (\Throwable $e) {
                             report($e);

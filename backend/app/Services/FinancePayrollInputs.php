@@ -246,7 +246,7 @@ class FinancePayrollInputs
                     $source['gross'] = (string) $earned;
                     $sources[] = $source;
                 }
-                foreach (StaffOutput::query()->where('business_id', $business->id)->where('staff_person_id', $person->id)->whereBetween('worked_on', [$from, $to])->where('status', '!=', 'rejected')->where('status', '!=', 'withdrawn')->orderBy('id')->get() as $output) {
+                foreach (StaffOutput::query()->where('business_id', $business->id)->where('staff_person_id', $person->id)->whereDate('worked_on', '>=', $from)->whereDate('worked_on', '<=', $to)->where('status', '!=', 'rejected')->where('status', '!=', 'withdrawn')->orderBy('id')->get() as $output) {
                     abort_unless($output->status === 'approved', 422, 'Review every selected piece-work record before payroll.');
                     $this->assertUnclaimed($business->id, 'output', $output->id);
                     $rate = $dayRates[$output->worked_on->toDateString()] ?? null;
@@ -260,7 +260,7 @@ class FinancePayrollInputs
                 }
                 $taxable = $gross;
                 $nssfBase = $gross;
-                foreach (StaffPayAdjustment::query()->where('business_id', $business->id)->where('staff_person_id', $person->id)->whereBetween('effective_on', [$from, $to])->whereNotIn('status', ['rejected', 'withdrawn'])->orderBy('id')->get() as $adjustment) {
+                foreach (StaffPayAdjustment::query()->where('business_id', $business->id)->where('staff_person_id', $person->id)->whereDate('effective_on', '>=', $from)->whereDate('effective_on', '<=', $to)->whereNotIn('status', ['rejected', 'withdrawn'])->orderBy('id')->get() as $adjustment) {
                     abort_unless($adjustment->status === 'approved', 422, 'Review selected pay adjustments before payroll.');
                     $this->assertUnclaimed($business->id, 'adjustment', $adjustment->id);
                     $amount = BigDecimal::of((string) $adjustment->amount);
