@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#37664b">
 <meta name="robots" content="noindex,nofollow">
 <title>@yield('title', 'Sign in') · Boosted One</title>
-<link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
+<link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css?v={{ filemtime(public_path('assets/modules.css')) }}">
 <script src="/assets/theme-init.js"></script>
 <x-pwa-meta />
 </head><body>

@@ -9,6 +9,7 @@ use App\Http\Controllers\BuyerOrderPortalController;
 use App\Http\Controllers\CartonController;
 use App\Http\Controllers\CommercialInvoiceController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerOrderingController;
 use App\Http\Controllers\ExportClearanceController;
 use App\Http\Controllers\ExportDocumentController;
 use App\Http\Controllers\ExportDocumentTemplateController;
@@ -32,8 +33,11 @@ use App\Http\Controllers\LabelTemplateController;
 use App\Http\Controllers\LabelWorkflowController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\OperatingPolicyController;
+use App\Http\Controllers\OrderWorkspaceController;
 use App\Http\Controllers\PackingJobController;
+use App\Http\Controllers\PartnerHistoryController;
 use App\Http\Controllers\PasswordRecoveryController;
+use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\PlatformBusinessController;
 use App\Http\Controllers\PlatformControlController;
 use App\Http\Controllers\PlatformOperationsController;
@@ -58,6 +62,9 @@ use App\Http\Controllers\SupplierReplyController;
 use App\Http\Controllers\SupplyRequestController;
 use App\Http\Controllers\TeamAccessController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TransportLegController;
+use App\Http\Controllers\TransportPlanRevisionController;
+use App\Services\OperationalToday;
 use App\Services\WorkspaceMetrics;
 use App\Support\BusinessPermissions;
 use Illuminate\Support\Facades\Route;
@@ -110,6 +117,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [SessionController::class, 'store'])
         ->middleware('throttle:12,1')->name('login.store');
 });
+Route::get('/customer-ordering/{token}', [CustomerOrderingController::class, 'show'])->middleware('throttle:60,1')->name('customer-ordering.show');
+Route::post('/customer-ordering/{token}', [CustomerOrderingController::class, 'store'])->middleware('throttle:10,1')->name('customer-ordering.store');
+Route::get('/customer-ordering/{token}/requests/{record}', [CustomerOrderingController::class, 'order'])->whereNumber('record')->middleware('throttle:60,1')->name('customer-ordering.request');
+
 Route::get('/invite/{token}', [InvitationController::class, 'show'])->name('invitations.show');
 Route::post('/invite/{token}', [InvitationController::class, 'accept'])
     ->middleware('throttle:10,1')->name('invitations.accept');
@@ -171,6 +182,41 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware(['business', 'billing'])->group(function () {
+        Route::post('/customers/{customer}/ordering-access', [CustomerOrderingController::class, 'invite'])->whereNumber('customer')->name('customer-ordering.invite');
+        Route::post('/customer-ordering-access/{link}/revoke', [CustomerOrderingController::class, 'revoke'])->whereNumber('link')->name('customer-ordering.revoke');
+        Route::post('/sales-requests/{record}/approve-operations', [OrderWorkspaceController::class, 'approve'])->whereNumber('record')->name('sales-requests.approve');
+        Route::get('/sales-orders/{order}/lines/{line}/candidates', [OrderWorkspaceController::class, 'candidates'])->whereNumber('order')->whereNumber('line')->name('order-work.candidates');
+        Route::post('/sales-orders/{order}/lines/{line}/reserve', [OrderWorkspaceController::class, 'reserve'])->whereNumber('order')->whereNumber('line')->name('order-work.reserve');
+        Route::post('/sales-orders/{order}/lines/{line}/supply', [OrderWorkspaceController::class, 'supply'])->whereNumber('order')->whereNumber('line')->name('order-work.supply');
+        Route::post('/sales-orders/{order}/lines/{line}/packing', [OrderWorkspaceController::class, 'packing'])->whereNumber('order')->whereNumber('line')->name('order-work.packing');
+        Route::post('/sales-orders/{order}/release-supply', [OrderWorkspaceController::class, 'release'])->whereNumber('order')->name('order-work.release');
+        Route::post('/sales-orders/{order}/market-trip', [OrderWorkspaceController::class, 'trip'])->whereNumber('order')->name('order-work.trip');
+        Route::post('/sales-orders/{order}/tasks', [OrderWorkspaceController::class, 'task'])->whereNumber('order')->name('order-work.task');
+        Route::post('/market-trips/{trip}/progress', [OrderWorkspaceController::class, 'tripProgress'])->whereNumber('trip')->name('order-work.trip-progress');
+        Route::post('/order-tasks/{task}/progress', [OrderWorkspaceController::class, 'taskProgress'])->whereNumber('task')->name('order-work.task-progress');
+        Route::post('/sales-orders/{order}/closure', [OrderWorkspaceController::class, 'close'])->whereNumber('order')->name('order-work.close');
+        Route::post('/sales-orders/{order}/customer-note', [OrderWorkspaceController::class, 'note'])->whereNumber('order')->name('order-work.note');
+        Route::post('/transport-partners', [TransportLegController::class, 'partner'])->name('transport.partners.store');
+        Route::post('/shipments/{shipment}/transport', [TransportLegController::class, 'store'])->whereNumber('shipment')->name('transport.legs.store');
+        Route::delete('/transport-legs/{leg}', [TransportPlanRevisionController::class, 'destroy'])->whereNumber('leg')->name('transport.legs.cancel');
+        Route::post('/transport-legs/{leg}/handover', [TransportLegController::class, 'handover'])->whereNumber('leg')->name('transport.handover');
+        Route::get('/people', [PeopleController::class, 'index'])->name('people.index');
+        Route::post('/people/register', [PeopleController::class, 'person'])->name('people.register');
+        Route::post('/people/rotas', [PeopleController::class, 'rota'])->name('people.rotas.store');
+        Route::post('/people/rotas/{rota}/shifts', [PeopleController::class, 'shift'])->whereNumber('rota')->name('people.shifts.store');
+        Route::post('/people/rotas/{rota}/coverage', [PeopleController::class, 'coverage'])->whereNumber('rota')->name('people.rotas.coverage');
+        Route::post('/people/rotas/{rota}/publish', [PeopleController::class, 'publish'])->whereNumber('rota')->name('people.rotas.publish');
+        Route::post('/people/shifts/{shift}/absence', [PeopleController::class, 'absence'])->whereNumber('shift')->name('people.shifts.absence');
+        Route::post('/people/shifts/{shift}/replace', [PeopleController::class, 'replace'])->whereNumber('shift')->name('people.shifts.replace');
+        Route::post('/people/leave', [PeopleController::class, 'leave'])->name('people.leave');
+        Route::post('/people/attendance', [PeopleController::class, 'attendance'])->name('people.attendance');
+        Route::post('/people/attendance/{attendance}/break', [PeopleController::class, 'breakAction'])->whereNumber('attendance')->name('people.break');
+        Route::post('/people/attendance/{attendance}/correction', [PeopleController::class, 'correction'])->whereNumber('attendance')->name('people.correction');
+        Route::post('/people/corrections/{correction}/review', [PeopleController::class, 'review'])->whereNumber('correction')->name('people.correction.review');
+        Route::post('/people/attendance/{attendance}/approve', [PeopleController::class, 'approve'])->whereNumber('attendance')->name('people.attendance.approve');
+        Route::get('/partners/receiving', [PartnerHistoryController::class, 'receiving'])->name('partners.receiving');
+        Route::post('/partners/{kind}/{partner}/followup', [PartnerHistoryController::class, 'followup'])->whereIn('kind', ['supplier', 'customer'])->whereNumber('partner')->name('partners.followup');
+        Route::get('/partners/{kind}/{partner}', [PartnerHistoryController::class, 'show'])->whereIn('kind', ['supplier', 'customer'])->whereNumber('partner')->name('partners.show');
         Route::get('/subscription-status', [BusinessPlatformController::class, 'status'])->name('business.subscription-status');
         Route::post('/business-support/{grant}', [BusinessPlatformController::class, 'grant'])->whereNumber('grant')->name('business.platform.grant');
         Route::post('/business-support-request', [BusinessPlatformController::class, 'request'])->name('business.platform.request');
@@ -519,7 +565,9 @@ Route::middleware('auth')->group(function () {
                     ->overview(request()->attributes->get('membership'))
                 : [];
 
-            return view('workspace', compact('section', 'sections', 'metrics'));
+            $todayWork = $section === 'overview' ? app(OperationalToday::class)->forMember(request()->attributes->get('membership')) : null;
+
+            return view('workspace', compact('section', 'sections', 'metrics', 'todayWork'));
         })->name('workspace');
 
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');

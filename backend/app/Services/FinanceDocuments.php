@@ -12,6 +12,7 @@ use App\Models\FinancePayment;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
 use App\Models\PurchaseOrder;
+use App\Models\TransportLeg;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -198,9 +199,13 @@ class FinanceDocuments
                 isset($data['bank_profile_id']) ? (int) $data['bank_profile_id'] : null,
                 $data['cash_account_key'], strtoupper($data['currency']));
 
+            if (! empty($data['transport_leg_id'])) {
+                TransportLeg::query()->where('business_id', $business->id)->where('shipment_id', $shipment->id)->findOrFail($data['transport_leg_id']);
+            }
+
             return FinanceShipmentCost::create([
                 'business_id' => $business->id, 'reference' => 'COST-'.Str::upper((string) Str::ulid()),
-                'shipment_id' => $shipment->id, 'category' => $data['category'],
+                'shipment_id' => $shipment->id, 'transport_leg_id' => $data['transport_leg_id'] ?? null, 'category' => $data['category'],
                 'description' => $data['description'], 'currency' => strtoupper($data['currency']),
                 'amount' => (string) $amount, 'cash_account_id' => $account->id,
                 'paid_on' => $data['paid_on'], 'external_reference' => $data['external_reference'],

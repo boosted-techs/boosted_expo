@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#37664b">
 <meta name="robots" content="noindex,nofollow">
 <title>@yield('title', 'Overview') · Boosted One</title>
-<link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
+<link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css?v={{ filemtime(public_path('assets/modules.css')) }}">
 <x-pwa-meta />
 <script src="/assets/theme-init.js"></script>
 </head>
@@ -24,111 +24,18 @@ $sections = config('expo.sections');
   </a>
   <p class="nav-label">WORKSPACE</p><a class="footer-link" href="{{ route('business.subscription-status') }}">Account & support</a>
   <nav aria-label="Main navigation">
-    @foreach($sections as $key => $details)
-      @if($access->allows($membership, $details[2]))
-      <a href="{{ route('workspace', ['section' => $key]) }}" class="{{ request()->is('workspace'.($key==='overview'?'':'/'.$key))?'active':'' }}" @if(request()->is('workspace'.($key==='overview'?'':'/'.$key))) aria-current="page" @endif>
-        <span class="nav-dot"></span>{{ $details[0] }}
-      </a>
-      @endif
+    <a href="{{ route('workspace') }}" class="{{ request()->routeIs('workspace')?'active':'' }}"><span class="nav-dot"></span>Today</a>
+    @php($groups=[
+      'Orders'=>[['Customer requests & quotations','sales-requests.index','sales.view'],['Order workspace','sales-orders.index','sales.orders.view'],['Shipments & transport','shipments.index','shipments.view'],['Commercial invoices','commercial-invoices.index','invoices.view'],['Export documents','export-documents.index','documents.view']],
+      'Stock & Buying'=>[['Suppliers','suppliers.index','suppliers.view'],['Supplier requests','supply-requests.index','procurement.view'],['Purchases','purchases.index','purchases.view'],['Receiving','receiving.index','receipts.view'],['Who supplied what?','partners.receiving','receipts.view'],['Stock batches','stock.index','stock.view'],['Packing jobs','packing.index','packing.view'],['Cartons','cartons.index','cartons.view'],['Stickers & printing','labels.print','labels.view']],
+      'Money'=>[['Finance & ledger','finance.index','finance.view'],['Financial Reports','finance.reports.index','finance.reports.view'],['Bank reconciliation','finance.bank.index','finance.bank.view'],['Stock valuation','finance.inventory.index','finance.inventory.view'],['Credits & returns','finance.credits.index','finance.credits.view'],['Accounting controls','finance.controls','finance.controls.view'],['Payroll','finance.payroll.index','finance.payroll.view'],['Invoice handoff','invoice-accounting-handoff.index','finance.handoff.view'],['Payment corrections','finance.transaction-reversals.index','finance.payment.reversal.prepare'],['Receivables & payables FX','finance.monetary-revaluations.index','finance.monetary.revaluation.view'],['FX revaluation','finance.fx-revaluations.index','finance.fx.revaluation.view']],
+      'People'=>[['Rota, attendance & work','people.index','staff.clock'],['My clock-in / clock-out','staff.index','staff.clock'],['System access','team.index','team.view']],
+      'Business'=>[['Customers','customers.index','customers.view'],['Products','products.index','catalogue.view'],['Business settings','business.settings','business.settings'],['Sticker templates','labels.index','labels.view'],['Document templates','document-templates.index','documents.view'],['Provider updates','integrations.index','integrations.view'],['Release acceptance','release.acceptance.index','release.acceptance.view'],['Account & support','business.subscription-status','section.overview']]
+    ])
+    @foreach($groups as $label=>$links)
+      @php($visible=collect($links)->filter(fn($link)=>$access->allows($membership,$link[2])))
+      @if($visible->isNotEmpty())<details class="nav-workgroup" @if($visible->contains(fn($link)=>request()->routeIs($link[1]))) open @endif><summary>{{ $label }}</summary>@foreach($visible as $link)<a href="{{ route($link[1]) }}" class="{{ request()->routeIs($link[1])?'active':'' }}">{{ $link[0] }}</a>@endforeach</details>@endif
     @endforeach
-    @if($access->allows($membership, 'customers.view'))
-    <a href="{{ route('customers.index') }}" class="{{ request()->routeIs('customers.*')?'active':'' }}"><span class="nav-dot"></span>Customers</a>
-    @endif
-    @if($access->allows($membership, 'sales.view'))
-    <a href="{{ route('sales-requests.index') }}" class="{{ request()->routeIs('sales-requests.*')||request()->routeIs('sales-quotes.*')?'active':'' }}"><span class="nav-dot"></span>Customer Requests & Quotes</a>
-    @endif
-    @if($access->allows($membership, 'sales.orders.view'))
-    <a href="{{ route('sales-orders.index') }}" class="{{ request()->routeIs('sales-orders.*')?'active':'' }}"><span class="nav-dot"></span>Sales Orders</a>
-    @endif
-    @if($access->allows($membership, 'invoices.view'))
-    <a href="{{ route('commercial-invoices.index') }}" class="{{ request()->routeIs('commercial-invoices.*')?'active':'' }}"><span class="nav-dot"></span>Commercial Invoices</a>
-    @endif
-    @if($access->allows($membership, 'release.acceptance.view'))
-    <a href="{{ route('release.acceptance.index') }}" class="{{ request()->routeIs('release.acceptance.*')?'active':'' }}"><span class="nav-dot"></span>Release Acceptance</a>
-    @endif
-    @if($access->allows($membership, 'integrations.view'))
-    <a href="{{ route('integrations.index') }}" class="{{ request()->routeIs('integrations.*')?'active':'' }}"><span class="nav-dot"></span>Provider Updates</a>
-    @endif
-    @if($access->allows($membership, 'finance.view'))
-    <a href="{{ route('finance.index') }}" class="{{ request()->routeIs('finance.*')?'active':'' }}"><span class="nav-dot"></span>Finance & Ledger</a>
-    @endif
-    @if($access->allows($membership, 'finance.reports.view'))
-    <a href="{{ route('finance.reports.index') }}" class="{{ request()->routeIs('finance.reports.*')?'active':'' }}"><span class="nav-dot"></span>Financial Reports</a>
-    @endif
-    @if($access->allows($membership, 'finance.bank.view'))
-    <a href="{{ route('finance.bank.index') }}" class="{{ request()->routeIs('finance.bank.*')?'active':'' }}"><span class="nav-dot"></span>Bank Reconciliation</a>
-    @endif
-    @if($access->allows($membership, 'finance.inventory.view'))
-    <a href="{{ route('finance.inventory.index') }}" class="{{ request()->routeIs('finance.inventory.*')?'active':'' }}"><span class="nav-dot"></span>Stock Valuation</a>
-    @endif
-    @if($access->allows($membership, 'finance.credits.view'))
-    <a href="{{ route('finance.credits.index') }}" class="{{ request()->routeIs('finance.credits.*')?'active':'' }}"><span class="nav-dot"></span>Credit Notes</a>
-    @endif
-    @if($access->allows($membership, 'finance.controls.view'))
-    <a href="{{ route('finance.controls') }}" class="{{ request()->routeIs('finance.controls*')?'active':'' }}"><span class="nav-dot"></span>Accounting Controls</a>
-    @endif
-    @if($access->allows($membership, 'finance.payroll.view'))
-    <a href="{{ route('finance.payroll.index') }}" class="{{ request()->routeIs('finance.payroll.*')?'active':'' }}"><span class="nav-dot"></span>Staff Payroll</a>
-    @endif
-    @if($access->allows($membership, 'finance.monetary.revaluation.view'))
-    <a href="{{ route('finance.monetary-revaluations.index') }}" class="{{ request()->routeIs('finance.monetary-revaluations.*')?'active':'' }}"><span class="nav-dot"></span>Receivables & Payables FX</a>
-    @endif
-    @if($access->allows($membership, 'finance.fx.revaluation.view'))
-    <a href="{{ route('finance.fx-revaluations.index') }}" class="{{ request()->routeIs('finance.fx-revaluations.*')?'active':'' }}"><span class="nav-dot"></span>FX Revaluation</a>
-    @endif
-    @if($access->allows($membership, 'finance.payment.reversal.prepare'))
-    <a href="{{ route('finance.transaction-reversals.index') }}" class="{{ request()->routeIs('finance.transaction-reversals.*')?'active':'' }}"><span class="nav-dot"></span>Payment Corrections</a>
-    @endif
-    @if($access->allows($membership, 'finance.handoff.view'))
-    <a href="{{ route('invoice-accounting-handoff.index') }}" class="{{ request()->routeIs('invoice-accounting-handoff.*')?'active':'' }}"><span class="nav-dot"></span>Invoice Finance Handoff</a>
-    @endif
-    @if($access->allows($membership, 'suppliers.view'))
-    <a href="{{ route('suppliers.index') }}" class="{{ request()->routeIs('suppliers.*')?'active':'' }}"><span class="nav-dot"></span>Suppliers</a>
-    @endif
-    @if($access->allows($membership, 'procurement.view'))
-    <a href="{{ route('supply-requests.index') }}" class="{{ request()->routeIs('supply-requests.*')?'active':'' }}"><span class="nav-dot"></span>Supply Requests</a>
-    @endif
-    @if($access->allows($membership, 'purchases.view'))
-    <a href="{{ route('purchases.index') }}" class="{{ request()->routeIs('purchases.*')?'active':'' }}"><span class="nav-dot"></span>Purchases</a>
-    @endif
-    @if($access->allows($membership, 'receipts.view'))
-    <a href="{{ route('receiving.index') }}" class="{{ request()->routeIs('receiving.*')?'active':'' }}"><span class="nav-dot"></span>Goods Receiving</a>
-    <a href="{{ route('stock.index') }}" class="{{ request()->routeIs('stock.*')?'active':'' }}"><span class="nav-dot"></span>Stock Batches</a>
-    @endif
-    @if($access->allows($membership, 'packing.view'))
-    <a href="{{ route('packing.index') }}" class="{{ request()->routeIs('packing.*')?'active':'' }}"><span class="nav-dot"></span>Packing Jobs</a>
-    @endif
-    @if($access->allows($membership, 'cartons.view'))
-    <a href="{{ route('cartons.index') }}" class="{{ request()->routeIs('cartons.*')?'active':'' }}"><span class="nav-dot"></span>Packed Cartons</a>
-    @endif
-    @if($access->allows($membership, 'shipments.view'))
-    <a href="{{ route('shipments.index') }}" class="{{ request()->routeIs('shipments.*')?'active':'' }}"><span class="nav-dot"></span>Export Shipments</a>
-    @endif
-    @if($access->allows($membership, 'documents.view'))
-    <a href="{{ route('export-documents.index') }}" class="{{ request()->routeIs('export-documents.*')?'active':'' }}"><span class="nav-dot"></span>Export Documents</a>
-    <a href="{{ route('document-templates.index') }}" class="{{ request()->routeIs('document-templates.*')?'active':'' }}"><span class="nav-dot"></span>Document Templates</a>
-    @endif
-    @if($access->allows($membership, 'labels.view'))
-    <a href="{{ route('labels.printers') }}" class="{{ request()->routeIs('labels.printers*')?'active':'' }}"><span class="nav-dot"></span>Print Workstations</a>
-    @endif
-    @if($access->allows($membership, 'labels.view'))
-    <a href="{{ route('labels.index') }}" class="{{ request()->routeIs('labels.*')?'active':'' }}"><span class="nav-dot"></span>Sticker Templates</a>
-    @endif
-    @if($access->allows($membership, 'catalogue.view'))
-    <a href="{{ route('products.index') }}" class="{{ request()->routeIs('products.*')?'active':'' }}"><span class="nav-dot"></span>Product Catalogue</a>
-    @endif
-    @if($access->allows($membership, 'staff.clock'))
-    <a href="{{ route('staff.index') }}" class="{{ request()->routeIs('staff.*')?'active':'' }}"><span class="nav-dot"></span>Shifts & Attendance</a>
-    @endif
-    @if($access->allows($membership, 'team.view'))
-    <a href="{{ route('team.index') }}" class="{{ request()->routeIs('team.*')?'active':'' }}"><span class="nav-dot"></span>Team & Access</a>
-    @endif
-    @if(in_array($membership->role,['owner','admin','accountant'],true))
-    <a href="{{ route('business.billing') }}" class="{{ request()->routeIs('business.billing*')?'active':'' }}"><span class="nav-dot"></span>My Subscription</a>
-    @endif
-    @if($access->allows($membership, 'business.settings'))
-    <a href="{{ route('business.settings') }}" class="{{ request()->routeIs('business.settings*')?'active':'' }}"><span class="nav-dot"></span>Company Preferences</a>
-    @endif
   </nav>
   <div class="sidebar-footer">
     <strong>{{ $business->name }}</strong>

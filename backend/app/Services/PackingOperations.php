@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Business;
 use App\Models\Carton;
 use App\Models\CartonContent;
 use App\Models\PackingJob;
@@ -18,6 +19,11 @@ class PackingOperations
 {
     private function lockJob(PackingJob $job): PackingJob
     {
+        Business::query()->whereKey($job->business_id)->lockForUpdate()->firstOrFail();
+        if ($job->sales_order_line_id) {
+            app(OrderSourcing::class)->line($job->business_id, $job->sales_order_line_id);
+        }
+
         return PackingJob::query()->where('business_id', $job->business_id)
             ->lockForUpdate()->findOrFail($job->id);
     }
@@ -47,7 +53,14 @@ class PackingOperations
             $existing = Carton::query()->where('business_id', $job->business_id)
                 ->where('packing_key', $data['packing_key'])->first();
             if ($existing) {
-                abort_unless($existing->packing_job_id === $job->id, 409, 'Duplicate carton submission.');
+                $prior = $existing->contents()->orderBy('batch_id')->get()->mapWithKeys(fn ($c) => [(int) $c->batch_id => (string) BigDecimal::of((string) $c->quantity)->strippedOfTrailingZeros()])->all();
+                $incoming = [];
+                foreach ($data['contents'] as $c) {
+                    $incoming[(int) $c['batch_id']] = (string) BigDecimal::of((string) $c['quantity'])->strippedOfTrailingZeros();
+                }ksort($incoming);
+                ksort($prior);
+                abort_unless($existing->packing_job_id === $job->id && $prior === $incoming && BigDecimal::of((string) $existing->net_weight_kg)->isEqualTo(BigDecimal::of((string) $data['net_weight_kg'])) && BigDecimal::of((string) $existing->gross_weight_kg)->isEqualTo(BigDecimal::of((string) $data['gross_weight_kg'])), 409, 'Duplicate carton submission has different contents.');
+
                 return $existing;
             }
             $this->assertOpen($job);
@@ -92,12 +105,19 @@ class PackingOperations
                 ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             abort_unless($batches->count() === count($qtyByBatch), 404);
 
+            if ($job->sales_order_line_id) {
+                $line = app(OrderSourcing::class)->line($job->business_id, $job->sales_order_line_id);
+                $packed = BigDecimal::of(app(OrderSourcing::class)->summary($line)['packed']);
+                if ($packed->plus($total)->isGreaterThan(BigDecimal::of((string) $line->quantity))) {
+                    throw ValidationException::withMessages(['contents' => 'Packed output exceeds the order quantity.']);
+                }
+            }
             foreach ($qtyByBatch as $batchId => $quantity) {
                 if ($batches[$batchId]->is_quarantined) {
-                    throw ValidationException::withMessages(['contents'=>
-                        'Batch '.$batches[$batchId]->batch_code.' is on a quality hold and cannot be packed.']);
+                    throw ValidationException::withMessages(['contents' => 'Batch '.$batches[$batchId]->batch_code.' is on a quality hold and cannot be packed.']);
                 }
                 $this->enough($batches[$batchId], $quantity, 'contents');
+                app(OrderSourcing::class)->consume($job, $batches[$batchId], $quantity, false);
             }
 
             $carton = Carton::create([
@@ -137,7 +157,9 @@ class PackingOperations
                 ['business_id' => $job->business_id, 'level' => 'carton', 'record_id' => $carton->id],
                 ['public_token' => (string) Str::uuid(), 'public_enabled' => false],
             );
-            if ($job->status === 'open') $job->update(['status' => 'in_progress']);
+            if ($job->status === 'open') {
+                $job->update(['status' => 'in_progress']);
+            }
 
             return $carton->refresh();
         }, 3);
@@ -151,6 +173,7 @@ class PackingOperations
                 ->where('idempotency_key', $data['idempotency_key'])->first();
             if ($existing) {
                 abort_unless($existing->packing_job_id === $job->id, 409, 'Duplicate grading submission.');
+
                 return $existing;
             }
             $this->assertOpen($job);
@@ -159,6 +182,7 @@ class PackingOperations
                 ->lockForUpdate()->findOrFail((int) $data['batch_id']);
             $qty = BigDecimal::of((string) $data['quantity']);
             $this->enough($batch, $qty, 'quantity');
+            app(OrderSourcing::class)->consume($job, $batch, $qty, true);
             $entry = PackingWasteEntry::create([
                 'business_id' => $job->business_id,
                 'packing_job_id' => $job->id,
@@ -179,7 +203,9 @@ class PackingOperations
                 'source_id' => $entry->id,
                 'created_by' => $userId,
             ]);
-            if ($job->status === 'open') $job->update(['status' => 'in_progress']);
+            if ($job->status === 'open') {
+                $job->update(['status' => 'in_progress']);
+            }
 
             return $entry;
         }, 3);

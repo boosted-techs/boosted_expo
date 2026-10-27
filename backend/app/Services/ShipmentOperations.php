@@ -6,8 +6,10 @@ use App\Models\Business;
 use App\Models\Carton;
 use App\Models\ExportShipment;
 use App\Models\SalesOrder;
+use App\Models\SalesOrderLine;
 use App\Models\ShipmentCarton;
 use App\Models\ShipmentEvent;
+use App\Models\TransportLeg;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +18,8 @@ class ShipmentOperations
 {
     private function lock(ExportShipment $shipment): ExportShipment
     {
+        Business::query()->whereKey($shipment->business_id)->lockForUpdate()->firstOrFail();
+
         return ExportShipment::query()->where('business_id', $shipment->business_id)
             ->lockForUpdate()->findOrFail($shipment->id);
     }
@@ -88,6 +92,7 @@ class ShipmentOperations
         return DB::transaction(function () use ($shipment, $cartonIds, $userId) {
             $shipment = $this->lock($shipment);
             $this->draft($shipment);
+            abort_if(TransportLeg::query()->where('business_id', $shipment->business_id)->where('shipment_id', $shipment->id)->where('status', '!=', 'cancelled')->exists(), 422, 'Resolve the transport plan before changing its carton manifest.');
             $cartonIds = array_values(array_unique(array_map('intval', $cartonIds)));
             $cartons = Carton::query()->where('business_id', $shipment->business_id)
                 ->whereIn('id', $cartonIds)->with('packingJob')
@@ -98,6 +103,10 @@ class ShipmentOperations
             $allocated = ShipmentCarton::query()->where('business_id', $shipment->business_id)
                 ->whereIn('carton_id', $cartonIds)->get()->keyBy('carton_id');
             foreach ($cartons as $carton) {
+                if ($carton->packingJob?->sales_order_line_id) {
+                    $source = SalesOrderLine::query()->where('business_id', $shipment->business_id)->findOrFail($carton->packingJob->sales_order_line_id);
+                    abort_unless($source->sales_order_id === $shipment->sales_order_id, 422, 'Carton is reserved for its originating order.');
+                }
                 $existing = $allocated->get($carton->id);
                 if ($existing) {
                     if ($existing->shipment_id === $shipment->id) {
@@ -162,6 +171,7 @@ class ShipmentOperations
         DB::transaction(function () use ($shipment, $cartonId, $userId) {
             $shipment = $this->lock($shipment);
             $this->draft($shipment);
+            abort_if(TransportLeg::query()->where('business_id', $shipment->business_id)->where('shipment_id', $shipment->id)->where('status', '!=', 'cancelled')->exists(), 422, 'The transport manifest is frozen. Resolve its transport plan before releasing cartons.');
             $allocation = ShipmentCarton::query()->where('business_id', $shipment->business_id)
                 ->where('shipment_id', $shipment->id)->where('carton_id', $cartonId)
                 ->lockForUpdate()->firstOrFail();
@@ -293,6 +303,11 @@ class ShipmentOperations
                 'Dispatched shipments cannot be cancelled through this workflow.');
             abort_unless(! $shipment->commercialInvoice()->exists(), 422,
                 'This shipment already has a commercial invoice and cannot be cancelled here.');
+            $legs = TransportLeg::query()->where('business_id', $shipment->business_id)->where('shipment_id', $shipment->id)->where('status', '!=', 'cancelled')->get();
+            abort_if($legs->contains(fn ($leg) => $leg->status !== 'planned'), 422, 'Resolve recorded transport custody before cancelling this shipment.');
+            foreach ($legs as $leg) {
+                $leg->update(['status' => 'cancelled']);
+            }
             $allocations = $shipment->allocations()->orderBy('carton_id')->lockForUpdate()->get();
             $cartons = Carton::query()->where('business_id', $shipment->business_id)
                 ->whereIn('id', $allocations->pluck('carton_id'))->orderBy('id')
@@ -304,7 +319,7 @@ class ShipmentOperations
             }
             $shipment->allocations()->delete();
             $shipment->update(['status' => 'cancelled']);
-            $this->event($shipment,$userId,'cancelled',[
+            $this->event($shipment, $userId, 'cancelled', [
                 'cartons_released' => $cartons->count(),
                 'warning' => 'Previously issued documents remain in history.',
             ]);

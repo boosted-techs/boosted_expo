@@ -35,15 +35,15 @@
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Supplier</th><th>Offered qty</th><th>Unit price</th><th>Delivery</th><th>Revision</th><th>Status</th><th>Action</th></tr></thead><tbody>
 @forelse($rfq->quotes as $offer)
 <tr><td><strong>{{ $offer->supplier->name }}</strong></td><td>{{ $offer->quantity }} {{ $rfq->product->base_unit }}</td><td>{{ $rfq->currency }} {{ $offer->unit_price }}</td><td>{{ $offer->delivery_on?->format('d M Y') ?: '—' }}</td><td>{{ $offer->revision }}</td><td>{{ ucfirst($offer->status) }}</td><td>
-@if($canAward && $rfq->status==='sent')
-<form method="POST" action="{{ route('supply-requests.award',['rfq'=>$rfq->id,'quote'=>$offer->id]) }}" data-confirm="Select this supplier and create a purchase order?">@csrf<button class="secondary-button" type="submit">Select offer</button></form>
+@if($canAward && in_array($rfq->status,['sent','part_awarded']) && $offer->status==='submitted')
+<form method="POST" action="{{ route('supply-requests.award',['rfq'=>$rfq->id,'quote'=>$offer->id]) }}" data-confirm="Select this supplier and create a purchase order?">@csrf<label class="field"><span>Award quantity</span><input name="quantity" type="number" min="0.001" step="0.001" max="{{ $offer->quantity }}" value="{{ $offer->quantity }}" required></label><button class="secondary-button" type="submit">Select offer</button></form>
 @else — @endif</td></tr>
 @if($offer->revisions->count()>1)<tr><td colspan="7"><details><summary>View {{ $offer->revisions->count() }} revisions</summary>@foreach($offer->revisions->sortBy('revision') as $revision)<p class="form-hint">Revision {{ $revision->revision }}: {{ $revision->quantity }} × {{ $rfq->currency }} {{ $revision->unit_price }} · {{ $revision->submitted_via }} · {{ $revision->created_at }}</p>@endforeach</details></td></tr>@endif
 @empty<tr><td colspan="7" class="empty-msg">No quotations received yet.</td></tr>@endforelse
 </tbody></table></div>
 <p class="form-hint">Only an authorised owner or administrator can select an offer. Confirming creates a purchase order; it does not record a payment.</p>
 </section>
-@if($canCreate && $rfq->status==='sent' && $rfq->response_deadline->isFuture())
+@if($canCreate && in_array($rfq->status,['sent','part_awarded']) && $rfq->response_deadline->isFuture())
 <section class="section-card form-narrow"><h2>Record a supplier's quotation</h2>
 <p class="muted">Use this if a supplier sends a quotation by phone or in person. Existing quotations are saved as new revisions.</p>
 <form action="{{ route('supply-requests.quotes.store',$rfq->id) }}" method="POST" class="form-stack">@csrf

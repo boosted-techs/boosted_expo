@@ -21,7 +21,7 @@ class SupplierQuoting
             $rfq = SupplyRequest::query()->where('business_id', $request->business_id)
                 ->lockForUpdate()->findOrFail($request->id);
 
-            abort_unless($rfq->status === 'sent' && $rfq->response_deadline->isFuture(), 422,
+            abort_unless(in_array($rfq->status, ['sent', 'part_awarded'], true) && $rfq->response_deadline->isFuture(), 422,
                 'This request no longer accepts quotations.');
             $supplier = Supplier::query()->where('business_id', $rfq->business_id)
                 ->where('active', true)->lockForUpdate()->find($supplier->id);
@@ -39,6 +39,7 @@ class SupplierQuoting
                 ->where('supply_request_id', $rfq->id)
                 ->where('supplier_id', $supplier->id)->lockForUpdate()->first();
 
+            abort_if($quote?->status === 'selected', 422, 'An awarded offer is frozen; submit a new reviewed request for further changes.');
             $revision = $quote ? $quote->revision + 1 : 1;
             $fields = [
                 'business_id' => $rfq->business_id,

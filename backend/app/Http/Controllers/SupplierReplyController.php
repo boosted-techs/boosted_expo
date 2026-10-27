@@ -17,9 +17,10 @@ class SupplierReplyController extends Controller
             ->whereExists(fn ($query) => $query->selectRaw('1')->from('businesses')
                 ->whereColumn('businesses.id', 'supplier_request_links.business_id')
                 ->where('businesses.is_active', true))
-            ->whereHas('supplyRequest', fn ($q) => $q->where('status', 'sent')
+            ->whereHas('supplyRequest', fn ($q) => $q->whereIn('status', ['sent', 'part_awarded'])
                 ->where('response_deadline', '>', now())
                 ->whereHas('product', fn ($p) => $p->where('active', true)))
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('supplier_quotes')->whereColumn('supplier_quotes.business_id', 'supplier_request_links.business_id')->whereColumn('supplier_quotes.supply_request_id', 'supplier_request_links.supply_request_id')->whereColumn('supplier_quotes.supplier_id', 'supplier_request_links.supplier_id')->where('supplier_quotes.status', 'selected'))
             ->whereHas('supplier', fn ($q) => $q->where('active', true))
             ->with(['supplyRequest.product', 'supplier'])
             ->firstOrFail();
@@ -46,6 +47,6 @@ class SupplierReplyController extends Controller
         $quotes->record($link->supplyRequest, $link->supplier, $data, 'supplier_link');
 
         return redirect()->route('supplier-offer.show', $token)
-            ->with('status','Quotation saved. You can revise it until the request closes.');
+            ->with('status', 'Quotation saved. You can revise it until the request closes.');
     }
 }

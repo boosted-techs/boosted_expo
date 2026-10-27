@@ -3,7 +3,7 @@
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">SALES ENQUIRY</span><h1>New customer request</h1><p>Record what the buyer wants before preparing a priced quotation.</p></div></div>
 <section class="section-card form-narrow">
-<form method="POST" action="{{ route('sales-requests.store') }}" class="form-stack">@csrf
+<form method="POST" action="{{ route('sales-requests.store') }}" class="form-stack">@csrf<input type="hidden" name="submission_key" value="{{ old('submission_key',\Illuminate\Support\Str::uuid()) }}"><label class="field"><span>Buyer reference</span><input name="buyer_reference" maxlength="120"></label><label class="field"><span>Destination</span><input name="destination" maxlength="200"></label>
 <label class="field"><span>Buyer / customer</span><select name="customer_id" required><option value="">Choose customer</option>
 @foreach($customers as $buyer)<option value="{{ $buyer->id }}" @selected(old('customer_id')==$buyer->id)>{{ $buyer->name }} · {{ $buyer->country_code }}</option>@endforeach
 </select></label>

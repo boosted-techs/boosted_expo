@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Business;
+use App\Models\MarketTrip;
+use App\Models\OrderSupply;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
+use App\Services\OrderSourcing;
 use App\Services\ProcurementMath;
 use App\Support\BusinessCurrencies;
 use App\Support\BusinessPermissions;
@@ -71,6 +75,7 @@ class PurchaseController extends Controller
             'currency' => ['required', 'string', app(BusinessCurrencies::class)->rule($request->attributes->get('activeBusiness'))],
             'notes' => ['nullable', 'string', 'max:2000'],
             'idempotency_key' => ['required', 'uuid'],
+            'market_trip_id' => ['nullable', 'integer'], 'sales_order_line_id' => ['nullable', 'integer'], 'origin_supply_id' => ['nullable', 'integer'], 'expected_on' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
         $business = $request->attributes->get('activeBusiness');
@@ -87,13 +92,22 @@ class PurchaseController extends Controller
         }
 
         $order = DB::transaction(function () use ($data, $business, $request, $math) {
+            Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            if (! empty($data['market_trip_id'])) {
+                MarketTrip::query()->where('business_id', $business->id)->where('status', '!=', 'closed')->findOrFail($data['market_trip_id']);
+            }
             $existing = PurchaseOrder::query()->where('business_id', $business->id)
                 ->where('idempotency_key', $data['idempotency_key'])->first();
             if ($existing) {
+                abort_unless($existing->product_id === (int) $data['product_id'] && $existing->kind === $data['kind'] && $existing->currency === $data['currency'] && $math->decimal($existing->quantity)->isEqualTo($math->decimal($data['quantity'])) && $math->decimal($existing->unit_price)->isEqualTo($math->decimal($data['unit_price'])), 409, 'This purchase key was already used for a different purchase.');
+                if (! empty($data['sales_order_line_id'])) {
+                    abort_unless(OrderSupply::query()->where('business_id', $business->id)->where('purchase_order_id', $existing->id)->where('sales_order_line_id', $data['sales_order_line_id'])->exists(), 409, 'This purchase key belongs to a different allocation.');
+                }
+
                 return $existing;
             }
 
-            return PurchaseOrder::create([
+            $purchase = PurchaseOrder::create([
                 ...$data, 'business_id' => $business->id,
                 'reference' => 'PO-'.Str::upper((string) Str::ulid()),
                 'currency' => strtoupper($data['currency']),
@@ -101,6 +115,13 @@ class PurchaseController extends Controller
                 'created_by' => $request->user()->id,
                 'status' => 'ordered',
             ]);
+            if (! empty($data['sales_order_line_id'])) {
+                $source = app(OrderSourcing::class);
+                $line = $source->line($business->id, (int) $data['sales_order_line_id']);
+                $source->supply($line, ['kind' => 'purchase', 'purchase_order_id' => $purchase->id, 'origin_supply_id' => $data['origin_supply_id'] ?? null, 'quantity' => $data['quantity'], 'reason' => 'Purchase created against approved demand.', 'request_key' => $data['idempotency_key']], $request->user()->id);
+            }
+
+            return $purchase;
         });
 
         return redirect()->route('purchases.show', $order->id)
@@ -116,6 +137,6 @@ class PurchaseController extends Controller
             app(ProcurementMath::class)->sum($purchase->receipts->pluck('received_quantity')->all())
         );
 
-        return view('purchases.show',compact('purchase','remaining','canReceive'));
+        return view('purchases.show', compact('purchase', 'remaining', 'canReceive'));
     }
 }

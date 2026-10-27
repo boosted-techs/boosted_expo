@@ -1,6 +1,7 @@
 @extends('layouts.console')
 @section('title','Shipment Details')
 @section('content')
+@if($shipment->sales_order_id)<a class="secondary-button" href="{{ route('sales-orders.show',[$shipment->sales_order_id,'tab'=>'delivery']) }}">Order delivery & transport handovers</a>@endif
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'labels.generate'))<div class="form-actions" style="margin-bottom:16px"><a class="secondary-button" href="{{ route('labels.print',['shipment'=>$shipment->id]) }}">Print shipment stickers</a></div>@endif
 @php $business=request()->attributes->get('activeBusiness'); @endphp
 <div class="page-intro"><div><span class="eyebrow">SHIPMENT RECORD</span><h1>{{ $shipment->reference }}</h1>

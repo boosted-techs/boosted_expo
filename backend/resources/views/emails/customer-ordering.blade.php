@@ -1,0 +1,1 @@
+<p>{{ $businessName }} invited you to submit produce requests and follow their progress.</p><p><a href="{{ route('customer-ordering.show',$token) }}">Open your private ordering page</a></p><p>The link expires in 14 days. Keep it private. Orders may be submitted without prices; the exporter reviews demand before committing.</p>

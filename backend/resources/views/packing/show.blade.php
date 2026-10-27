@@ -1,6 +1,7 @@
 @extends('layouts.console')
 @section('title', 'Packing Job')
 @section('content')
+@if($job->sales_order_line_id)<a href="{{ route('sales-orders.show',[$job->orderLine->sales_order_id,'tab'=>'preparation']) }}" class="secondary-button">Back to order preparation</a>@endif
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'labels.generate'))<div class="form-actions" style="margin-bottom:16px"><a class="secondary-button" href="{{ route('labels.print',['packing'=>$job->id]) }}">Print packing-job stickers</a></div>@endif
 <div class="page-intro"><div><span class="eyebrow">PACKING RECORD</span><h1>{{ $job->reference }}</h1><p>{{ $job->product->name }} · {{ $job->product->base_unit }} · {{ ucfirst(str_replace('_',' ',$job->status)) }}</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('packing.index') }}">All packing jobs</a><a class="secondary-button" href="{{ route('cartons.index') }}">Packed cartons</a></div>
@@ -9,7 +10,7 @@
 @forelse($batches as $entry)<tr><td><strong>{{ $entry['batch']->batch_code }}</strong></td><td>{{ $entry['batch']->source_reference ?: 'Not specified' }}</td><td>{{ $entry['available'] }} {{ $job->product->base_unit }} @if($entry['batch']->is_quarantined)<strong>· QUALITY HOLD</strong>@endif</td></tr>
 @empty<tr><td colspan="3" class="empty-msg">No produce has been received for this product yet. <a class="action-link" href="{{ route('receiving.index') }}">View receiving</a>.</td></tr>@endforelse
 </tbody></table></div>
-<p class="form-hint">Only accepted goods enter available stock. Packing and sorting losses deduct stock from their exact source batches.</p>
+<p class="form-hint">Available quantities exclude stock reserved for other orders. Order-linked jobs show only their own reservations. Only accepted goods enter available stock. Packing and sorting losses deduct stock from their exact source batches.</p>
 </section>
 @if($canManage && in_array($job->status,['open','in_progress'],true))
 <div class="split-panels">

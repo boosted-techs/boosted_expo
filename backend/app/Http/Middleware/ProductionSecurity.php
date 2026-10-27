@@ -24,6 +24,7 @@ class ProductionSecurity
             if (! $request->isSecure() || strcasecmp($request->getHost(), $host) !== 0) {
                 $port = parse_url($url, PHP_URL_PORT);
                 $base = 'https://'.$host.($port ? ':'.$port : '');
+
                 return redirect()->to($base.$request->getRequestUri(), 307);
             }
         }
@@ -33,8 +34,8 @@ class ProductionSecurity
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'DENY');
-        $response->headers->set('Referrer-Policy', $request->is('buyer-order/*')
-            ?'no-referrer':'strict-origin-when-cross-origin');
+        $response->headers->set('Referrer-Policy', $request->is('buyer-order/*', 'customer-ordering/*')
+            ? 'no-referrer' : 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
         $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
         $response->headers->set('Cross-Origin-Opener-Policy', 'same-origin');
@@ -55,7 +56,7 @@ class ProductionSecurity
             $response->headers->set('Strict-Transport-Security', 'max-age=31536000');
         }
 
-        if ($request->user() || $request->is('buyer-order/*')) {
+        if ($request->user() || $request->is('buyer-order/*', 'customer-ordering/*')) {
             $response->headers->set('Cache-Control', 'private, no-store');
         }
 

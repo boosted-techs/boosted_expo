@@ -27,6 +27,7 @@ use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
 use App\Models\FinanceTransactionReversal;
 use App\Models\PurchaseOrder;
+use App\Models\TransportLeg;
 use App\Services\FinanceDocuments;
 use App\Services\FinancePosting;
 use App\Services\FinanceRates;
@@ -198,7 +199,9 @@ class FinanceController extends Controller
         $paymentKey = (string) Str::uuid();
         $supplierPaymentKey = (string) Str::uuid();
 
-        return view('finance.documents', compact(
+        $transportLegs = TransportLeg::query()->where('business_id', $business->id)->whereIn('shipment_id', $shipments->modelKeys())->where('status', '!=', 'cancelled')->with('shipment')->orderBy('sequence')->get();
+
+        return view('finance.documents', compact('transportLegs',
             'business', 'bills', 'purchases', 'payments', 'costs', 'invoices',
             'payableBills', 'shipments', 'invoiceBalances', 'billBalances', 'canCreate', 'paymentKey', 'supplierPaymentKey', 'bankProfiles'
         ));
@@ -246,7 +249,7 @@ class FinanceController extends Controller
         $this->check($request, 'finance.documents.create');
         $request->merge(['currency' => strtoupper(trim((string) $request->input('currency')))]);
         $data = $request->validate([
-            'shipment_id' => ['required', 'integer'],
+            'shipment_id' => ['required', 'integer'], 'transport_leg_id' => ['nullable', 'integer'],
             'category' => ['required', Rule::in([
                 'freight', 'packing_material', 'ground_transport', 'handling', 'airline_fees', 'inspection', 'other',
             ])],
@@ -396,22 +399,22 @@ class FinanceController extends Controller
             'Approved balanced journal posted. Original transaction and rate have been preserved.');
     }
 
-    public function contribution(Request $request,int $shipment,ShipmentContribution $costing): View
+    public function contribution(Request $request, int $shipment, ShipmentContribution $costing): View
     {
-        $this->check($request,'finance.view');
-        $shipment = ExportShipment::query()->where('business_id',$this->business($request)->id)
+        $this->check($request, 'finance.view');
+        $shipment = ExportShipment::query()->where('business_id', $this->business($request)->id)
             ->findOrFail($shipment);
         $report = $costing->report($shipment);
 
-        return view('finance.contribution',compact('shipment','report'));
+        return view('finance.contribution', compact('shipment', 'report'));
     }
 
-    public function journal(Request $request,int $journal): View
+    public function journal(Request $request, int $journal): View
     {
-        $this->check($request,'finance.view');
-        $journal = FinanceJournal::query()->where('business_id',$this->business($request)->id)
+        $this->check($request, 'finance.view');
+        $journal = FinanceJournal::query()->where('business_id', $this->business($request)->id)
             ->with('lines.account')->findOrFail($journal);
 
-        return view('finance.journal',compact('journal'));
+        return view('finance.journal', compact('journal'));
     }
 }

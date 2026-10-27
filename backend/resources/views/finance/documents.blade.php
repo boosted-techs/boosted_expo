@@ -69,6 +69,7 @@
 @include('finance._record-search', ['field' => 'shipment_search', 'page' => 'shipment_page', 'label' => 'Find shipment by reference or AWB'])
 {{ $shipments->links() }}
 <form method="POST" action="{{ route('finance.costs.store') }}" class="form-stack">@csrf
+<label class="field"><span>Transport leg (optional, must match shipment)</span><select name="transport_leg_id"><option value="">Whole shipment / no specific leg</option>@foreach($transportLegs as $leg)<option value="{{ $leg->id }}">{{ $leg->shipment->reference }} · Leg {{ $leg->sequence }} · {{ $leg->partner_snapshot['name'] }} · {{ $leg->origin }} → {{ $leg->destination }}</option>@endforeach</select></label>
 <label class="field"><span>Shipment</span><select name="shipment_id" required><option value="">Choose shipment</option>@foreach($shipments as $shipment)<option value="{{ $shipment->id }}">{{ $shipment->reference }} · {{ $shipment->destination_country }}</option>@endforeach</select></label>
 <div class="form-columns"><label class="field"><span>Cost category</span><select name="category">
 @foreach(['freight'=>'Air freight','packing_material'=>'Packing materials','ground_transport'=>'Ground transport','handling'=>'Cargo handling','airline_fees'=>'Airline charges','inspection'=>'Inspection','other'=>'Other'] as $key=>$name)

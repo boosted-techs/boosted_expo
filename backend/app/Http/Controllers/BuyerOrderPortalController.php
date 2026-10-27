@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BuyerOrderLink;
+use App\Models\OrderEvent;
 use App\Models\SalesOrder;
 use App\Services\BuyerOrderAccess;
+use App\Services\OrderOperations;
 use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,32 +13,38 @@ use Illuminate\View\View;
 
 class BuyerOrderPortalController extends Controller
 {
-    private function own(Request $request,int $order):SalesOrder
+    private function own(Request $request, int $order): SalesOrder
     {
         abort_unless(app(BusinessPermissions::class)->allows(
-            $request->attributes->get('membership'),'sales.manage'),403);
+            $request->attributes->get('membership'), 'sales.manage'), 403);
+
         return SalesOrder::query()->where('business_id',
             $request->attributes->get('activeBusiness')->id)->findOrFail($order);
     }
 
-    public function share(Request $request,int $order,BuyerOrderAccess $access):RedirectResponse
+    public function share(Request $request, int $order, BuyerOrderAccess $access): RedirectResponse
     {
-        $record=$access->invite($this->own($request,$order),$request->user()->id);
-        return back()->with('status',config('mail.default')==='log'
-            ?'Buyer access was recorded in the local development mail log, not delivered externally.'
-            :'A private, time-limited order tracking link was sent to '.$record->buyer_email.'.');
+        $record = $access->invite($this->own($request, $order), $request->user()->id);
+
+        return back()->with('status', config('mail.default') === 'log'
+            ? 'Buyer access was recorded in the local development mail log, not delivered externally.'
+            : 'A private, time-limited order tracking link was sent to '.$record->buyer_email.'.');
     }
 
-    public function revoke(Request $request,int $order,int $link,BuyerOrderAccess $access):RedirectResponse
+    public function revoke(Request $request, int $order, int $link, BuyerOrderAccess $access): RedirectResponse
     {
-        $order=$this->own($request,$order);
-        $access->revoke($order->business_id,$order->id,$link,$request->user()->id);
-        return back()->with('status','Buyer tracking access revoked immediately.');
+        $order = $this->own($request, $order);
+        $access->revoke($order->business_id, $order->id, $link, $request->user()->id);
+
+        return back()->with('status', 'Buyer tracking access revoked immediately.');
     }
 
-    public function show(string $token,BuyerOrderAccess $access):View
+    public function show(string $token, BuyerOrderAccess $access): View
     {
-        $order=$access->resolve($token);
-        return view('buyer.order',compact('order'));
+        $order = $access->resolve($token);
+        $summary = app(OrderOperations::class)->progress($order);
+        $updates = OrderEvent::query()->where('business_id', $order->business_id)->where('sales_order_id', $order->id)->whereNotNull('customer_note')->latest('id')->get(['customer_note', 'created_at']);
+
+        return view('buyer.order', compact('order', 'summary', 'updates'));
     }
 }

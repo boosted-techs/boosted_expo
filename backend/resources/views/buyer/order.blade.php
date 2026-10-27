@@ -6,7 +6,7 @@
 <p class="subhead">Prepared for {{ $order->customer->name }}. This read-only page does not request payment or access to your accounts.</p>
 <section class="section-card">
 <div class="record"><strong>Order status</strong><span>{{ ucfirst($order->status) }}</span></div>
-<div class="record"><strong>Confirmed total</strong><span>{{ $order->currency }} {{ $order->grand_total }}</span></div>
+<div class="record"><strong>Confirmed total</strong><span>{{ $order->pricing_status==='unpriced'?'Pricing pending':$order->currency.' '.$order->grand_total }}</span></div>
 <div class="record"><strong>Delivery term</strong><span>{{ $order->incoterm?:'Not recorded' }}</span></div>
 </section>
 <section class="section-card"><h2>Products ordered</h2>
@@ -15,11 +15,11 @@
 @foreach($order->lines as $line)
 <tr><td>{{ $line->product_name }}</td>
 <td>{{ $line->quantity }} {{ $line->unit }}</td>
-<td>{{ $order->currency }} {{ $line->unit_price }}</td>
-<td>{{ $order->currency }} {{ $line->line_total }}</td></tr>
+<td>{{ $order->pricing_status==='unpriced'?'Pending':$order->currency.' '.$line->unit_price }}</td>
+<td>{{ $order->pricing_status==='unpriced'?'Pending':$order->currency.' '.$line->line_total }}</td></tr>
 @endforeach
 </tbody></table></div></section>
-<section class="section-card"><h2>Shipment updates</h2>
+<section class="section-card"><h2>Shipment updates</h2><p>Progress: {{ str_replace('_',' ',$summary['stage']) }}</p>@foreach($updates as $update)<p>{{ $update->customer_note }}</p>@endforeach
 <p class="muted">Events shown below have been entered by the exporter. They are not official airline or customs confirmations.</p>
 @forelse($order->shipments->sortByDesc('created_at') as $shipment)
 <div class="record"><div><strong>{{ $shipment->reference }} · {{ ucfirst($shipment->status) }}</strong>

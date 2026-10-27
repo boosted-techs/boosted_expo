@@ -294,3 +294,12 @@ Printer and PWA field tests must be recorded against actual supported devices. C
 The platform-owner questions S01–S18 now have a local control-centre implementation and an explicit release boundary in the [roadmap](EXPORT_BUSINESS_ROADMAP_2026-10-27.md#phase-1-implementation--27-october-2026). Business/owner lifecycle, subscriptions and corrections, source usage/allowances, scoped support and audit are implemented and regression-tested. Infrastructure observations and cost estimates remain partly manual; production delivery/scheduling, concurrent PostgreSQL behavior, complete service-cost instrumentation and monitoring-to-incident escalation still require acceptance. These limits must remain visible when assessing S09–S12 and S15–S18.
 
 This update does not close the exporter-owner gaps O01–O48, the Phase 0A physical printer/PWA device gate, or the operational/people/finance/asset requirements assigned to phases 2–5.
+
+
+## Phase 2 implementation follow-up — 27 October 2026
+
+The [roadmap's Phase 2 implementation entry](EXPORT_BUSINESS_ROADMAP_2026-10-27.md#phase-2-implementation--27-october-2026) now records locally implemented demand, sourcing, stock-reservation, work, transport and people controls. It gives the owner a connected order workspace, named/due work, supplier/date evidence, declared supplier-performance samples, partner follow-ups, transport/custody history and weekly staffing/attendance exceptions. R02/R03/R10 therefore have working operational components; their financial allocation, complete reminder/escalation and field acceptance portions retain the later gates.
+
+The implementation deliberately preserves pricing-pending orders without zero-value sales, source history after closure, explicit unmeasured/missing data, independent time review and permissions after a staff role change. R04–R09/R15 and the complete financial position, assets, loans, cutover, physical printing and real-device installation requirements are not closed by this phase.
+
+Local Phase 2 regression evidence: **294 tests / 4,045 assertions**, including 34 new operating/people cases, all passing. The physical printer/device and production-concurrency gates remain independent of these automated results.

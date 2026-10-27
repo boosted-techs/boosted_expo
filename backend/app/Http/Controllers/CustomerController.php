@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\CustomerOrderingLink;
+use App\Models\Product;
 use App\Support\BusinessCurrencies;
 use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
@@ -50,7 +52,10 @@ class CustomerController extends Controller
         $customers = Customer::query()->where('business_id', $businessId)->orderBy('name')->paginate(20);
         $canManage = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'customers.manage');
 
-        return view('customers.index', compact('customers', 'canManage'));
+        $orderingProducts = Product::query()->where('business_id', $businessId)->where('active', true)->orderBy('name')->get();
+        $orderingLinks = CustomerOrderingLink::query()->where('business_id', $businessId)->whereIn('customer_id', $customers->modelKeys())->latest('id')->get();
+
+        return view('customers.index', compact('customers', 'canManage', 'orderingProducts', 'orderingLinks'));
     }
 
     public function store(Request $request): RedirectResponse

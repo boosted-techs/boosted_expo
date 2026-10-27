@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\SupplierRequestMail;
+use App\Models\Business;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
@@ -145,32 +146,40 @@ class SupplyRequestController extends Controller
     public function award(Request $request, int $rfq, int $quote, ProcurementMath $math): RedirectResponse
     {
         $this->check($request, 'procurement.award');
+        $data = $request->validate(['quantity' => ['nullable', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999']]);
         $businessId = $request->attributes->get('activeBusiness')->id;
-        $order = DB::transaction(function () use ($businessId, $rfq, $quote, $math, $request) {
+        $order = DB::transaction(function () use ($businessId, $rfq, $quote, $math, $request, $data) {
+            Business::query()->whereKey($businessId)->lockForUpdate()->firstOrFail();
             $supply = SupplyRequest::query()->where('business_id', $businessId)->lockForUpdate()->findOrFail($rfq);
-            abort_unless($supply->status === 'sent', 422, 'This request cannot be awarded.');
+            abort_unless(in_array($supply->status, ['sent', 'part_awarded'], true), 422, 'This request cannot be awarded.');
             $offer = SupplierQuote::query()->where('business_id', $businessId)
-                ->where('supply_request_id', $supply->id)->where('status', 'submitted')
+                ->where('supply_request_id', $supply->id)
                 ->findOrFail($quote);
+            abort_unless($offer->status === 'submitted', 422, 'This offer is already awarded.');
+            $quantity = $data['quantity'] ?? $offer->quantity;
+            $awarded = $math->sum(PurchaseOrder::query()->where('business_id', $businessId)->whereIn('supplier_quote_id', $supply->quotes()->select('id'))->pluck('quantity')->all());
+            if ($math->decimal($quantity)->isGreaterThan($math->decimal($offer->quantity)) || $awarded->plus($quantity)->isGreaterThan($math->decimal($supply->quantity))) {
+                throw ValidationException::withMessages(['quantity' => 'Award exceeds the offer or remaining RFQ quantity.']);
+            }
             $order = PurchaseOrder::create([
                 'business_id' => $businessId,
                 'reference' => 'PO-'.Str::upper((string) Str::ulid()),
                 'kind' => 'supplier', 'product_id' => $supply->product_id,
                 'supplier_id' => $offer->supplier_id, 'supplier_quote_id' => $offer->id,
                 'purchased_on' => now()->timezone($supply->created_at->timezone)->toDateString(),
-                'quantity' => $offer->quantity, 'unit_price' => $offer->unit_price,
-                'estimated_total' => $math->amount($offer->unit_price, $offer->quantity),
-                'currency' => $offer->currency, 'status' => 'ordered',
+                'quantity' => $quantity, 'unit_price' => $offer->unit_price,
+                'estimated_total' => $math->amount($offer->unit_price, $quantity),
+                'expected_on' => $offer->delivery_on, 'currency' => $offer->currency, 'status' => 'ordered',
                 'notes' => 'Awarded from '.$supply->reference,
                 'idempotency_key' => (string) Str::uuid(), 'created_by' => $request->user()->id,
             ]);
             $offer->update(['status' => 'selected']);
-            $supply->update(['status' => 'awarded']);
+            $supply->update(['status' => $awarded->plus($quantity)->isEqualTo($math->decimal($supply->quantity)) ? 'awarded' : 'part_awarded']);
 
             return $order;
         });
 
-        return redirect()->route('purchases.show',$order->id)
-            ->with('status','Supplier selected and purchase order created. Awaiting goods receipt.');
+        return redirect()->route('purchases.show', $order->id)
+            ->with('status', 'Supplier selected and purchase order created. Awaiting goods receipt.');
     }
 }

@@ -3,6 +3,7 @@
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">EXPORT OPERATIONS</span><h1>{{ $sections[$section][0] }}</h1><p>{{ $sections[$section][1] }}</p></div><div class="page-mark">EXP / 01</div></div>
 @if($section === 'overview')
+@include('people._today')
   <div class="notice"><span>●</span><div><strong>Operations overview</strong><p>These are current figures from your business records. Each figure is shown only when your role permits access to the underlying records.</p></div></div>
   <div class="stats">
     @forelse($metrics as $card)

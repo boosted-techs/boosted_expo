@@ -96,7 +96,19 @@ class PlatformTenancy
 
     public function moduleFor(string $route): string
     {
-        foreach (['sales-' => 'sales', 'sales.' => 'sales', 'commercial-invoices.' => 'sales', 'customers.' => 'sales',
+        if ($route === 'partners.followup') {
+            return 'core';
+        }
+        if (in_array($route, ['order-work.reserve', 'order-work.supply', 'order-work.release', 'order-work.trip'], true)) {
+            return 'procurement';
+        }
+        if ($route === 'order-work.packing') {
+            return 'packing';
+        }
+        if ($route === 'order-work.task-progress') {
+            return 'core';
+        }
+        foreach (['customer-ordering.' => 'sales', 'order-work.' => 'sales', 'people.' => 'people', 'transport.' => 'exports', 'partners.' => 'procurement', 'sales-' => 'sales', 'sales.' => 'sales', 'commercial-invoices.' => 'sales', 'customers.' => 'sales',
             'supplier' => 'procurement', 'supply-' => 'procurement', 'purchases.' => 'procurement', 'receiving.' => 'procurement', 'stock.' => 'procurement',
             'packing.' => 'packing', 'cartons.' => 'packing', 'labels.' => 'packing', 'shipments.' => 'exports', 'export-documents.' => 'exports', 'document-templates.' => 'exports',
             'finance.' => 'finance', 'staff.' => 'people', 'team.' => 'people', 'integrations.' => 'integrations'] as $prefix => $module) {
@@ -113,6 +125,6 @@ class PlatformTenancy
         $state = $this->state($business);
         abort_unless($state['can_write'], 402, 'New work is paused. Contact the exporting business owner to review account access.');
         $modules = $state['terms']['modules'] ?? null;
-        abort_if($modules !== null && $module !== 'core' && ! in_array($module,$modules,true), 403, 'New work in this module is not included in the current agreement.');
+        abort_if($modules !== null && $module !== 'core' && ! in_array($module, $modules, true), 403, 'New work in this module is not included in the current agreement.');
     }
 }
