@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 class TenantDataExport
 {
     public const TABLES = [
+        'stock_locations', 'stock_location_events', 'stock_adjustments', 'carton_repacks', 'shipment_requirements', 'export_clearance_checks',
+        'business_assets', 'asset_activities', 'loan_facilities', 'loan_instalments', 'finance_register_entries',
         'partner_followups', 'order_events', 'order_tasks', 'order_supplies', 'order_receipt_allocations', 'stock_reservations', 'market_trips', 'transport_partners', 'transport_legs', 'transport_handovers', 'staff_people', 'staff_rotas', 'staff_rota_requirements', 'staff_shifts', 'staff_attendances', 'staff_breaks', 'staff_leaves', 'staff_attendance_corrections',
         'products', 'customers', 'suppliers', 'sales_requests', 'sales_request_items', 'sales_quotations', 'sales_quotation_lines', 'sales_orders', 'sales_order_lines',
         'purchase_orders', 'goods_receipts', 'stock_batches', 'stock_movements', 'packing_jobs', 'cartons', 'carton_contents', 'packing_waste_entries', 'export_shipments', 'shipment_cartons', 'shipment_events',

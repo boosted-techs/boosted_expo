@@ -11,6 +11,7 @@ use App\Models\FinanceOperation;
 use App\Models\FinancePartialBankReturn;
 use App\Models\FinancePayment;
 use App\Models\FinancePayrollSettlement;
+use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceTransactionReversal;
 use Brick\Math\BigDecimal;
@@ -142,10 +143,11 @@ class FinanceBankReconciliation
         }, 3);
     }
 
-    private function candidate(FinanceBankStatementLine $line, string $type, int $id): FinancePayment|FinanceShipmentCost|FinancePayrollSettlement|FinanceTransactionReversal|FinancePartialBankReturn|FinanceOperation
+    private function candidate(FinanceBankStatementLine $line, string $type, int $id): FinancePayment|FinanceShipmentCost|FinancePayrollSettlement|FinanceTransactionReversal|FinancePartialBankReturn|FinanceOperation|FinanceRegisterEntry
     {
         $statement = $line->statement;
         $class = match ($type) {
+            'register_entry' => FinanceRegisterEntry::class,
             'money_operation','money_transfer_in' => FinanceOperation::class,
             'payment' => FinancePayment::class,'shipment_cost' => FinanceShipmentCost::class,
             'payroll_settlement' => FinancePayrollSettlement::class,
@@ -154,8 +156,8 @@ class FinanceBankReconciliation
             default => abort(422, 'Unsupported reconciliation type.'),
         };
         $record = $class::query()->where('business_id', $line->business_id)
-            ->when(in_array($type, ['money_operation', 'money_transfer_in', 'transaction_reversal', 'partial_bank_return'], true),
-                fn ($query) => $query->where('posting_status', 'posted'),
+            ->when(in_array($type, ['register_entry', 'money_operation', 'money_transfer_in', 'transaction_reversal', 'partial_bank_return'], true),
+                fn ($query) => $query->whereIn('posting_status', ['posted', 'reversed']),
                 fn ($query) => $query->whereIn('status', ['posted', 'reversed']))
             ->lockForUpdate()->findOrFail($id);
         // A source legitimately reversed by a separate posted journal remains
@@ -166,6 +168,11 @@ class FinanceBankReconciliation
                 ->where('source_type', $type)->where('source_id', $record->id)
                 ->where('posting_status', 'posted')->exists(), 422,
                 'A reversed bank source must have an immutable approved correction journal.');
+        }
+        $registerReserved = FinanceRegisterEntry::query()->where('business_id', $line->business_id)->where('return_bank_line_id', $line->id)->whereIn('posting_status', ['not_posted', 'posted'])->first();
+        abort_unless(! $registerReserved || ($record instanceof FinanceRegisterEntry && $record->id === $registerReserved->id), 422, 'This bank line is reserved for a specific asset/loan correction.');
+        if ($record instanceof FinanceRegisterEntry && $record->return_bank_line_id) {
+            abort_unless($record->return_bank_line_id === $line->id, 422, 'Match this correction to its exact imported bank return line.');
         }
         $reserved = FinanceTransactionReversal::query()->where('business_id', $line->business_id)
             ->where('return_bank_line_id', $line->id)->first();
@@ -201,7 +208,12 @@ class FinanceBankReconciliation
             $direction = $record instanceof FinancePayment
                 ? ($record->direction === 'in' ? 'credit' : 'debit') : 'debit';
         }
-        if ($record instanceof FinanceOperation) {
+        if ($record instanceof FinanceRegisterEntry) {
+            abort_unless($record->cash_account_id && BigDecimal::of((string) $record->cash_amount)->isGreaterThan(0), 422, 'This register event has no money movement.');
+            $direction = $record->cash_direction === 'in' ? 'credit' : 'debit';
+            $accountId = $record->cash_account_id;
+            abort_unless($record->event_on->toDateString() === $line->transaction_on->toDateString(), 422, 'The register cash event date must match the bank.');
+        } elseif ($record instanceof FinanceOperation) {
             abort_unless(in_array($record->kind, FinanceOperations::CASH, true), 422, 'This money record has no cash movement.');
             if ($type === 'money_transfer_in') {
                 abort_unless($record->kind === 'transfer', 422);
@@ -218,7 +230,7 @@ class FinanceBankReconciliation
         $math = app(FinanceMath::class);
         if ($direction !== $line->direction
             || $record->currency !== $statement->currency
-            || ! $math->money((string) $record->amount)->isEqualTo(
+            || ! $math->money((string) ($record instanceof FinanceRegisterEntry ? $record->cash_amount : $record->amount))->isEqualTo(
                 $math->money((string) $line->amount)
             ) || $accountId !== $statement->account_id) {
             throw ValidationException::withMessages(['source' => 'Bank direction, currency, recorded account and exact transaction amount must match.']);
@@ -321,12 +333,12 @@ class FinanceBankReconciliation
                 ->lockForUpdate()->findOrFail($statement->id);
             abort_unless($statement->status === 'open', 422, 'Already closed.');
             $all = $statement->lines()->count();
-            $confirmed = FinanceBankMatch::query()->where('business_id',$statement->business_id)
-                ->whereIn('statement_line_id',$statement->lines()->pluck('id'))
-                ->where('status','confirmed')->count();
-            abort_unless($all > 0 && $all === $confirmed,422,
+            $confirmed = FinanceBankMatch::query()->where('business_id', $statement->business_id)
+                ->whereIn('statement_line_id', $statement->lines()->pluck('id'))
+                ->where('status', 'confirmed')->count();
+            abort_unless($all > 0 && $all === $confirmed, 422,
                 'Each imported bank line must be independently confirmed before closing.');
-            abort_unless($statement->imported_by !== $actor,422,
+            abort_unless($statement->imported_by !== $actor, 422,
                 'A different authorised person must complete reconciliation.');
             $statement->update(['status' => 'reconciled', 'completed_at' => now()]);
         });

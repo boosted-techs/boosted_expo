@@ -21,10 +21,12 @@ use App\Models\FinancePayrollReversal;
 use App\Models\FinancePayrollRun;
 use App\Models\FinancePayrollSettlement;
 use App\Models\FinancePostingRequest;
+use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
 use App\Models\FinanceTransactionReversal;
 use App\Models\GoodsReceipt;
+use App\Models\StockAdjustment;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Support\Facades\DB;
@@ -32,9 +34,11 @@ use Illuminate\Validation\ValidationException;
 
 class FinancePosting
 {
-    private function source(int $businessId, string $type, int $id): CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening|FinanceFxRevaluation|FinancePartialBankReturn|FinanceMonetaryRevaluation|FinanceOperation
+    private function source(int $businessId, string $type, int $id): CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening|FinanceFxRevaluation|FinancePartialBankReturn|FinanceMonetaryRevaluation|FinanceOperation|FinanceRegisterEntry|StockAdjustment
     {
         $model = match ($type) {
+            'stock_adjustment' => StockAdjustment::class,
+            'register_entry' => FinanceRegisterEntry::class,
             'money_operation' => FinanceOperation::class,
             'commercial_invoice' => CommercialInvoice::class,
             'supplier_bill' => FinanceSupplierBill::class,
@@ -58,7 +62,7 @@ class FinancePosting
         return $model::query()->where('business_id', $businessId)->lockForUpdate()->findOrFail($id);
     }
 
-    private function state(CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening|FinanceFxRevaluation|FinancePartialBankReturn|FinanceMonetaryRevaluation|FinanceOperation $record): string
+    private function state(CommercialInvoice|FinanceSupplierBill|FinancePayment|FinanceShipmentCost|FinanceInventoryRelief|FinanceCreditNote|FinanceOpeningBalance|FinanceBalanceAdjustment|FinancePayrollRun|FinancePayrollSettlement|FinancePayrollReversal|FinanceTransactionReversal|FinanceForeignBankOpening|FinanceFxRevaluation|FinancePartialBankReturn|FinanceMonetaryRevaluation|FinanceOperation|FinanceRegisterEntry|StockAdjustment $record): string
     {
         return $record instanceof CommercialInvoice || $record instanceof FinanceSupplierBill
             || $record instanceof FinanceInventoryRelief || $record instanceof FinanceCreditNote
@@ -67,7 +71,7 @@ class FinancePosting
             || $record instanceof FinanceTransactionReversal || $record instanceof FinanceForeignBankOpening
             || $record instanceof FinanceFxRevaluation
             || $record instanceof FinancePartialBankReturn
-            || $record instanceof FinanceMonetaryRevaluation || $record instanceof FinanceOperation
+            || $record instanceof FinanceMonetaryRevaluation || $record instanceof FinanceOperation || $record instanceof FinanceRegisterEntry || $record instanceof StockAdjustment
             ? $record->posting_status : $record->status;
     }
 
@@ -96,7 +100,15 @@ class FinancePosting
             if ($type === 'inventory_relief') {
                 app(FinanceInventoryValuation::class)->validateBeforePost($source);
             }
-            if ($type === 'money_operation') {
+            if ($type === 'stock_adjustment') {
+                abort_unless(($data['exchange_rate_id'] ?? null) === null && $source->currency === $business->base_currency, 422, 'Stock count adjustments use the frozen base-currency cost.');
+                app(StockExceptions::class)->lines($source);
+                $fx = '1';
+            } elseif ($type === 'register_entry') {
+                abort_unless($data['posting_on'] === $source->event_on->toDateString() && ($data['exchange_rate_id'] ?? null) === $source->exchange_rate_id, 422, 'Use the register transaction date and frozen FX reference.');
+                app(FinanceRegisterPostings::class)->lines($source);
+                $fx = (string) $source->rate_to_base;
+            } elseif ($type === 'money_operation') {
                 abort_unless($data['posting_on'] === $source->event_on->toDateString() && ($data['exchange_rate_id'] ?? null) === $source->exchange_rate_id, 422, 'Use the frozen rate selected when this money record was prepared.');
                 app(FinanceOperations::class)->lines($source);
                 $fx = (string) $source->rate_to_base;
@@ -183,6 +195,8 @@ class FinancePosting
                     $data['exchange_rate_id'] ?? null, $data['posting_on']);
             }
             $date = match ($type) {
+                'stock_adjustment' => $source->event_on->toDateString(),
+                'register_entry' => $source->event_on->toDateString(),
                 'money_operation' => $source->event_on->toDateString(),
                 'commercial_invoice' => $source->issued_at->copy()->timezone($business->timezone)->toDateString(),
                 'supplier_bill' => $source->vendor_invoice_date->toDateString(),
@@ -242,8 +256,14 @@ class FinancePosting
             abort_unless($request->requested_by !== $actor, 422,
                 'A different authorised person must review this posting request.');
             $source = $this->source($request->business_id, $request->source_type, $request->source_id);
-            if ($source instanceof FinanceOperation || ($source instanceof FinancePayrollRun && ($source->data_snapshot['method'] ?? null) === 'approved_time_and_agreed_rate')) {
+            if ($source instanceof StockAdjustment || $source instanceof FinanceRegisterEntry || $source instanceof FinanceOperation || ($source instanceof FinancePayrollRun && ($source->data_snapshot['method'] ?? null) === 'approved_time_and_agreed_rate')) {
                 abort_unless($source->created_by !== $actor, 422, 'The person preparing this money or time-payroll record cannot review it.');
+            }
+            if ($approve && $request->source_type === 'stock_adjustment') {
+                app(StockExceptions::class)->lines($source);
+            }
+            if ($approve && $request->source_type === 'register_entry') {
+                app(FinanceRegisterPostings::class)->lines($source);
             }
             if ($approve && $request->source_type === 'money_operation') {
                 app(FinanceOperations::class)->lines($source);
@@ -292,7 +312,7 @@ class FinancePosting
                 'approved_by' => $approve ? $actor : null,
                 'approved_at' => $approve ? now() : null,
             ]);
-            if (! $approve && $source instanceof FinanceOperation) {
+            if (! $approve && ($source instanceof FinanceOperation || $source instanceof FinanceRegisterEntry || $source instanceof StockAdjustment)) {
                 $source->update(['posting_status' => 'rejected']);
             }
             if (! $approve && ($source instanceof FinancePayment || $source instanceof FinanceShipmentCost
@@ -302,6 +322,21 @@ class FinancePosting
             $this->event($request, $actor, $approve ? 'approved' : 'rejected', $notes);
 
             return $request;
+        }, 3);
+    }
+
+    public function withdraw(FinancePostingRequest $request, int $actor, string $reason): void
+    {
+        DB::transaction(function () use ($request, $actor, $reason) {
+            app(OrderOperations::class)->lockForWork($request->business_id, 'finance');
+            $request = FinancePostingRequest::query()->where('business_id', $request->business_id)->lockForUpdate()->findOrFail($request->id);
+            abort_unless(in_array($request->source_type, ['register_entry', 'stock_adjustment', 'money_operation'], true) && in_array($request->status, ['pending', 'approved'], true), 422, 'Only an unposted supported financial review can be withdrawn.');
+            abort_unless($request->status === 'approved' ? $request->approved_by === $actor : $request->requested_by === $actor, 422, 'The requester may withdraw a pending request; only its approver may withdraw an approval.');
+            $source = $this->source($request->business_id, $request->source_type, $request->source_id);
+            abort_unless($this->state($source) === 'not_posted' && ! FinanceJournal::query()->where('business_id', $request->business_id)->where('source_type', $request->source_type)->where('source_id', $source->id)->exists(), 422, 'A posted source cannot be withdrawn. Use a controlled correction.');
+            $request->update(['status' => 'rejected']);
+            $source->update(['posting_status' => 'rejected']);
+            $this->event($request, $actor, 'withdrawn', $reason);
         }, 3);
     }
 
@@ -327,7 +362,13 @@ class FinancePosting
                 $source->shipment->status, ['dispatched', 'delivered'], true)) {
                 abort(422, 'Shipment dispatch status has changed. Re-review recognition evidence.');
             }
-            if ($request->source_type === 'money_operation') {
+            if ($request->source_type === 'stock_adjustment') {
+                abort_unless($request->exchange_rate_id === null && $source->currency === $business->base_currency, 422);
+                $rate = '1';
+            } elseif ($request->source_type === 'register_entry') {
+                abort_unless($request->posting_on->toDateString() === $source->event_on->toDateString() && $request->exchange_rate_id === $source->exchange_rate_id, 422, 'The register event date and rate are frozen.');
+                $rate = (string) $source->rate_to_base;
+            } elseif ($request->source_type === 'money_operation') {
                 abort_unless($request->posting_on->toDateString() === $source->event_on->toDateString() && $request->exchange_rate_id === $source->exchange_rate_id, 422, 'The money record date and rate are frozen.');
                 $rate = (string) $source->rate_to_base;
             } elseif ($request->source_type === 'partial_bank_return') {
@@ -388,6 +429,8 @@ class FinancePosting
                     $request->exchange_rate_id, $request->posting_on->toDateString());
             }
             $lines = match ($request->source_type) {
+                'stock_adjustment' => app(StockExceptions::class)->lines($source),
+                'register_entry' => app(FinanceRegisterPostings::class)->lines($source),
                 'money_operation' => app(FinanceOperations::class)->lines($source),
                 'commercial_invoice' => $this->invoiceLines($source, $rate),
                 'supplier_bill' => $this->billLines($source, $rate),
@@ -411,7 +454,11 @@ class FinancePosting
                 $request->posting_on->toDateString(),
                 $this->description($request->source_type, $source), $actor, $request->approved_by, $lines,
             );
-            if ($source instanceof FinanceOperation) {
+            if ($source instanceof StockAdjustment) {
+                app(StockExceptions::class)->finalize($source, $actor);
+            } elseif ($source instanceof FinanceRegisterEntry) {
+                app(FinanceRegisterPostings::class)->finalize($source);
+            } elseif ($source instanceof FinanceOperation) {
                 $source->update(['posting_status' => 'posted', 'posted_at' => now()]);
             } elseif ($source instanceof CommercialInvoice) {
                 $source->update(['posting_status' => 'posted']);
@@ -449,6 +496,8 @@ class FinancePosting
     private function description(string $type, $source): string
     {
         return match ($type) {
+            'stock_adjustment' => 'Approved stock count '.$source->reference,
+            'register_entry' => 'Asset / borrowing transaction '.$source->reference,
             'money_operation' => 'Money operation '.$source->reference,
             'commercial_invoice' => 'Commercial invoice '.$source->reference,
             'supplier_bill' => 'Supplier bill '.$source->reference,

@@ -10,6 +10,7 @@ use App\Models\SalesOrderLine;
 use App\Models\ShipmentCarton;
 use App\Models\ShipmentEvent;
 use App\Models\TransportLeg;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -243,6 +244,7 @@ class ShipmentOperations
             abort_unless($shipment->status === 'ready', 422, 'Mark the shipment ready before dispatch.');
             $this->assertNoHeldProduce($shipment);
             app(ShipmentDispatchApproval::class)->assertDispatchAllowed($shipment, $userId);
+            $readiness = app(ShipmentReadiness::class)->assertReady($shipment, Carbon::parse($actualDeparture, 'UTC')->timezone(Business::query()->findOrFail($shipment->business_id)->timezone)->toDateString());
             $allocations = $shipment->allocations()->orderBy('carton_id')
                 ->lockForUpdate()->get();
             if ($allocations->isEmpty()) {
@@ -264,7 +266,7 @@ class ShipmentOperations
             ]);
             $this->event($shipment, $userId, 'dispatched', [
                 'carton_count' => $allocations->count(),
-                'actual_departure_at' => $actualDeparture,
+                'actual_departure_at' => $actualDeparture, 'document_readiness' => $readiness,
                 'recorded_manually' => true,
             ]);
         }, 3);

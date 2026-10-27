@@ -24,10 +24,12 @@ use App\Models\FinancePayrollReversal;
 use App\Models\FinancePayrollRun;
 use App\Models\FinancePayrollSettlement;
 use App\Models\FinancePostingRequest;
+use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
 use App\Models\FinanceTransactionReversal;
 use App\Models\PurchaseOrder;
+use App\Models\StockAdjustment;
 use App\Models\TransportLeg;
 use App\Services\FinanceDocuments;
 use App\Services\FinancePosting;
@@ -338,6 +340,8 @@ class FinanceController extends Controller
             ->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
             ->orderByDesc('id')->paginate(15, ['*'], 'source_foreignBankOpenings_page')->withQueryString();
         $operations = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_money_page')->withQueryString();
+        $registerEntries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_register_page')->withQueryString();
+        $stockAdjustments = StockAdjustment::query()->where('business_id', $business->id)->where('status', 'approved')->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_stock_adjustment_page')->withQueryString();
         $hasPending = FinancePostingRequest::query()->where('business_id', $business->id)
             ->whereIn('status', ['pending', 'approved'])
             ->get(['source_type', 'source_id'])->map(fn ($r) => $r->source_type.':'.$r->source_id)->all();
@@ -347,7 +351,7 @@ class FinanceController extends Controller
             'canSubmit', 'canApprove', 'canPost', 'hasPending', 'reliefs', 'creditNotes',
             'openingBalances', 'balanceAdjustments', 'payrollRuns', 'payrollSettlements', 'payrollReversals',
             'transactionReversals', 'foreignBankOpenings', 'fxRevaluations',
-            'partialReturns', 'monetaryRevaluations', 'operations'
+            'partialReturns', 'monetaryRevaluations', 'operations', 'registerEntries', 'stockAdjustments'
         ));
     }
 
@@ -388,6 +392,16 @@ class FinanceController extends Controller
         $posting->review($record, false, $request->user()->id, $data['notes']);
 
         return redirect()->route('finance.reviews')->with('status', 'Posting rejected with an audit note.');
+    }
+
+    public function withdraw(Request $request, int $review, FinancePosting $posting): RedirectResponse
+    {
+        $record = FinancePostingRequest::query()->where('business_id', $this->business($request)->id)->findOrFail($review);
+        $this->check($request, $record->status === 'approved' ? 'finance.reviews.approve' : 'finance.reviews.request');
+        $data = $request->validate(['reason' => ['required', 'string', 'min:20', 'max:3000']]);
+        $posting->withdraw($record, $request->user()->id, $data['reason']);
+
+        return back()->with('status', 'Unposted review withdrawn. Its source and approval history are retained; prepare corrected details as a new record.');
     }
 
     public function post(Request $request, int $review, FinancePosting $posting): RedirectResponse

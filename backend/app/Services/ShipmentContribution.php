@@ -94,7 +94,7 @@ class ShipmentContribution
                             $missing[] = $bill->reference.': missing posted supplier-bill journal.';
                         } else {
                             try {
-                                $unit = app(FinanceCostBasis::class)->receiptUnitBase($receipt);
+                                $unit = app(FinanceCostBasis::class)->batchBasis($receipt->batch)['unit'];
                                 $baseCost = $math->money(BigDecimal::of((string) $content->quantity)->multipliedBy($unit));
                                 $purchaseCosts = $purchaseCosts->plus($baseCost);
                             } catch (ValidationException $error) {

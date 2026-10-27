@@ -79,6 +79,7 @@
 </form>
 </section>
 @endif
+@include('shipments._readiness')
 <section class="section-card"><h2>Shipment control</h2>
 @if($shipment->status==='draft' && $canManage)
 <p class="muted">When all carton assignments, flight details and AWB are correct, mark this shipment ready. You can still reopen it before dispatch.</p>
@@ -180,11 +181,11 @@
 @endif
 @if($canViewDocs)
 <section class="section-card">
-<h2>Export clearance and permit references</h2>
+<h2 id="shipment-document-evidence">Export clearance and permit references</h2>
 <div class="notice"><span>●</span><div><strong>Internal records are not government approvals</strong>
 <p>Save references from the actual issuing authority, and arrange official portal or document checks separately. The ERP does not issue a phytosanitary certificate, file a customs declaration, or claim an authority approved it. Validity, destination rules and original evidence must be verified by responsible staff.</p></div></div>
 @if($canGenerate && $shipment->status!=='cancelled')
-<form method="POST" action="{{ route('shipments.clearance.submit',$shipment->id) }}" class="form-stack form-narrow">@csrf
+<form method="POST" action="{{ route('shipments.clearance.submit',$shipment->id) }}" enctype="multipart/form-data" class="form-stack form-narrow">@csrf
 <label class="field"><span>Document type</span><select name="document_kind" required>
 @foreach($clearanceKinds as $kind=>$label)<option value="{{ $kind }}">{{ $label }}</option>@endforeach
 </select></label>
@@ -192,6 +193,7 @@
 <label class="field"><span>Issuing authority shown on document</span><input name="authority_name" required minlength="3" maxlength="180" placeholder="Name on original certificate"></label>
 <label class="field"><span>Official reference number on document</span><input name="external_reference" required minlength="3" maxlength="180"></label>
 </div>
+<label class="field"><span>Original supporting document (PDF/JPEG/PNG; up to 5 MB)</span><input name="file" type="file" accept="application/pdf,image/jpeg,image/png"></label>
 <label class="field"><span>Expiration date (if applicable)</span><input type="date" name="valid_until"></label>
 <label class="field"><span>Evidence and official verification steps</span><textarea name="source_evidence" required rows="3" minlength="30" maxlength="3000" placeholder="Identify the original document, issuing authority, inspection findings and where the reference may be verified independently."></textarea></label>
 <button class="secondary-button">Submit document for separate internal review</button></form>
@@ -202,6 +204,9 @@
 <small>{{ $check->authority_name }} · {{ $check->external_reference }}</small>
 <small>{{ str_replace('_',' ',ucfirst($check->status)) }}@if($check->valid_until) · Expires {{ $check->valid_until->format('d M Y') }}@endif</small>
 <small>{{ $check->source_evidence }}</small>
+@if($check->file_path)<p><a href="{{ route('shipments.readiness.evidence',$check->id) }}">Download private original document</a></p>@endif
+@if($canManageRequirements && $check->status==='internally_checked')<details><summary>Revoke this document review</summary><form method="POST" action="{{ route('shipments.readiness.revoke',$check->id) }}" class="form-stack">@csrf<input name="reason" minlength="20" maxlength="3000" required placeholder="Reason and source evidence"><button class="text-button">Revoke and retain history</button></form></details>@endif
+@if($check->revocation_reason)<small>Revoked: {{ $check->revocation_reason }}</small>@endif
 @if($check->review_note)<small>Review: {{ $check->review_note }}</small>@endif
 </div>
 @if($check->status==='pending_review' && $canCheckClearance && $check->submitted_by!==auth()->id())

@@ -28,7 +28,7 @@ class BusinessPermissions
             'staff.clock', 'release.acceptance.view',
             'section.overview', 'section.operations', 'catalogue.view',
             'purchases.view', 'receipts.view', 'receipts.post',
-            'stock.view', 'stock.quality.hold', 'packing.view', 'packing.manage', 'cartons.view',
+            'stock.view', 'stock.adjust.record', 'stock.quality.hold', 'packing.view', 'packing.manage', 'cartons.view',
             'labels.view', 'labels.generate', 'traceability.publish',
             'shipments.view', 'shipments.manage',
             'documents.view', 'documents.generate', 'integrations.view',

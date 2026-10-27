@@ -120,7 +120,10 @@ class PackingOperations
                 app(OrderSourcing::class)->consume($job, $batches[$batchId], $quantity, false);
             }
 
+            $locations = $batches->map(fn ($b) => $b->stock_location_id ?? app(StockExceptions::class)->defaultLocation($job->business_id)->id)->unique();
+            abort_unless($locations->count() === 1, 422, 'Move the loose input batches to one packing location before making a mixed carton.');
             $carton = Carton::create([
+                'stock_location_id' => $locations->first(),
                 'business_id' => $job->business_id,
                 'packing_job_id' => $job->id,
                 'carton_code' => 'CTN-'.Str::upper((string) Str::ulid()),

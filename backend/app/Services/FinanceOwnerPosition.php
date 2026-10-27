@@ -7,6 +7,8 @@ use App\Models\FinanceAccount;
 use App\Models\FinanceJournalLine;
 use App\Models\FinanceOperation;
 use App\Models\FinancePostingRequest;
+use App\Models\FinanceRegisterEntry;
+use App\Models\LoanInstalment;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 
@@ -64,7 +66,7 @@ class FinanceOwnerPosition
                         continue;
                     }
                     $currency = $document->currency;
-                    $funding[$days][$currency] ??= ['collections' => BigDecimal::zero(), 'payments' => BigDecimal::zero(), 'expenses' => BigDecimal::zero()];
+                    $funding[$days][$currency] ??= ['collections' => BigDecimal::zero(), 'payments' => BigDecimal::zero(), 'expenses' => BigDecimal::zero(), 'loans' => BigDecimal::zero()];
                     if ($customer) {
                         $funding[$days][$currency]['collections'] = $funding[$days][$currency]['collections']->plus($amount->multipliedBy($collectionPercent)->dividedBy(100, 2, RoundingMode::HalfUp));
                     } else {
@@ -85,13 +87,26 @@ class FinanceOwnerPosition
             }
             foreach ([7, 30] as $days) {
                 if ($expense->due_on->toDateString() <= now($business->timezone)->addDays($days)->toDateString()) {
-                    $funding[$days][$expense->currency] ??= ['collections' => BigDecimal::zero(), 'payments' => BigDecimal::zero(), 'expenses' => BigDecimal::zero()];
+                    $funding[$days][$expense->currency] ??= ['collections' => BigDecimal::zero(), 'payments' => BigDecimal::zero(), 'expenses' => BigDecimal::zero(), 'loans' => BigDecimal::zero()];
                     $funding[$days][$expense->currency]['expenses'] = $funding[$days][$expense->currency]['expenses']->plus($remaining);
                 }
             }
         }
+        foreach (LoanInstalment::query()->where('business_id', $business->id)->where('status', 'active')->whereDate('due_on', '<=', now($business->timezone)->addDays(30)->toDateString())->whereHas('loan', fn ($q) => $q->where('status', 'active'))->with('loan')->orderBy('due_on')->get() as $instalment) {
+            $parts = app(LoanRegister::class)->instalmentBalances($instalment);
+            $total = $parts['principal']->plus($parts['interest'])->plus($parts['fees']);
+            foreach ([7, 30] as $days) {
+                if ($instalment->due_on->toDateString() <= now($business->timezone)->addDays($days)->toDateString()) {
+                    $currency = $instalment->loan->currency;
+                    $funding[$days][$currency] ??= ['collections' => BigDecimal::zero(), 'payments' => BigDecimal::zero(), 'expenses' => BigDecimal::zero(), 'loans' => BigDecimal::zero()];
+                    $funding[$days][$currency]['loans'] = $funding[$days][$currency]['loans']->plus($total);
+                }
+            }
+        }
+        $unallocatedLoanRepayments = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('kind', 'loan_repayment')->where('posting_status', 'posted')->whereNull('instalment_id')->count();
+        $registerReconciliation = app(FinanceRegisterReconciliation::class)->report($business, $date, $balances);
         $unaccounted = FinanceOperation::query()->where('business_id', $business->id)->whereIn('kind', ['staff_advance', 'supplier_advance', 'customer_deposit'])->where('posting_status', 'posted')->orderBy('due_on')->get()->map(fn ($operation) => ['operation' => $operation, 'remaining' => app(FinanceOperations::class)->remaining($operation)])->filter(fn ($row) => $row['remaining']->isGreaterThan(0));
 
-        return compact('balances', 'money', 'cashIn', 'cashOut', 'baseCashIn', 'baseCashOut', 'unposted', 'reviews', 'funding', 'missingTerms', 'today', 'overdue', 'unaccounted');
+        return compact('balances', 'money', 'cashIn', 'cashOut', 'baseCashIn', 'baseCashOut', 'unposted', 'reviews', 'funding', 'missingTerms', 'today', 'overdue', 'unaccounted', 'unallocatedLoanRepayments', 'registerReconciliation');
     }
 }

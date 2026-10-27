@@ -7,12 +7,32 @@ use App\Models\FinanceBillReceipt;
 use App\Models\FinanceJournal;
 use App\Models\FinanceSupplierBill;
 use App\Models\GoodsReceipt;
+use App\Models\StockAdjustment;
+use App\Models\StockBatch;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Validation\ValidationException;
 
 class FinanceCostBasis
 {
+    public function batchBasis(StockBatch $batch): array
+    {
+        $receipt = GoodsReceipt::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->first();
+        abort_unless($receipt, 422, 'This batch needs a verified source receipt before cost adjustment.');
+        $originalUnit = $this->receiptUnitBase($receipt);
+        $quantity = BigDecimal::of((string) $receipt->accepted_quantity);
+        $cost = app(FinanceMath::class)->money($quantity->multipliedBy($originalUnit));
+        foreach (StockAdjustment::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->where('posting_status', 'posted')->orderBy('id')->get() as $adjustment) {
+            $delta = BigDecimal::of((string) $adjustment->quantity_delta);
+            $quantity = $quantity->plus($delta);
+            $cost = $delta->isGreaterThan(0) ? $cost->plus((string) $adjustment->amount) : $cost->minus((string) $adjustment->amount);
+        }
+        abort_unless(! $quantity->isLessThan(0) && ! $cost->isLessThan(0), 422, 'Approved count adjustments exceed this batch cost layer.');
+        $unit = $quantity->isGreaterThan(0) ? $cost->dividedBy($quantity, 12, RoundingMode::HalfUp) : $originalUnit;
+
+        return compact('quantity', 'cost', 'unit');
+    }
+
     public function receiptUnitBase(GoodsReceipt $receipt): BigDecimal
     {
         $math = app(FinanceMath::class);
@@ -91,6 +111,6 @@ class FinanceCostBasis
             throw ValidationException::withMessages(['inventory' => 'Supplier bill has no valid remaining cost basis.']);
         }
 
-        return $net->dividedBy($quantity,12,RoundingMode::HalfUp);
+        return $net->dividedBy($quantity, 12, RoundingMode::HalfUp);
     }
 }

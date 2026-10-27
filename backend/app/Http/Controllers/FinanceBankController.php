@@ -12,6 +12,7 @@ use App\Models\FinanceOperation;
 use App\Models\FinancePartialBankReturn;
 use App\Models\FinancePayment;
 use App\Models\FinancePayrollSettlement;
+use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceTransactionReversal;
 use App\Services\FinanceBankAuthenticity;
@@ -89,6 +90,7 @@ class FinanceBankController extends Controller
             $request->attributes->get('membership'), 'finance.bank.match');
         $canReview = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'finance.bank.review');
+        $registerEntries = FinanceRegisterEntry::query()->where('business_id', $statement->business_id)->where('cash_account_id', $statement->account_id)->whereIn('posting_status', ['posted', 'reversed'])->where('currency', $statement->currency)->whereIn('cash_amount', $candidateAmounts)->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_register_page')->withQueryString();
         $operations = FinanceOperation::query()->where('business_id', $statement->business_id)->where('posting_status', 'posted')->where('currency', $statement->currency)->whereIn('amount', $candidateAmounts)->where(fn ($q) => $q->where('cash_account_id', $statement->account_id)->orWhere('destination_account_id', $statement->account_id))->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_money_page')->withQueryString();
         $payments = FinancePayment::query()->where('business_id', $statement->business_id)
             ->where('cash_account_id', $statement->account_id)
@@ -151,7 +153,7 @@ class FinanceBankController extends Controller
 
         return view('finance.bank.show', compact(
             'statement', 'lines', 'canMatch', 'canReview', 'payments', 'costs', 'payrollSettlements',
-            'operations', 'reversals', 'partials', 'ledgerCheck', 'ledgerPreview', 'isLedgerCheckCurrent',
+            'registerEntries', 'operations', 'reversals', 'partials', 'ledgerCheck', 'ledgerPreview', 'isLedgerCheckCurrent',
             'canProofSubmit', 'canProofReview', 'matched',
             'bankAttestation', 'isBankAuthenticated', 'canUploadBankSignature'
         ));
@@ -163,7 +165,7 @@ class FinanceBankController extends Controller
         $this->check($request, 'finance.bank.match');
         $statement = $this->own($request, $statement);
         $data = $request->validate([
-            'candidate' => ['required', 'regex:/^(money_operation|money_transfer_in|payment|shipment_cost|payroll_settlement|transaction_reversal|partial_bank_return):[1-9][0-9]*$/D'],
+            'candidate' => ['required', 'regex:/^(register_entry|money_operation|money_transfer_in|payment|shipment_cost|payroll_settlement|transaction_reversal|partial_bank_return):[1-9][0-9]*$/D'],
             'note' => ['required', 'string', 'min:10', 'max:1000'],
         ]);
         [$type,$sourceId] = explode(':', $data['candidate'], 2);
@@ -247,6 +249,6 @@ class FinanceBankController extends Controller
         $this->check($request, 'finance.bank.review');
         $bank->complete($this->own($request, $statement), $request->user()->id);
 
-        return back()->with('status','Every imported statement line is confirmed. The statement has been marked reconciled.');
+        return back()->with('status', 'Every imported statement line is confirmed. The statement has been marked reconciled.');
     }
 }

@@ -16,6 +16,8 @@
 <p class="muted">Submitting a document here does not affect the ledger. Enter a meaningful audit explanation and, where applicable, the exact approved exchange rate.</p>
 @include('finance._record-search', ['field' => 'source_search', 'page' => 'page', 'label' => 'Find source document by reference'])
 @php $sourceSections=[
+ ['type'=>'stock_adjustment','name'=>'Independently reviewed stock counts','rows'=>$stockAdjustments],
+ ['type'=>'register_entry','name'=>'Asset and borrowing transactions','rows'=>$registerEntries],
  ['type'=>'money_operation','name'=>'Deposits, advances, expenses and transfers','rows'=>$operations],
  ['type'=>'commercial_invoice','name'=>'Commercial invoices (revenue recognition)','rows'=>$invoices],
  ['type'=>'supplier_bill','name'=>'Supplier bills (accepted produce and payables)','rows'=>$bills],
@@ -63,10 +65,10 @@
 @else Review already submitted @endif</summary>
 @if($eligible && !in_array($id,$hasPending))
 <form method="POST" action="{{ route('finance.reviews.request',['type'=>$section['type'],'source'=>$source->id]) }}" class="form-stack">@csrf
-<label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ $section['type']==='money_operation' ? $source->event_on->toDateString() : (in_array($section['type'],['fx_revaluation','monetary_revaluation'],true) ? $source->valued_on->format('Y-m-d') : (in_array($section['type'],['transaction_reversal','partial_bank_return'],true) && $source->return_bank_line_id ? ($section['type']==='transaction_reversal' ? $source->original_snapshot['bank_return_evidence']['return_transaction_on'] : $source->data_snapshot['return_date']) : now()->format('Y-m-d'))) }}" required max="{{ now()->format('Y-m-d') }}"></label>
+<label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ in_array($section['type'],['register_entry','money_operation'],true) ? $source->event_on->toDateString() : (in_array($section['type'],['fx_revaluation','monetary_revaluation'],true) ? $source->valued_on->format('Y-m-d') : (in_array($section['type'],['transaction_reversal','partial_bank_return'],true) && $source->return_bank_line_id ? ($section['type']==='transaction_reversal' ? $source->original_snapshot['bank_return_evidence']['return_transaction_on'] : $source->data_snapshot['return_date']) : now()->format('Y-m-d'))) }}" required max="{{ now()->format('Y-m-d') }}"></label>
 @if(in_array($section['type'],['credit_note','balance_adjustment','transaction_reversal','partial_bank_return'],true))
 <p class="form-hint">This correction must preserve the exact original approved exchange rate. A second rate cannot be selected.</p>
-@elseif(in_array($section['type'],['money_operation','foreign_bank_opening','fx_revaluation','monetary_revaluation'],true))
+@elseif(in_array($section['type'],['register_entry','money_operation','foreign_bank_opening','fx_revaluation','monetary_revaluation'],true))
 <input type="hidden" name="exchange_rate_id" value="{{ $source->exchange_rate_id }}">
 <p class="form-hint">Prepared approved rate: 1 {{ $currency }} = {{ $source->rate_to_base }} {{ $business->base_currency }} (locked rate reference #{{ $source->exchange_rate_id }}). It cannot be changed. For revaluation, choose the exact valuation date rather than today's date.</p>
 @elseif($currency!==$business->base_currency)
@@ -92,7 +94,7 @@
 <section class="section-card"><h2>Posting review register</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Type</th><th>Document</th><th>Posting date</th><th>Status</th><th>Exchange rate</th><th>Evidence</th><th>Controls</th></tr></thead><tbody>
 @forelse($requests as $review)
-<tr><td>{{ ucwords(str_replace('_',' ',$review->source_type)) }}</td><td>@if($review->source_type==='money_operation')<a href="{{ route('finance.money.show',$review->source_id) }}">Money record #{{ $review->source_id }}</a>@else #{{ $review->source_id }} @endif</td><td>{{ $review->posting_on->format('d M Y') }}</td>
+<tr><td>{{ ucwords(str_replace('_',' ',$review->source_type)) }}</td><td>@if($review->source_type==='register_entry')<a href="{{ route('finance.register.show',$review->source_id) }}">Asset / loan record #{{ $review->source_id }}</a>@elseif($review->source_type==='money_operation')<a href="{{ route('finance.money.show',$review->source_id) }}">Money record #{{ $review->source_id }}</a>@else #{{ $review->source_id }} @endif</td><td>{{ $review->posting_on->format('d M Y') }}</td>
 <td><span class="tiny-pill">{{ ucfirst($review->status) }}</span></td>
 <td>{{ $review->exchangeRate ? ($review->exchangeRate->currency.' @ '.$review->exchangeRate->rate_to_base) : 'Base currency' }}</td>
 <td><small>{{ $review->basis_notes }}</small></td>
@@ -112,6 +114,7 @@ data-confirm="Post this independently approved journal? Ledger postings cannot b
 <span class="form-hint">Posted — locked</span>
 @else<span class="form-hint">Awaiting another authorised person</span>
 @endif
+@if(in_array($review->source_type,['register_entry','stock_adjustment','money_operation'],true) && (($review->status==='pending' && $canSubmit && $review->requested_by===auth()->id())||($review->status==='approved' && $canApprove && $review->approved_by===auth()->id())))<form method="POST" action="{{ route('finance.reviews.withdraw',$review->id) }}" class="form-stack">@csrf<label class="field"><span>Withdraw request / approval with reason</span><input name="reason" required minlength="20" maxlength="3000"></label><button class="text-button">Withdraw unposted review</button></form>@endif
 </td></tr>
 @empty<tr><td colspan="7" class="empty-msg">No finance posting reviews yet.</td></tr>@endforelse
 </tbody></table></div>{{ $requests->links() }}

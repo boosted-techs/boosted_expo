@@ -105,7 +105,8 @@ class FinanceInventoryValuation
                 if (! $journal) {
                     throw ValidationException::withMessages(['inventory' => 'Missing the posted journal for supplier bill '.$bill->reference.'.']);
                 }
-                $received = BigDecimal::of((string) $receipt->accepted_quantity);
+                $basis = app(FinanceCostBasis::class)->batchBasis($batch);
+                $received = $basis['quantity'];
                 $previousQty = $reserved[$batch->id]['quantity'] ?? BigDecimal::zero();
                 $previousCost = $reserved[$batch->id]['base_cost'] ?? BigDecimal::zero();
                 $qty = $quantities[$batch->id];
@@ -114,7 +115,7 @@ class FinanceInventoryValuation
                 }
                 // Use the posted supplier bill's net payable valuation, including
                 // independently posted pre-consumption price concessions.
-                $unitBase = app(FinanceCostBasis::class)->receiptUnitBase($receipt);
+                $unitBase = $basis['unit'];
                 $totalBatch = $math->money($received->multipliedBy($unitBase));
                 $cost = $qty->plus($previousQty)->isEqualTo($received)
                     ? $totalBatch->minus($previousCost)
@@ -132,7 +133,7 @@ class FinanceInventoryValuation
                     'original_currency' => $purchase->currency,
                     'quantity' => (string) $qty, 'unit' => $batch->product->base_unit,
                     'rate_to_base' => (string) $journal->rate_to_base,
-                    'base_cost' => (string) $cost,
+                    'base_cost' => (string) $cost, 'basis_quantity' => (string) $basis['quantity'], 'basis_cost' => (string) $basis['cost'],
                 ];
             }
             $snapshot = [
@@ -166,6 +167,11 @@ class FinanceInventoryValuation
         foreach ($snapshot['lines'] as $line) {
             $id = (int) $line['batch_id'];
             $snapshotQuantities[$id] = BigDecimal::of($line['quantity']);
+            if (isset($line['basis_quantity'])) {
+                $batch = StockBatch::query()->where('business_id', $business->id)->findOrFail($id);
+                $basis = app(FinanceCostBasis::class)->batchBasis($batch);
+                abort_unless(BigDecimal::of($line['basis_quantity'])->isEqualTo($basis['quantity']) && BigDecimal::of($line['basis_cost'])->isEqualTo($basis['cost']), 422, 'The approved stock cost layer changed after relief preparation.');
+            }
             $total = $total->plus((string) $line['base_cost']);
         }
         abort_unless(count($actual) === count($snapshotQuantities), 422,
@@ -174,8 +180,8 @@ class FinanceInventoryValuation
             abort_unless(isset($snapshotQuantities[$id]) &&
                 $qty->isEqualTo($snapshotQuantities[$id]), 422, 'Inventory source quantities have changed.');
         }
-        abort_unless($total->isEqualTo((string) $relief->base_amount),422,'Valuation is inconsistent.');
-        abort_unless(hash('sha256',json_encode($snapshot,JSON_THROW_ON_ERROR)) === $relief->sha256,422,
+        abort_unless($total->isEqualTo((string) $relief->base_amount), 422, 'Valuation is inconsistent.');
+        abort_unless(hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)) === $relief->sha256, 422,
             'Original inventory valuation snapshot failed integrity validation.');
     }
 }

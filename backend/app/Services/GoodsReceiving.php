@@ -88,6 +88,7 @@ class GoodsReceiving
 
             if ($accepted->isGreaterThan(0)) {
                 $batch = StockBatch::create([
+                    'stock_location_id' => app(StockExceptions::class)->defaultLocation($order->business_id)->id,
                     'business_id' => $order->business_id,
                     'product_id' => $order->product_id,
                     'batch_code' => 'BT-'.Str::upper((string) Str::ulid()),

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssetRegisterController;
 use App\Http\Controllers\BoostedOneBillingController;
 use App\Http\Controllers\BoostedOnePublicController;
 use App\Http\Controllers\BusinessPlatformController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\FinanceMonetaryRevaluationController;
 use App\Http\Controllers\FinanceOperationController;
 use App\Http\Controllers\FinancePayrollController;
 use App\Http\Controllers\FinancePositionController;
+use App\Http\Controllers\FinanceRegisterEntryController;
 use App\Http\Controllers\FinanceReportController;
 use App\Http\Controllers\FinanceTransactionReversalController;
 use App\Http\Controllers\GoodsReceiptController;
@@ -33,6 +35,7 @@ use App\Http\Controllers\InvoiceAccountingHandoffController;
 use App\Http\Controllers\LabelPrintAgentController;
 use App\Http\Controllers\LabelTemplateController;
 use App\Http\Controllers\LabelWorkflowController;
+use App\Http\Controllers\LoanRegisterController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\OperatingPolicyController;
 use App\Http\Controllers\OrderWorkspaceController;
@@ -57,8 +60,10 @@ use App\Http\Controllers\SalesQuotationController;
 use App\Http\Controllers\SalesRequestController;
 use App\Http\Controllers\SessionController;
 use App\Http\Controllers\ShipmentApprovalController;
+use App\Http\Controllers\ShipmentReadinessController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StaffPayRateController;
+use App\Http\Controllers\StockExceptionController;
 use App\Http\Controllers\StockQualityController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierQuoteController;
@@ -68,6 +73,8 @@ use App\Http\Controllers\TeamAccessController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TransportLegController;
 use App\Http\Controllers\TransportPlanRevisionController;
+use App\Services\AssetRegister;
+use App\Services\LoanRegister;
 use App\Services\OperationalToday;
 use App\Services\WorkspaceMetrics;
 use App\Support\BusinessPermissions;
@@ -376,6 +383,34 @@ Route::middleware('auth')->group(function () {
         Route::post('/finance/pay-rates/{rate}/approve', [StaffPayRateController::class, 'approve'])->whereNumber('rate')->name('finance.pay-rates.approve');
         Route::post('/finance/payroll/from-time', [StaffPayRateController::class, 'prepare'])->name('finance.payroll.from-time');
         Route::get('/finance/payroll/{run}/payslip/{line}', [FinancePayrollController::class, 'payslip'])->whereNumber('run')->whereNumber('line')->name('finance.payroll.payslip');
+        Route::get('/stock/exceptions', [StockExceptionController::class, 'index'])->name('stock.exceptions.index');
+        Route::post('/stock/exceptions/counts', [StockExceptionController::class, 'count'])->name('stock.exceptions.count');
+        Route::post('/stock/exceptions/counts/{count}/{decision}', [StockExceptionController::class, 'reviewCount'])->whereNumber('count')->whereIn('decision', ['approve', 'reject'])->name('stock.exceptions.count.review');
+        Route::post('/stock/exceptions/counts/{count}/withdraw', [StockExceptionController::class, 'cancelCount'])->whereNumber('count')->name('stock.exceptions.count.cancel');
+        Route::post('/stock/exceptions/locations', [StockExceptionController::class, 'location'])->name('stock.exceptions.location');
+        Route::post('/stock/exceptions/moves', [StockExceptionController::class, 'move'])->name('stock.exceptions.move');
+        Route::post('/stock/exceptions/repacks', [StockExceptionController::class, 'repack'])->name('stock.exceptions.repack');
+        Route::post('/stock/exceptions/repacks/{repack}/{decision}', [StockExceptionController::class, 'reviewRepack'])->whereNumber('repack')->whereIn('decision', ['approve', 'reject'])->name('stock.exceptions.repack.review');
+        Route::post('/shipment-readiness/defaults', [ShipmentReadinessController::class, 'defaults'])->name('shipments.readiness.defaults');
+        Route::post('/shipment-readiness/{shipment}/requirements', [ShipmentReadinessController::class, 'store'])->whereNumber('shipment')->name('shipments.readiness.store');
+        Route::post('/shipment-readiness/requirement/{requirement}/waive', [ShipmentReadinessController::class, 'waive'])->whereNumber('requirement')->name('shipments.readiness.waive');
+        Route::get('/shipment-readiness/document/{check}', [ShipmentReadinessController::class, 'evidence'])->whereNumber('check')->name('shipments.readiness.evidence');
+        Route::post('/shipment-readiness/document/{check}/revoke', [ShipmentReadinessController::class, 'revoke'])->whereNumber('check')->name('shipments.readiness.revoke');
+        Route::get('/finance/assets', [AssetRegisterController::class, 'index'])->name('finance.assets.index');
+        Route::post('/finance/assets', [AssetRegisterController::class, 'store'])->name('finance.assets.store');
+        Route::get('/finance/assets/{asset}', [AssetRegisterController::class, 'show'])->whereNumber('asset')->name('finance.assets.show');
+        Route::put('/finance/assets/{asset}', [AssetRegisterController::class, 'update'])->whereNumber('asset')->name('finance.assets.update');
+        Route::post('/finance/assets/{asset}/activities', [AssetRegisterController::class, 'activity'])->whereNumber('asset')->name('finance.assets.activity');
+        Route::get('/finance/loans', [LoanRegisterController::class, 'index'])->name('finance.loans.index');
+        Route::post('/finance/loans', [LoanRegisterController::class, 'store'])->name('finance.loans.store');
+        Route::get('/finance/loans/{loan}', [LoanRegisterController::class, 'show'])->whereNumber('loan')->name('finance.loans.show');
+        Route::post('/finance/loan-schedule/{instalment}/cancel', [LoanRegisterController::class, 'cancelSchedule'])->whereNumber('instalment')->name('finance.loans.schedule.cancel');
+        Route::post('/finance/loans/{loan}/schedule', [LoanRegisterController::class, 'schedule'])->whereNumber('loan')->name('finance.loans.schedule');
+        Route::post('/finance/register/{kind}', [FinanceRegisterEntryController::class, 'store'])->whereIn('kind', array_unique([...array_keys(AssetRegister::KINDS), ...array_keys(LoanRegister::KINDS)]))->name('finance.register.store');
+        Route::get('/finance/register/{entry}', [FinanceRegisterEntryController::class, 'show'])->whereNumber('entry')->name('finance.register.show');
+        Route::post('/finance/register/{entry}/withdraw', [FinanceRegisterEntryController::class, 'cancel'])->whereNumber('entry')->name('finance.register.cancel');
+        Route::post('/finance/register/{entry}/evidence', [FinanceRegisterEntryController::class, 'upload'])->whereNumber('entry')->name('finance.register.upload');
+        Route::get('/finance/register/{entry}/evidence/{file}', [FinanceRegisterEntryController::class, 'evidence'])->whereNumber('entry')->whereNumber('file')->name('finance.register.evidence');
         Route::get('/finance/position', [FinancePositionController::class, 'index'])->name('finance.position');
         Route::get('/finance/money', [FinanceOperationController::class, 'index'])->name('finance.money.index');
         Route::get('/finance/money/new', [FinanceOperationController::class, 'create'])->name('finance.money.create');
@@ -401,6 +436,7 @@ Route::middleware('auth')->group(function () {
             ->whereNumber('review')->name('finance.reviews.approve');
         Route::post('/finance/reviews/{review}/reject', [FinanceController::class, 'rejectPosting'])
             ->whereNumber('review')->name('finance.reviews.reject');
+        Route::post('/finance/reviews/{review}/withdraw', [FinanceController::class, 'withdraw'])->whereNumber('review')->name('finance.reviews.withdraw');
         Route::post('/finance/reviews/{review}/post', [FinanceController::class, 'post'])
             ->whereNumber('review')->name('finance.reviews.post');
         Route::get('/finance/shipments/{shipment}/contribution', [FinanceController::class, 'contribution'])

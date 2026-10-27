@@ -67,7 +67,7 @@ class OrderSourcing
         $loss = BigDecimal::zero();
         $jobs = PackingJob::query()->where('business_id', $line->business_id)->where('sales_order_line_id', $line->id)->with('cartons.contents', 'losses')->get();
         foreach ($jobs as $job) {
-            foreach ($job->cartons as $carton) {
+            foreach ($job->cartons->where('status', '!=', 'repacked') as $carton) {
                 $packed = $packed->plus($this->sum($carton->contents->pluck('quantity')));
             } $loss = $loss->plus($this->sum($job->losses->pluck('quantity')));
         }
