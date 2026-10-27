@@ -8,6 +8,7 @@ use App\Models\BusinessMembership;
 use App\Models\Carton;
 use App\Models\Customer;
 use App\Models\ExportShipment;
+use App\Models\FinanceExchangeRate;
 use App\Models\GoodsReceipt;
 use App\Models\MarketTrip;
 use App\Models\OrderSupply;
@@ -273,6 +274,7 @@ class OperatingSpineTest extends TestCase
         $this->post(route('sales-requests.draft', $o->sales_request_id))->assertSessionHasNoErrors();
         $q = SalesQuotation::firstOrFail();
         $this->put(route('sales-quotes.update', $q), ['currency' => 'USD', 'discount_percent' => '0', 'tax_percent' => '0', 'items' => [['product_id' => $c['product']->id, 'quantity' => '10', 'unit_price' => '2.50']]])->assertSessionHasNoErrors();
+        $q->update(['pricing_exchange_rate_id' => FinanceExchangeRate::create(['business_id' => $c['business']->id, 'currency' => 'USD', 'base_currency' => 'UGX', 'rate_to_base' => '3700', 'effective_on' => '2026-10-20', 'status' => 'approved', 'source_note' => 'Test manual pricing rate', 'created_by' => User::factory()->create()->id, 'approved_by' => $c['owner']->id, 'approved_at' => now()])->id]);
         $this->post(route('sales-quotes.issue', $q))->assertSessionHasNoErrors();
         $this->post(route('sales-quotes.confirm', $q), ['buyer_confirmation' => 'Verified buyer PO reference 1001'])->assertSessionHasNoErrors();
         $this->assertDatabaseCount('sales_orders', 1);
@@ -519,6 +521,7 @@ class OperatingSpineTest extends TestCase
         $this->post(route('sales-requests.draft', $o->sales_request_id))->assertSessionHasNoErrors();
         $q = SalesQuotation::firstOrFail();
         $this->put(route('sales-quotes.update', $q), ['currency' => 'USD', 'discount_percent' => '0', 'tax_percent' => '0', 'items' => [['product_id' => $c['product']->id, 'quantity' => '10', 'unit_price' => '2']]])->assertSessionHasNoErrors();
+        $q->update(['pricing_exchange_rate_id' => FinanceExchangeRate::create(['business_id' => $c['business']->id, 'currency' => 'USD', 'base_currency' => 'UGX', 'rate_to_base' => '3700', 'effective_on' => '2026-10-20', 'status' => 'approved', 'source_note' => 'Test manual pricing rate', 'created_by' => User::factory()->create()->id, 'approved_by' => $c['owner']->id, 'approved_at' => now()])->id]);
         $this->post(route('sales-quotes.issue', $q))->assertSessionHasNoErrors();
         $this->post(route('sales-quotes.confirm', $q), ['buyer_confirmation' => 'Verified buyer purchase order to proceed'])->assertSessionHasNoErrors();
         $p = $this->purchase($c, '10');

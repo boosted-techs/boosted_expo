@@ -7,15 +7,17 @@
 @if($canCreate)
 <div class="split-panels">
 <section class="section-card"><h2>Supplier bill from received produce</h2>
-<p class="muted">The calculated supplier bill uses the accepted quantities and agreed purchase-order unit price. One complete-receipt bill is supported per purchase order.</p>
+<p class="muted">The calculated supplier bill uses the accepted quantities and agreed purchase-order unit price. You can bill part of the accepted produce. Pending bills reserve their quantities.</p>
 @include('finance._record-search', ['field' => 'purchase_search', 'page' => 'purchase_page', 'label' => 'Find unbilled purchase by reference or supplier'])
-@if($purchases->isEmpty())<p class="empty-msg">No fully received, unbilled purchases available.</p>@endif
+@if($purchases->isEmpty())<p class="empty-msg">No accepted, unbilled produce available.</p>@endif
 @foreach($purchases as $purchase)
 <details class="finance-details"><summary><strong>{{ $purchase->reference }}</strong> · {{ $purchase->product->name }} · {{ $purchase->currency }} {{ $purchase->estimated_total }}</summary>
 <div class="form-hint">Vendor: {{ $purchase->supplier?->name ?: $purchase->vendor_name ?: 'Unregistered vendor' }} · Ordered {{ $purchase->quantity }} {{ $purchase->product->base_unit }}</div>
 <form method="POST" action="{{ route('finance.bills.store',$purchase->id) }}" class="form-stack">@csrf
 <label class="field"><span>Supplier document / invoice reference</span><input name="vendor_invoice_reference" maxlength="120" required placeholder="e.g. Supplier bill 2044"></label>
 <label class="field"><span>Supplier invoice date</span><input name="vendor_invoice_date" type="date" required max="{{ now()->format('Y-m-d') }}" value="{{ now()->format('Y-m-d') }}"></label>
+<label class="field"><span>Quantity to bill (blank = all accepted unbilled produce)</span><input name="accepted_quantity" type="number" min="0.001" step="0.001"></label>
+<label class="field"><span>Agreed payment due date (optional)</span><input name="due_on" type="date"></label>
 <label class="field"><span>Notes (optional)</span><textarea name="notes" rows="2" maxlength="2000"></textarea></label>
 <button class="secondary-button">Prepare supplier bill</button>
 </form></details>

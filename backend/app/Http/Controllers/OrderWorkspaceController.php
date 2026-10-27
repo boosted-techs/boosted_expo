@@ -16,6 +16,7 @@ use App\Models\StockReservation;
 use App\Models\TransportHandover;
 use App\Models\TransportLeg;
 use App\Models\TransportPartner;
+use App\Services\OrderCostSheet;
 use App\Services\OrderOperations;
 use App\Services\OrderSourcing;
 use App\Services\PlatformAccess;
@@ -84,7 +85,9 @@ class OrderWorkspaceController extends Controller
         $partners = TransportPartner::query()->where('business_id', $order->business_id)->where('active', true)->orderBy('name')->get();
         $reservations = StockReservation::query()->where('business_id', $order->business_id)->whereIn('sales_order_line_id', $order->lines->modelKeys())->with('batch')->get();
 
-        return view('sales.orders.workspace', compact('order', 'tab', 'summary', 'supply', 'tasks', 'events', 'people', 'trips', 'allTrips', 'legs', 'handovers', 'partners', 'shipments', 'reservations', 'canMoney', 'canSource', 'canManage', 'canPack', 'canShip'));
+        $costSheet = $tab === 'money' && $permission->allows($member, 'finance.view') ? app(OrderCostSheet::class)->report($order) : null;
+
+        return view('sales.orders.workspace', compact('costSheet', 'order', 'tab', 'summary', 'supply', 'tasks', 'events', 'people', 'trips', 'allTrips', 'legs', 'handovers', 'partners', 'shipments', 'reservations', 'canMoney', 'canSource', 'canManage', 'canPack', 'canShip'));
     }
 
     public function candidates(Request $request, int $order, int $line, OrderSourcing $source): JsonResponse

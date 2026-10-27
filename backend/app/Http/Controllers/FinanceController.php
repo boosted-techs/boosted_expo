@@ -17,6 +17,7 @@ use App\Models\FinanceJournal;
 use App\Models\FinanceJournalLine;
 use App\Models\FinanceMonetaryRevaluation;
 use App\Models\FinanceOpeningBalance;
+use App\Models\FinanceOperation;
 use App\Models\FinancePartialBankReturn;
 use App\Models\FinancePayment;
 use App\Models\FinancePayrollReversal;
@@ -128,7 +129,7 @@ class FinanceController extends Controller
         $data = $request->validate([
             'currency' => ['required', 'string', app(BusinessCurrencies::class)->rule($request->attributes->get('activeBusiness'))],
             'rate_to_base' => ['required', 'numeric', 'gt:0', 'decimal:0,10', 'max:99999999999999'],
-            'effective_on' => ['required', 'date', 'before_or_equal:today'],
+            'effective_on' => ['required', 'date', 'before_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
             'source_note' => ['required', 'string', 'min:8', 'max:250'],
         ]);
         $rates->propose($this->business($request), $data, $request->user()->id);
@@ -161,10 +162,8 @@ class FinanceController extends Controller
         $bills = FinanceSupplierBill::query()->where('business_id', $business->id)
             ->with('purchase.supplier', 'purchase.product')->latest('id')->paginate(15, ['*'], 'bills')->withQueryString();
         $purchases = PurchaseOrder::query()->where('business_id', $business->id)
-            ->where('status', 'received')->with(['supplier', 'product'])
-            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('finance_supplier_bills')
-                ->whereColumn('finance_supplier_bills.business_id', 'purchase_orders.business_id')
-                ->whereColumn('finance_supplier_bills.purchase_order_id', 'purchase_orders.id'))
+            ->whereIn('status', ['part_received', 'received'])->with(['supplier', 'product'])
+            ->whereRaw('(SELECT COALESCE(SUM(accepted_quantity),0) FROM goods_receipts WHERE goods_receipts.business_id=purchase_orders.business_id AND goods_receipts.purchase_order_id=purchase_orders.id) > (SELECT COALESCE(SUM(accepted_quantity),0) FROM finance_supplier_bills WHERE finance_supplier_bills.business_id=purchase_orders.business_id AND finance_supplier_bills.purchase_order_id=purchase_orders.id)')
             ->when($filters['purchase_search'] ?? null, fn ($query, $term) => $query->where(fn ($query) => $query
                 ->where('reference', 'like', '%'.$term.'%')->orWhere('vendor_name', 'like', '%'.$term.'%')
                 ->orWhereHas('supplier', fn ($supplier) => $supplier->where('name', 'like', '%'.$term.'%'))))
@@ -211,8 +210,10 @@ class FinanceController extends Controller
     {
         $this->check($request, 'finance.documents.create');
         $data = $request->validate([
+            'accepted_quantity' => ['nullable', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999'],
             'vendor_invoice_reference' => ['required', 'string', 'min:3', 'max:120'],
-            'vendor_invoice_date' => ['required', 'date', 'before_or_equal:today'],
+            'vendor_invoice_date' => ['required', 'date', 'before_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
+            'due_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:vendor_invoice_date'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
         $business = $this->business($request);
@@ -233,7 +234,7 @@ class FinanceController extends Controller
             'cash_account_key' => ['required', Rule::in(['bank', 'cash'])],
             'bank_profile_id' => ['nullable', 'integer', 'min:1'],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'],
-            'payment_on' => ['required', 'date', 'before_or_equal:today'],
+            'payment_on' => ['required', 'date', 'before_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
             'external_reference' => ['required', 'string', 'min:3', 'max:150'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'idempotency_key' => ['required', 'uuid'],
@@ -258,7 +259,7 @@ class FinanceController extends Controller
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'],
             'cash_account_key' => ['required', Rule::in(['bank', 'cash'])],
             'bank_profile_id' => ['nullable', 'integer', 'min:1'],
-            'paid_on' => ['required', 'date', 'before_or_equal:today'],
+            'paid_on' => ['required', 'date', 'before_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
             'external_reference' => ['required', 'string', 'min:3', 'max:150'],
         ]);
         $finance->shipmentCost($this->business($request), $data, $request->user()->id);
@@ -336,6 +337,7 @@ class FinanceController extends Controller
             ->where('business_id', $business->id)->where('posting_status', 'not_posted')
             ->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
             ->orderByDesc('id')->paginate(15, ['*'], 'source_foreignBankOpenings_page')->withQueryString();
+        $operations = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_money_page')->withQueryString();
         $hasPending = FinancePostingRequest::query()->where('business_id', $business->id)
             ->whereIn('status', ['pending', 'approved'])
             ->get(['source_type', 'source_id'])->map(fn ($r) => $r->source_type.':'.$r->source_id)->all();
@@ -345,7 +347,7 @@ class FinanceController extends Controller
             'canSubmit', 'canApprove', 'canPost', 'hasPending', 'reliefs', 'creditNotes',
             'openingBalances', 'balanceAdjustments', 'payrollRuns', 'payrollSettlements', 'payrollReversals',
             'transactionReversals', 'foreignBankOpenings', 'fxRevaluations',
-            'partialReturns', 'monetaryRevaluations'
+            'partialReturns', 'monetaryRevaluations', 'operations'
         ));
     }
 
@@ -353,7 +355,7 @@ class FinanceController extends Controller
     {
         $this->check($request, 'finance.reviews.request');
         $data = $request->validate([
-            'posting_on' => ['required', 'date', 'before_or_equal:today'],
+            'posting_on' => ['required', 'date', 'before_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
             'exchange_rate_id' => ['nullable', 'integer'],
             'basis_notes' => ['required', 'string', 'min:20', 'max:3000'],
         ]);

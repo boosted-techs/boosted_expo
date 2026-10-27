@@ -12,6 +12,7 @@ use App\Models\FinanceBankStatement;
 use App\Models\FinanceBankStatementLine;
 use App\Models\FinancePayment;
 use App\Models\FinanceSupplierBill;
+use App\Models\GoodsReceipt;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
@@ -315,6 +316,7 @@ class PhaseZeroBaselineTest extends TestCase
     {
         $context = $this->company();
         $old = $this->purchase($context, 'OLD-UNBILLED');
+        GoodsReceipt::create(['business_id' => $context['business']->id, 'reference' => 'GR-OLD-UNBILLED', 'purchase_order_id' => $old->id, 'received_quantity' => '10', 'accepted_quantity' => '10', 'rejected_quantity' => '0', 'received_on' => now()->toDateString(), 'posted_by' => $context['user']->id, 'idempotency_key' => (string) Str::uuid()]);
         for ($i = 0; $i < 76; $i++) {
             $this->bill($context, 'BILLED-'.$i);
         }

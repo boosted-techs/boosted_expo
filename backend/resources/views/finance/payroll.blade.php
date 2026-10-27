@@ -1,12 +1,25 @@
 @extends('layouts.console')
 @section('title','Staff Payroll')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">STAFF & FINANCE</span><h1>Payroll accruals</h1><p>Prepare company payroll from active staff memberships, then seek independent finance approval before recognising payroll costs.</p></div><span class="tiny-pill">{{ $business->base_currency }}</span></div>
+<div class="page-intro"><div><span class="eyebrow">STAFF & FINANCE</span><h1>Payroll accruals</h1><p>Prepare company payroll from staff records and approved attendance, then seek independent finance approval before recognising payroll costs.</p></div><span class="tiny-pill">{{ $business->base_currency }}</span></div>
 <div class="form-actions" style="margin-bottom:18px"><a href="{{ route('finance.index') }}" class="secondary-button">Finance dashboard</a>
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.reviews.view'))
 <a href="{{ route('finance.reviews') }}" class="secondary-button">Posting approvals</a>
 @endif</div>
-<div class="notice"><span>●</span><div><strong>Payroll is an accrual — it does not send salaries</strong><p>Enter gross earnings and deductions using verified staff records. This first release does not calculate shift wages, Uganda PAYE/NSSF or statutory contributions, and does not send funds. The approved posting records payroll expense, net wages payable and deduction liabilities only.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Payroll is an accrual — it does not send salaries</strong><p>Enter gross earnings and deductions using verified staff records. Approved time can calculate agreed hourly and daily earnings, including casual staff without logins. PAYE/NSSF and other statutory deductions remain manually verified. The approved posting records payroll expense, net wages payable and deduction liabilities only.</p></div></div>
+@if($canPrepare)
+<section class="section-card"><h2>Prepare from approved attendance</h2><p>Daily rates pay once per Uganda start date. Hourly rates subtract recorded breaks. Resolve open and unapproved attendance first. Monthly, overtime and piece-rate arrangements need a separately verified earnings calculation.</p>
+<form method="GET" class="form-actions"><input name="person_search" value="{{ request('person_search') }}" aria-label="Find a staff person" placeholder="Find staff"><button class="secondary-button">Find staff</button></form>{{ $people->links() }}
+<form method="POST" action="{{ route('finance.payroll.from-time') }}" class="form-stack">@csrf
+<div class="form-columns"><label class="field"><span>From</span><input name="period_from" type="date" required></label><label class="field"><span>Through</span><input name="period_to" type="date" max="{{ now()->toDateString() }}" required></label></div>
+@foreach($people as $person)<label class="field"><span><input name="staff_person_ids[]" type="checkbox" value="{{ $person->id }}"> {{ $person->name }} · {{ $person->staff_code }}</span><input name="deductions[{{ $person->id }}]" type="number" step=".01" min="0" placeholder="Manual deduction, if any" aria-label="Deduction for {{ $person->name }}"></label>@endforeach
+<label class="field"><span>Payroll evidence and adjustment explanation</span><textarea name="notes" required minlength="15" maxlength="2000"></textarea></label><button class="primary-button">Prepare from approved time</button></form></section>
+<section class="section-card"><details><summary>Agreed daily / hourly pay rates</summary><form method="POST" action="{{ route('finance.pay-rates.propose') }}" class="form-stack">@csrf
+<label class="field"><span>Staff person</span><select name="staff_person_id" required>@foreach($people as $person)<option value="{{ $person->id }}">{{ $person->name }}</option>@endforeach</select></label><label class="field"><span>Pay basis</span><select name="basis"><option value="daily">Per approved work day</option><option value="hourly">Per approved hour</option></select></label>
+<label class="field"><span>Rate in {{ $business->base_currency }}</span><input name="amount" type="number" step=".01" min=".01" required></label><div class="form-columns"><label class="field"><span>Effective from</span><input name="starts_on" type="date" required></label><label class="field"><span>Effective through</span><input name="ends_on" type="date" required></label></div><label class="field"><span>Employment / pay agreement reference</span><input name="agreement_reference" required minlength="10" maxlength="250"></label><button class="secondary-button">Propose pay agreement</button></form></details></section>
+@endif
+<section class="section-card"><h2>Pay agreements</h2>@forelse($rates as $rate)<p>{{ $rate->person->name }} · {{ $rate->currency }} {{ $rate->amount }} {{ $rate->basis }} · {{ $rate->starts_on->format('d M Y') }}–{{ $rate->ends_on->format('d M Y') }} · {{ $rate->status }} · {{ $rate->agreement_reference }}</p>@if($canApprove && $rate->status==='proposed' && $rate->created_by!==auth()->id())<form method="POST" action="{{ route('finance.pay-rates.approve',$rate->id) }}">@csrf<button class="secondary-button">Approve agreement</button></form>@endif
+@empty<p>No agreed daily / hourly rates recorded.</p>@endforelse{{ $rates->links() }}</section>
 @if($canPrepare)
 <section class="section-card"><h2>Prepare a payroll run</h2>
 <p class="muted">Enter amounts only for staff included in this run. Deductions are manual and must not exceed gross earnings. No overlapping run periods are allowed.</p>

@@ -303,3 +303,12 @@ The [roadmap's Phase 2 implementation entry](EXPORT_BUSINESS_ROADMAP_2026-10-27.
 The implementation deliberately preserves pricing-pending orders without zero-value sales, source history after closure, explicit unmeasured/missing data, independent time review and permissions after a staff role change. R04–R09/R15 and the complete financial position, assets, loans, cutover, physical printing and real-device installation requirements are not closed by this phase.
 
 Local Phase 2 regression evidence: **294 tests / 4,045 assertions**, including 34 new operating/people cases, all passing. The physical printer/device and production-concurrency gates remain independent of these automated results.
+
+
+## Phase 3 implementation follow-up — 27 October 2026
+
+The [roadmap's Phase 3 implementation entry](EXPORT_BUSINESS_ROADMAP_2026-10-27.md#phase-3-implementation--commercial-and-daily-money-foundations--27-october-2026) records working money commands, private buyer decisions, frozen pricing FX, advances/accountability balances, receipt-specific partial bills, expenses/evidence, approved daily/hourly casual pay and order cost/position views. Owner questions about customer deposits, supplier/staff money held, dated trade debt, posted daily outflow and earned/unpaid approved wages now have connected sources. Paying or allocating an existing source clears its control balance rather than creating the cost/payment twice.
+
+R04/R06/R09 therefore have implemented components, not full acceptance. The owner can see missing due dates, unposted records, a selected collection scenario and incomplete cost coverage. Physical cash counts/close, recurring expenses, conversion transactions, complete commitment funding, collection/dispute cases, monthly/piece/overtime and material/labour inventory costing still require Phase 3 work. R05/R07/R08/R15 and complete assets/loans, owner funding transactions, exception/cutover and physical printer/PWA acceptance are not closed by this pass. Phase 1 platform controls remain in place; no new unscoped superadmin access to private tenant money or wages was added.
+
+Local verification: **309 tests / 4,340 assertions**, preserved existing source-table counts and a clean SQLite foreign-key check after four migrations. These results do not replace production concurrency or real exporter acceptance. Keep the roadmap in **Phase 3 — in progress**.

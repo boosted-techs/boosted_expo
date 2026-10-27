@@ -7,7 +7,7 @@
 <section class="section-card"><h2>Find matching transactions</h2>
 @include('finance._record-search', ['field' => 'candidate_search', 'page' => 'page', 'label' => 'Find transaction by record or payment reference'])
 <p class="form-hint">Candidates match the account, currency and amounts of the bank lines on this page. Browse older candidates below when needed.</p>
-@foreach(['Payments' => $payments, 'Shipment costs' => $costs, 'Payroll settlements' => $payrollSettlements, 'Corrections' => $reversals, 'Partial returns' => $partials] as $candidateLabel => $candidateRows)
+@foreach(['Money records'=>$operations, 'Payments' => $payments, 'Shipment costs' => $costs, 'Payroll settlements' => $payrollSettlements, 'Corrections' => $reversals, 'Partial returns' => $partials] as $candidateLabel => $candidateRows)
 @if($candidateRows->hasPages())<p>{{ $candidateLabel }} · {{ $candidateRows->total() }} candidates</p>{{ $candidateRows->links() }}@endif
 @endforeach
 </section>
@@ -107,6 +107,10 @@ $ledgerCheck->prepared_by!==auth()->id())
 <option value="payment:{{ $p->id }}">Payment {{ $p->reference }} · {{ $p->currency }} {{ $p->amount }}</option>@endif @endforeach
 @foreach($costs as $cost)@if($line->direction==='debit' && \Brick\Math\BigDecimal::of((string)$cost->amount)->isEqualTo((string)$line->amount))
 <option value="shipment_cost:{{ $cost->id }}">Cost {{ $cost->reference }} · {{ $cost->currency }} {{ $cost->amount }}</option>@endif @endforeach
+@foreach($operations as $operation)@if(\Brick\Math\BigDecimal::of((string)$operation->amount)->isEqualTo((string)$line->amount))
+<option value="{{ $operation->destination_account_id===$statement->account_id?'money_transfer_in':'money_operation' }}:{{ $operation->id }}">{{ $operation->reference }} · {{ $operation->description }} · {{ $operation->currency }} {{ $operation->amount }}</option>
+@endif
+@endforeach
 @foreach($payrollSettlements as $settlement)@if($line->direction==='debit' && \Brick\Math\BigDecimal::of((string)$settlement->amount)->isEqualTo((string)$line->amount))
 <option value="payroll_settlement:{{ $settlement->id }}">Payroll {{ $settlement->reference }} · {{ $settlement->currency }} {{ $settlement->amount }}</option>@endif @endforeach
 @foreach($partials as $partial)

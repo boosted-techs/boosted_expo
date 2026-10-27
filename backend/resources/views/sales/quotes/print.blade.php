@@ -22,6 +22,7 @@ table.items td{border-bottom:1px solid #dbe5dc;padding:8px;vertical-align:top}
 Discount ({{ $quote->discount_percent }}%): {{ $quote->discount_amount }}<br>
 Tax ({{ $quote->tax_percent }}%): {{ $quote->tax_amount }}<br>
 <strong>Total quotation: {{ $quote->currency }} {{ $quote->grand_total }}</strong></div>
+@if($quote->payment_terms_days!==null)<p>Payment due {{ $quote->payment_terms_days }} days after the commercial invoice date.</p>@endif
 @if($quote->notes)<div class="note"><strong>Terms and notes:</strong> {{ $quote->notes }}</div>@endif
 <div class="footer">This quotation is a commercial price offer, not a commercial invoice, receipt, regulatory certificate or confirmation of payment. Tax applicability and agreed terms should be verified with the parties.</div>
 </body></html>

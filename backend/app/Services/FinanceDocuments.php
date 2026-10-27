@@ -6,7 +6,9 @@ use App\Models\Business;
 use App\Models\CommercialInvoice;
 use App\Models\ExportShipment;
 use App\Models\FinanceBalanceAdjustment;
+use App\Models\FinanceBillReceipt;
 use App\Models\FinanceCreditNote;
+use App\Models\FinanceOperation;
 use App\Models\FinancePartialBankReturn;
 use App\Models\FinancePayment;
 use App\Models\FinanceShipmentCost;
@@ -33,6 +35,9 @@ class FinanceDocuments
         $adjustments = FinanceBalanceAdjustment::query()->selectRaw('COALESCE(SUM(amount), 0)')
             ->whereColumn($column, $table.'.id')->whereColumn('business_id', $table.'.business_id')
             ->whereIn('posting_status', ['not_posted', 'posted']);
+        $advances = FinanceOperation::query()->selectRaw('COALESCE(SUM(amount), 0)')
+            ->whereColumn($column, $table.'.id')->whereColumn('business_id', $table.'.business_id')
+            ->whereIn('posting_status', ['not_posted', 'posted']);
         $returns = FinancePartialBankReturn::query()->selectRaw('COALESCE(SUM(finance_partial_bank_returns.amount), 0)')
             ->join('finance_payments as paid', function ($join) {
                 $join->on('paid.id', '=', 'finance_partial_bank_returns.source_id')
@@ -44,8 +49,8 @@ class FinanceDocuments
 
         return $model::query()->where($table.'.business_id', $business->id)
             ->where($table.'.posting_status', 'posted')
-            ->whereRaw('ROUND('.$table.'.'.$total.' - ('.$adjustments->toSql().') - ('.$payments->toSql().') + ('.$returns->toSql().'), 2) > 0',
-                [...$adjustments->getBindings(), ...$payments->getBindings(), ...$returns->getBindings()]);
+            ->whereRaw('ROUND('.$table.'.'.$total.' - ('.$adjustments->toSql().') - ('.$payments->toSql().') - ('.$advances->toSql().') + ('.$returns->toSql().'), 2) > 0',
+                [...$adjustments->getBindings(), ...$payments->getBindings(), ...$advances->getBindings(), ...$returns->getBindings()]);
     }
 
     public function supplierBill(Business $business, PurchaseOrder $purchase, array $data, int $actor): FinanceSupplierBill
@@ -53,34 +58,61 @@ class FinanceDocuments
         return DB::transaction(function () use ($business, $purchase, $data, $actor) {
             $purchase = PurchaseOrder::query()->where('business_id', $business->id)
                 ->lockForUpdate()->findOrFail($purchase->id);
-            abort_unless($purchase->status === 'received', 422,
-                'Complete goods receiving before preparing the supplier bill.');
+            abort_unless(in_array($purchase->status, ['part_received', 'received'], true), 422,
+                'Receive accepted produce before preparing a supplier bill.');
             abort_unless(! $purchase->receipts()->where('accepted_quantity', '>', 0)->doesntExist(), 422,
                 'This purchase has no accepted goods to bill.');
-            abort_unless(! FinanceSupplierBill::query()->where('business_id', $business->id)
-                ->where('purchase_order_id', $purchase->id)->exists(), 422,
-                'This purchase already has a supplier bill.');
+            abort_if(FinanceSupplierBill::query()->where('business_id', $business->id)->where('purchase_order_id', $purchase->id)->where('vendor_invoice_reference', $data['vendor_invoice_reference'])->exists(), 422, 'This supplier invoice reference has already been recorded for this purchase.');
             $math = app(FinanceMath::class);
-            $accepted = BigDecimal::zero();
-            foreach ($purchase->receipts()->pluck('accepted_quantity') as $quantity) {
-                $accepted = $accepted->plus((string) $quantity);
+            $receipts = $purchase->receipts()->where('accepted_quantity', '>', 0)->orderBy('id')->lockForUpdate()->get();
+            $available = [];
+            $totalAvailable = BigDecimal::zero();
+            $legacy = FinanceSupplierBill::query()->where('business_id', $business->id)->where('purchase_order_id', $purchase->id)->whereNull('receipt_snapshot')->get();
+            $legacyQuantity = BigDecimal::zero();
+            foreach ($legacy as $priorBill) {
+                $legacyQuantity = $legacyQuantity->plus((string) $priorBill->accepted_quantity);
             }
-            if ($accepted->isLessThanOrEqualTo(0)) {
-                throw ValidationException::withMessages([
-                    'purchase' => 'No accepted produce is available to bill.',
-                ]);
+            foreach ($receipts as $receipt) {
+                $quantity = BigDecimal::of((string) $receipt->accepted_quantity);
+                if ($legacyQuantity->isGreaterThan(0)) {
+                    $used = BigDecimal::min($quantity, $legacyQuantity);
+                    $quantity = $quantity->minus($used);
+                    $legacyQuantity = $legacyQuantity->minus($used);
+                }
+                foreach (FinanceBillReceipt::query()->where('business_id', $business->id)->where('goods_receipt_id', $receipt->id)->pluck('quantity') as $billed) {
+                    $quantity = $quantity->minus((string) $billed);
+                }
+                $available[$receipt->id] = $quantity;
+                $totalAvailable = $totalAvailable->plus($quantity);
+            }
+            $accepted = BigDecimal::of((string) ($data['accepted_quantity'] ?? $totalAvailable));
+            abort_unless($accepted->isGreaterThan(0) && ! $accepted->isGreaterThan($totalAvailable), 422, 'The bill exceeds accepted, unbilled produce. Pending bills already reserve their quantity.');
+            $remaining = $accepted;
+            $allocations = [];
+            foreach ($available as $receiptId => $quantity) {
+                $used = BigDecimal::min($quantity, $remaining);
+                if ($used->isGreaterThan(0)) {
+                    $allocations[] = ['goods_receipt_id' => $receiptId, 'quantity' => (string) $used];
+                }
+                $remaining = $remaining->minus($used);
             }
             $total = $math->amount($accepted, (string) $purchase->unit_price);
 
-            return FinanceSupplierBill::create([
+            $bill = FinanceSupplierBill::create([
                 'business_id' => $business->id, 'purchase_order_id' => $purchase->id,
                 'reference' => 'BILL-'.Str::upper((string) Str::ulid()),
                 'vendor_invoice_reference' => $data['vendor_invoice_reference'],
-                'vendor_invoice_date' => $data['vendor_invoice_date'],
+                'vendor_invoice_date' => $data['vendor_invoice_date'], 'due_on' => $data['due_on'] ?? null,
                 'accepted_quantity' => (string) $accepted, 'total' => (string) $total,
                 'currency' => $purchase->currency, 'notes' => $data['notes'] ?? null,
                 'created_by' => $actor, 'posting_status' => 'not_posted',
+                'receipt_snapshot' => ['unit_price' => (string) $purchase->unit_price, 'allocations' => $allocations],
             ]);
+            foreach ($allocations as $allocation) {
+                FinanceBillReceipt::create([...$allocation, 'business_id' => $business->id, 'supplier_bill_id' => $bill->id]);
+            }
+
+            return $bill;
         }, 3);
     }
 
@@ -113,6 +145,11 @@ class FinanceDocuments
                     $allocated = $allocated->minus((string) $returned);
                 }
             }
+        }
+
+        foreach (FinanceOperation::query()->where('business_id', $source->business_id)->where($relation, $source->id)
+            ->whereIn('posting_status', $includePending ? ['not_posted', 'posted'] : ['posted'])->pluck('amount') as $advance) {
+            $allocated = $allocated->plus((string) $advance);
         }
 
         return $base->minus($allocated);

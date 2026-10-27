@@ -111,6 +111,10 @@ class SalesWorkflow
                 ->lockForUpdate()->findOrFail($quote->id);
             abort_unless($quote->status === 'draft', 422, 'Only draft quotations can be edited.');
             $request = $quote->salesRequest()->with('items')->firstOrFail();
+            $override = strtoupper($data['currency']) !== $request->customer->currency;
+            if ($override && mb_strlen(trim($data['currency_override_reason'] ?? '')) < 10) {
+                throw ValidationException::withMessages(['currency_override_reason' => 'Explain the agreed change from the customer default currency.']);
+            }
             $expected = $request->items->keyBy('product_id');
             $seen = [];
             foreach ($data['items'] as $line) {
@@ -140,6 +144,9 @@ class SalesWorkflow
             }
             $quote->update([
                 'currency' => strtoupper($data['currency']),
+                'currency_override_reason' => $override ? $data['currency_override_reason'] : null,
+                'pricing_exchange_rate_id' => isset($data['pricing_exchange_rate_id']) ? (int) $data['pricing_exchange_rate_id'] : null,
+                'payment_terms_days' => $data['payment_terms_days'] ?? null,
                 'incoterm' => $data['incoterm'] ?? null,
                 'valid_until' => $data['valid_until'] ?? null,
                 'discount_percent' => $data['discount_percent'] ?? 0,
@@ -167,7 +174,7 @@ class SalesWorkflow
                 'This quotation cannot be issued.');
             $latest = $request->quotations()->max('revision');
             abort_unless($latest === $quote->revision, 422, 'A newer quotation revision already exists.');
-            if ($quote->valid_until && $quote->valid_until->endOfDay()->isPast()) {
+            if ($quote->valid_until && $quote->valid_until->toDateString() < now(Business::query()->findOrFail($quote->business_id)->timezone)->toDateString()) {
                 throw ValidationException::withMessages(['valid_until' => 'Validity date has passed.']);
             }
             foreach ($quote->lines as $line) {
@@ -175,6 +182,10 @@ class SalesWorkflow
                     throw ValidationException::withMessages(['items' => 'Every quoted product needs a positive unit price.']);
                 }
             }
+            $business = Business::query()->findOrFail($quote->business_id);
+            $rate = app(FinanceRates::class)->rate($business, $quote->currency, $quote->pricing_exchange_rate_id, now($business->timezone)->toDateString());
+            $pricing = ['currency_override_reason' => $quote->currency_override_reason, 'currency' => $quote->currency, 'base_currency' => $business->base_currency, 'exchange_rate_id' => $quote->pricing_exchange_rate_id, 'rate_to_base' => $rate, 'pricing_on' => now($business->timezone)->toDateString(), 'base_grand_total' => (string) app(FinanceMath::class)->base((string) $quote->grand_total, $rate), 'payment_terms_days' => $quote->payment_terms_days];
+            $quote->update(['pricing_snapshot' => $pricing]);
             $request->quotations()->where('status', 'issued')->update(['status' => 'superseded']);
             $quote->update(['status' => 'issued', 'issued_by' => $userId, 'issued_at' => now()]);
             // Preserve exactly what the buyer was offered, including names and prices.
@@ -186,7 +197,7 @@ class SalesWorkflow
         });
     }
 
-    public function confirm(SalesQuotation $quote, string $buyerConfirmation, int $userId): SalesOrder
+    public function confirm(SalesQuotation $quote, string $buyerConfirmation, ?int $userId): SalesOrder
     {
         return DB::transaction(function () use ($quote, $buyerConfirmation, $userId) {
             Business::query()->whereKey($quote->business_id)->lockForUpdate()->firstOrFail();
@@ -197,7 +208,7 @@ class SalesWorkflow
             $existing = $request->order()->first();
             if ($existing) {
                 abort_unless($existing->pricing_status === 'unpriced' && $existing->status === 'confirmed' && $quote->status === 'issued' && $request->status === 'quoted', 422, 'This order already has agreed pricing or is closed.');
-                abort_unless(! $quote->valid_until || $quote->valid_until->copy()->endOfDay()->isFuture(), 422, 'The quotation has expired.');
+                abort_unless(! $quote->valid_until || $quote->valid_until->toDateString() >= now(Business::query()->findOrFail($quote->business_id)->timezone)->toDateString(), 422, 'The quotation has expired.');
                 $expected = $existing->lines->keyBy('product_id');
                 abort_unless($quote->lines->count() === $expected->count(), 422, 'Pricing must cover the existing operational order.');
                 foreach ($quote->lines as $line) {
@@ -213,7 +224,7 @@ class SalesWorkflow
             }
             abort_unless($quote->status === 'issued' && $request->status === 'quoted', 422,
                 'Only an issued, current quotation can be confirmed.');
-            abort_unless(! $quote->valid_until || $quote->valid_until->endOfDay()->isFuture(), 422,
+            abort_unless(! $quote->valid_until || $quote->valid_until->toDateString() >= now(Business::query()->findOrFail($quote->business_id)->timezone)->toDateString(), 422,
                 'The quotation has expired. Issue a new revision.');
             $order = SalesOrder::create([
                 'business_id' => $quote->business_id, 'reference' => 'SO-'.Str::upper((string) Str::ulid()),

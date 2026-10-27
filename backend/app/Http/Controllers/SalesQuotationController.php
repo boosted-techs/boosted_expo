@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FinanceExchangeRate;
+use App\Models\QuotationAccess;
 use App\Models\SalesQuotation;
 use App\Services\SalesWorkflow;
 use App\Support\BusinessCurrencies;
@@ -36,7 +38,10 @@ class SalesQuotationController extends Controller
         $canConfirm = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'sales.orders.confirm');
 
-        return view('sales.quotes.show', compact('quote', 'canManage', 'canConfirm'));
+        $rates = FinanceExchangeRate::query()->where('business_id', $quote->business_id)->where('status', 'approved')->orderByDesc('effective_on')->get();
+        $accesses = QuotationAccess::query()->where('business_id', $quote->business_id)->where('sales_quotation_id', $quote->id)->latest('id')->get();
+
+        return view('sales.quotes.show', compact('quote', 'canManage', 'canConfirm', 'rates', 'accesses'));
     }
 
     public function update(Request $request, int $quote, SalesWorkflow $sales): RedirectResponse
@@ -46,8 +51,11 @@ class SalesQuotationController extends Controller
         $request->merge(['currency' => strtoupper(trim((string) $request->input('currency')))]);
         $data = $request->validate([
             'currency' => ['required', 'string', app(BusinessCurrencies::class)->rule($request->attributes->get('activeBusiness'))],
+            'currency_override_reason' => ['nullable', 'string', 'min:10', 'max:250'],
+            'pricing_exchange_rate_id' => ['nullable', 'integer', 'min:1'],
+            'payment_terms_days' => ['nullable', 'integer', 'between:0,365'],
             'incoterm' => ['nullable', 'in:EXW,FCA,CPT,CIP,DAP,DPU,DDP'],
-            'valid_until' => ['nullable', 'date', 'after_or_equal:today'],
+            'valid_until' => ['nullable', 'date', 'after_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
             'discount_percent' => ['required', 'numeric', 'between:0,100', 'decimal:0,2'],
             'tax_percent' => ['required', 'numeric', 'between:0,100', 'decimal:0,2'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -112,7 +120,7 @@ class SalesQuotationController extends Controller
         $pdf->setPaper('a4', 'portrait');
         $pdf->render();
 
-        return response($pdf->output(),200,[
+        return response($pdf->output(), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="quotation-'.$quote.'.pdf"',
             'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',

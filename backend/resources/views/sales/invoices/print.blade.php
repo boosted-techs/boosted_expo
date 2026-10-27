@@ -13,7 +13,7 @@ h1{color:#2c5b3d;font-size:23px;margin:12px 0 3px}.brand{font-size:17px;font-wei
 .note{background:#f3f7f4;padding:9px;line-height:1.4}.num{text-align:right}
 </style></head><body>
 <div class="brand">{{ $invoice['business']['name'] }}</div><div class="small">Exporter · {{ $invoice['business']['country'] }} · {{ $invoice['business']['code'] }}</div>
-<h1>Commercial Invoice</h1><div class="small">{{ $invoice['reference'] }} · Issued {{ $invoice['issued_at'] }}</div>
+<h1>Commercial Invoice</h1>@if(!empty($invoice['due_on']))<p>Payment due: {{ $invoice['due_on'] }}</p>@endif<div class="small">{{ $invoice['reference'] }} · Issued {{ $invoice['issued_at'] }}</div>
 <table class="meta"><tr>
 <td><strong>Buyer / Consignee</strong><br>{{ $invoice['customer']['name'] }}<br>{{ $invoice['customer']['city'] }} {{ $invoice['customer']['country'] }}<br>{{ $invoice['customer']['email'] }}</td>
 <td><strong>Sales order</strong><br>{{ $invoice['order']['reference'] }}<br>

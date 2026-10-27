@@ -4,6 +4,7 @@
 <div class="page-intro"><div><span class="eyebrow">FINANCIAL MANAGEMENT</span><h1>Finance and accounting</h1><p>Company chart of accounts, controlled postings, receivables, payables and source-currency reporting.</p></div><span class="tiny-pill">{{ $business->base_currency }} BASE</span></div>
 <div class="notice"><span>●</span><div><strong>Controlled accounting — no automatic revenue posting</strong><p>Documents are entered first, then reviewed by a second authorised person and posted by a different person from the approver. Payments are manual records until posted; there is no live bank reconciliation. Income recognition requires review of the actual delivery terms and transfer evidence.</p></div></div>
 <div class="form-actions" style="margin:18px 0">
+<a class="primary-button" href="{{ route('finance.money.index') }}">Daily money, advances and expenses</a>
 <a class="secondary-button" href="{{ route('finance.documents') }}">Supplier bills, payments & expenses</a>
 <a class="secondary-button" href="{{ route('finance.reviews') }}">Approval & posting queue</a>
 <a class="secondary-button" href="{{ route('finance.rates') }}">Exchange rates</a>

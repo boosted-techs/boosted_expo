@@ -88,6 +88,8 @@ class CommercialInvoiceIssuance
             $reference = 'CI-'.Str::upper((string) Str::ulid());
             $snapshot = [
                 'reference' => $reference, 'issued_at' => now($shipment->business->timezone)->format('d M Y H:i T'),
+                'due_on' => $order->quotation?->payment_terms_days !== null ? now($shipment->business->timezone)->addDays($order->quotation->payment_terms_days)->toDateString() : null,
+                'payment_terms_days' => $order->quotation?->payment_terms_days,
                 'business' => [
                     'name' => $shipment->business->name, 'country' => $shipment->business->country_code,
                     'code' => $shipment->business->code,
@@ -139,6 +141,7 @@ class CommercialInvoiceIssuance
                 'grand_total' => $totals['grand_total'], 'posting_status' => 'not_posted',
                 'data_snapshot' => $snapshot, 'html_snapshot' => $html, 'sha256' => hash('sha256', $html),
                 'issued_by' => $userId, 'issued_at' => now(),
+                'due_on' => $order->quotation?->payment_terms_days !== null ? now($shipment->business->timezone)->addDays($order->quotation->payment_terms_days)->toDateString() : null,
             ]);
             InvoiceAccountingHandoff::create([
                 'business_id' => $shipment->business_id,

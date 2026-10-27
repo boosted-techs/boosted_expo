@@ -10,11 +10,11 @@
 <section class="section-card"><h2>Employees and amounts</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Team member</th><th>Gross</th><th>Manual deductions</th><th>Net payable</th></tr></thead><tbody>
 @foreach($run->lines as $line)
-<tr><td><strong>{{ $line->user->name }}</strong></td><td>{{ $run->currency }} {{ $line->gross }}</td>
+<tr><td>@if($run->posting_status==='posted')<a href="{{ route('finance.payroll.payslip',[$run->id,$line->id]) }}" target="_blank" rel="noopener">Payslip</a> · @endif<strong>{{ ($line->name_snapshot??$line->user?->name) }}</strong></td><td>{{ $run->currency }} {{ $line->gross }}</td>
 <td>{{ $line->deductions }}</td><td>{{ $line->net }}</td></tr>@endforeach
 </tbody><tfoot><tr><td><strong>Total</strong></td><td><strong>{{ $run->gross_total }}</strong></td>
 <td><strong>{{ $run->deduction_total }}</strong></td><td><strong>{{ $run->net_total }}</strong></td></tr></tfoot></table></div>
-<h3>Preparation basis</h3><p>{{ $run->notes }}</p><p class="form-hint">Gross earnings and deduction calculations remain manual. Each approved settlement requires external evidence and is a ledger record, not a banking instruction. Payslips, statutory computations, pay advances and automatic bank disbursements remain future work.</p>
+<h3>Preparation basis</h3><p>{{ $run->notes }}</p><p class="form-hint">Gross earnings come from the recorded preparation basis; deductions are manually verified. Each approved settlement requires external evidence and is a ledger record, not a banking instruction. Payslips preserve the approved amounts. Statutory computation and automatic bank disbursements require separately verified arrangements.</p>
 </section>
 @if($canSettle)
 <section class="section-card">
@@ -22,7 +22,7 @@
 <p class="muted">These are manually evidenced payments. This screen does not send money. Pending suggestions reserve the outstanding amount until approved or rejected by independent finance staff.</p>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Employee</th><th>Net payroll</th><th>Available for new settlement</th></tr></thead><tbody>
 @foreach($run->lines as $line)
-<tr><td>{{ $line->user?->name }}</td><td>{{ $run->currency }} {{ $line->net }}</td><td>{{ $run->currency }} {{ $remaining[$line->id] }}</td></tr>
+<tr><td>{{ ($line->name_snapshot??$line->user?->name) }}</td><td>{{ $run->currency }} {{ $line->net }}</td><td>{{ $run->currency }} {{ $remaining[$line->id] }}</td></tr>
 @endforeach
 <tr><td><strong>Manual deductions / withholding</strong></td><td>{{ $run->currency }} {{ $run->deduction_total }}</td><td>{{ $run->currency }} {{ $withholdingRemaining }}</td></tr>
 </tbody></table></div>
@@ -36,7 +36,7 @@
 <select name="payroll_line_id" required><option value="">Select employee</option>
 @foreach($run->lines as $line)
 @if(\Brick\Math\BigDecimal::of($remaining[$line->id])->isGreaterThan(0))
-<option value="{{ $line->id }}">{{ $line->user?->name }} · {{ $run->currency }} {{ $remaining[$line->id] }} available</option>
+<option value="{{ $line->id }}">{{ ($line->name_snapshot??$line->user?->name) }} · {{ $run->currency }} {{ $remaining[$line->id] }} available</option>
 @endif
 @endforeach
 </select></label>
@@ -94,7 +94,7 @@ placeholder="Receipt number, payee, remittance period and authorisation"></texta
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Purpose</th><th>Payee / employee</th><th>Amount</th><th>Date</th><th>Evidence reference</th><th>Review status</th></tr></thead><tbody>
 @forelse($settlements as $s)
 <tr><td>{{ $s->reference }}</td><td>{{ $s->kind==='salary'?'Employee salary':'Manual withholding' }}</td>
-<td>{{ $s->kind==='salary' ? $run->lines->firstWhere('id',$s->payroll_line_id)?->user?->name : $s->recipient_name }}</td>
+<td>{{ $s->kind==='salary' ? ($run->lines->firstWhere('id',$s->payroll_line_id)?->name_snapshot??$run->lines->firstWhere('id',$s->payroll_line_id)?->user?->name) : $s->recipient_name }}</td>
 <td>{{ $s->currency }} {{ $s->amount }}</td><td>{{ $s->paid_on->format('d M Y') }}</td>
 <td>{{ $s->external_reference }}</td><td>{{ ucfirst($s->status) }}</td></tr>
 @empty<tr><td colspan="7" class="empty-msg">No staff payments or remittances recorded.</td></tr>@endforelse
