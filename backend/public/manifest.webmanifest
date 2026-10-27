@@ -1,10 +1,16 @@
 {
-  "name": "Boosted Export ERP",
-  "short_name": "Boosted Export",
-  "description": "Operations management for agricultural exporters",
+  "id": "/boosted-one",
+  "name": "Boosted One",
+  "short_name": "Boosted One",
+  "description": "Your export business workspace",
   "start_url": "/workspace",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f5f8f4",
-  "theme_color": "#37664b"
+  "theme_color": "#37664b",
+  "icons": [
+    {"src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
 }

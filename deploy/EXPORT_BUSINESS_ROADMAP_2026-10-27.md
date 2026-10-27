@@ -1,7 +1,7 @@
 # Export business completion roadmap
 
 **Date:** 27 October 2026, Africa/Kampala  
-**Basis:** [Current-system audit](EXPORT_BUSINESS_AUDIT_2026-10-27.md). The audit originally proposed the requirements and stages below. Phase 0 has since been implemented locally; later stages remain planned and must meet their exit criteria before being called complete.
+**Basis:** [Current-system audit](EXPORT_BUSINESS_AUDIT_2026-10-27.md). Phase 0 is implemented locally. Phase 0A software is also implemented locally, with physical printer and real-device installation acceptance still open. Later ERP stages remain planned and must meet their exit criteria before being called complete.
 
 **Owner-control acceptance contract:** [Owner and superadmin control review](EXPORT_OWNER_CONTROL_REVIEW_2026-10-27.md). It defines 48 owner questions, 18 superadmin questions, 15 additional pending requirements (R01–R15), and the detailed priority printing/login-installation requirements. Use those questions to judge completeness alongside this implementation plan.
 
@@ -38,8 +38,8 @@ The target is a complete ERP for this export business line. The following are re
 | Wages and payroll | Manually entered gross/deductions with approval/posting and settlement exist | Employee/casual records, agreed rates, attendance/output calculations, approved adjustments and labour cost allocation. |
 | Finance and reporting | Ledger, manual FX, payments, bank reconciliation and statements exist | Deposits/advances, allocations/transfers, complete expenses/costing and reliable operational/financial reports. |
 | Assets and borrowing | Domain modules absent | Equipment lifecycle, maintenance, loan facilities, schedules and financial posting. |
-| PWA and usability | Responsive application and manifest foundation | Installation, selected offline drafts, safe synchronization and role-specific daily workflows. |
-| Stickers and printing | Configurable bounded label size/DPI, ZPL/history and agent queue exist | Actual media/printer profiles, preview/layout, bulk print, required/stale fields, controlled reprint and applied-label verification; early physical acceptance. |
+| PWA and usability | Login/post-login invitation, native/guided installation, icons and an offline connection screen implemented locally | Actual device installation acceptance, selected offline drafts, safe synchronization and role-specific daily workflows. |
+| Stickers and printing | Profiles, shared artwork/preview/PDF/ZPL, bulk selection, required/stale fields, recovery and scan verification implemented locally | Real GK888t/Windows/Mac/Android acceptance; consumables stock control remains later scope. |
 
 ## 2. Superadmin control centre
 
@@ -421,7 +421,7 @@ This is a scope summary, not a production-acceptance certificate. The [audit](EX
 | --- | --- | --- |
 | Tenant access, roles and supplier links | Existing tenant/role controls; suspended supplier links now refuse access and writes | Platform lifecycle/support controls in 1; concurrency acceptance in 5 |
 | Currency entry and finance candidate selection | Baseline defects repaired and regression tested | Connected commercial FX and money flows in 3 |
-| Stickers and installation | Existing ZPL generation/template snapshots; printer/media workflow and login install invitation incomplete | 0A |
+| Stickers and installation | Phase 0A software delivered locally; physical printer and device acceptance pending | 0A field gate |
 | Superadmin | Business administration and billing actions exist; full dashboard, lifecycle and usage control incomplete | 1 |
 | Orders, procurement, receiving and packing | Working modules; quantity-only operational commitments, sourcing splits and assignments incomplete | 2 |
 | People and transport | Shifts/clock events and shipment fields exist; staff register, rota-to-work/payroll and transport handovers incomplete | 2–3 |
@@ -429,7 +429,25 @@ This is a scope summary, not a production-acceptance certificate. The [audit](EX
 | Stock exceptions, assets and borrowing | Existing traceability and some corrections; complete stock exceptions, asset/maintenance and loan subledgers incomplete | 4 |
 | Offline operation and field readiness | Partial PWA foundation; controlled offline work and real-device/exporter acceptance incomplete | 5 |
 
-**Next stage: 0A — priority printing and installation at login.** Keep sign-in usable when installation is dismissed or unsupported, and prove sticker dimensions/scanning on the actual target printer before packhouse acceptance.
+### Phase 0A implementation — 27 October 2026
+
+**Software delivered locally; physical acceptance remains open.** The user's first printer is a Zebra GK888t using 100 × 50 mm stickers, with Windows, Mac and Android operators. Follow the [printing setup and acceptance guide](zebra_agent/README.md).
+
+| Area | Delivered behavior |
+| --- | --- |
+| Printer/media setup | GK888t 203 dpi / 100 × 50 mm defaults; separate configurable ZPL/PDF profiles, fractional mm dimensions, margins, offsets, media sensing, orientation and recorded physical test evidence. Wrong GK888t DPI/oversized print width is rejected. |
+| Templates | Saved/versioned approval by an authorized template manager; text fields and required values, customer/product defaults and restrictions, automatic or coordinate-based layout, ordering, wrapping, alignment, font size and optional logo. Existing templates can be upgraded by saving in the new preview layout. This is a form-based layout editor, without a drag-and-drop canvas. |
+| Artwork and batches | Up to 50 selected cartons and 1–10 copies each, subject to an artwork-size budget; immutable per-carton source, template, PNG and ZPL records with integrity checks. Preview, PDF and ZPL use the same monochrome artwork. Missing required fields, overlap and overflow reject the entire batch. Separate carton/revision identities and a manifest avoid repeating the first carton's identity. |
+| Output | Actual-size PDF label pages or explicit sheet dimensions/grid/gaps/offsets; original ZPL and shared-workstation queue. Entry points on carton, packing-job, order and shipment records; historical generations are searchable and paginated. Archive downloads are labelled as historical output. |
+| Windows/Mac/Android | Bundled helper with guided setup for an installed Windows RAW or Mac CUPS printer queue, including USB; optional existing private-LAN TCP transport. Android can queue to the shared workstation or use a compatible system PDF print service. Python and an appropriate installed printer/driver are prerequisites for the helper. Native spooler/driver compatibility remains a field test, not a simulated-test claim. |
+| Recovery | Copies included in queue delivery; expired/partial deliveries become uncertain without automatic resend. Inspection confirmation/reason is required for cancel/resolve/reprint; linked retry jobs preserve prior evidence. Local started-transfer receipts prevent blind repeat delivery after a partial send. “Transferred” means OS queue/connection acceptance, not paper output. |
+| Privacy and dispatch | Internal QR routes require authentication and tenant permission; no publication is required. Revision-code scans and operator confirmation record applied verification. Source/template changes flag stale labels and block new queue/output/verification. Owners can require current verified carton labels before dispatch; this gate is optional until the business enables it after setup. |
+| Login installation | Shared invitation on public/sign-in and authenticated layouts, including platform pages; native Chromium prompt only following a click; iPhone/iPad, macOS Safari and other-browser guidance. Seven-day device-local dismissal where storage is available; standalone windows hide the invitation. Authentication/MFA remain authoritative. Manifest identity/icons and a network-only service worker are included. No private pages or business writes are cached; offline operation shows a connection-needed message. |
+| Verification | 226 PHP tests / 3,436 assertions pass, including 25 new Phase 0A cases; 9 JavaScript installation/service-worker tests and 4 Python workstation transport tests pass. Blade compilation and route checks pass. A generated four-page PDF was rendered and visually reviewed: each page is 100 × 50 mm for two cartons with two copies. The local login page was visually reviewed in the in-app browser. One additive migration was applied locally after taking a SQLite backup; foreign-key checks pass. Nothing was deployed. |
+
+**Open Phase 0A exit evidence:** actual GK888t calibration/readable codes/correct carton identity; Windows USB RAW and Mac queue/PDF tests; Android queue/PDF tests; real desktop/mobile installation and MFA launch; partial-copy/lost-acknowledgement recovery on equipment. These cannot be certified by HTTP tests, PDF geometry or an in-app browser. Packing-material stock/consumption accounting and controlled offline work remain later phases. PostgreSQL concurrency and production-scale performance remain field/release checks.
+
+**Next ERP implementation stage: 1 — superadmin control centre.** Keep the Phase 0A physical/device gate open until its evidence is recorded; the packhouse pilot must not treat untested printer support as accepted.
 
 ## 15. Required platform and business acceptance scenarios
 

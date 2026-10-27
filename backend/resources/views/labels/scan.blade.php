@@ -1,0 +1,10 @@
+@extends('layouts.console')
+@section('title','Verify sticker')
+@section('content')
+<div class="page-intro"><div><h1>{{ $label->carton->carton_code }}</h1><p>Sticker #{{ $label->id }} · Template version {{ $label->template_version }}</p></div></div>
+@include('labels._nav')
+@if($stale)<div class="flash error">This sticker is stale. Replace it and scan the current version before dispatch.</div>@endif
+<section class="section-card"><img class="sticker-preview" src="{{ route('labels.artwork',$label->id) }}" alt="Sticker revision" width="378"><p>{{ $label->verified_at ? 'Applied sticker last verified '.$label->verified_at->format('d M Y H:i') : 'Not yet verified on a physical carton' }}</p><a href="{{ route('cartons.show',$label->carton_id) }}">Open carton traceability</a>
+@if(!$stale)<form method="POST" action="{{ route('labels.verify',$label->id) }}" class="form-stack" style="margin-top:18px">@csrf<label class="field"><span>Scan this sticker's QR or revision barcode</span><input name="scan" maxlength="300" required autocomplete="off" placeholder="Use a scanner or paste the scanned code"></label><label class="field"><span>Verification / replacement note</span><textarea name="reason" minlength="10" maxlength="1000" required></textarea></label><label class="check-row"><input name="applied" type="checkbox" value="1" required> I checked the carton identity, readable codes and current sticker applied to this carton</label><button class="primary-button">Verify applied sticker</button></form>@endif</section>
+<section class="section-card"><h2>Sticker history</h2>@forelse($events as $event)<div class="record"><div><strong>{{ str_replace('_',' ',$event->action) }}</strong><small>{{ $event->created_at->format('d M Y H:i') }} · User #{{ $event->actor_id }}</small><p>{{ $event->reason }}</p></div></div>@empty<p>No events.</p>@endforelse{{ $events->links() }}</section>
+@endsection

@@ -13,6 +13,7 @@ class ZebraLabelRenderer
 {
     public const FIELD_LABELS = [
         'company' => 'Exporter',
+        'customer' => 'Customer',
         'product' => 'Product',
         'sku' => 'Product code',
         'carton' => 'Carton code',
@@ -32,6 +33,7 @@ class ZebraLabelRenderer
         // ^FH decodes bytes. Hex encoding ALL user-derived input prevents ZPL
         // control commands being injected through product names or notes.
         $bytes = unpack('C*', $text);
+
         return implode('', array_map(
             fn (int $byte) => sprintf('_%02X', $byte),
             $bytes ?: [],
@@ -41,10 +43,10 @@ class ZebraLabelRenderer
     public function make(Carton $carton, LabelTemplate $template): string
     {
         abort_unless($carton->business_id === $template->business_id, 404);
-        abort_unless(in_array($carton->status, ['packed','reserved','ready','shipped','delivered'], true), 422,
+        abort_unless(in_array($carton->status, ['packed', 'reserved', 'ready', 'shipped', 'delivered'], true), 422,
             'Only packed cartons can receive a label.');
 
-        $carton->loadMissing(['packingJob.product','contents.batch','shipmentAllocation.shipment']);
+        $carton->loadMissing(['packingJob.product', 'contents.batch', 'shipmentAllocation.shipment']);
         $job = $carton->packingJob;
         abort_unless($job && $job->business_id === $carton->business_id, 422,
             'This carton has no completed packing record.');
@@ -58,6 +60,7 @@ class ZebraLabelRenderer
 
         $values = [
             'company' => $business->name,
+            'customer' => $shipment?->customer?->name,
             'product' => $product->name,
             'sku' => $product->sku,
             'carton' => $carton->carton_code,
@@ -92,12 +95,12 @@ class ZebraLabelRenderer
                 ],
                 ['public_token' => (string) Str::uuid(), 'public_enabled' => false],
             );
-            if (! $identity->public_enabled) {
+            if ($template->qr_visibility !== 'internal' && ! $identity->public_enabled) {
                 throw ValidationException::withMessages([
                     'label' => 'Enable the public '.$template->qr_level.' QR page before generating this label, or choose a template without a QR code.',
                 ]);
             }
-            $qrUrl = route('qr.public', $identity->public_token);
+            $qrUrl = route($template->qr_visibility === 'internal' ? 'labels.trace' : 'qr.public', $identity->public_token);
         }
 
         $width = (int) round($template->width_mm * $template->dpi / 25.4);
@@ -111,12 +114,14 @@ class ZebraLabelRenderer
         $textWidth = max((int) round(25 * $unit),
             $width - 2 * $margin - ($qrUrl ? (int) round(32 * $unit) : 0)
         );
-        $lines = ['^XA','^CI28','^PW'.$width,'^LL'.$height,'^LH0,0'];
+        $lines = ['^XA', '^CI28', '^PW'.$width, '^LL'.$height, '^LH0,0'];
         $y = $margin;
 
         foreach ($template->visible_fields as $field) {
             $value = $values[$field] ?? null;
-            if ($value === null || $value === '') continue;
+            if ($value === null || $value === '') {
+                continue;
+            }
             if ($y + $lineHeight > $maxY) {
                 throw ValidationException::withMessages([
                     'label' => 'This label is too small for its selected fields. Choose fewer fields or a taller label.',

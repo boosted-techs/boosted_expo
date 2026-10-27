@@ -7,6 +7,7 @@
 <div class="notice"><span>●</span><div><strong>Allocated to export shipment</strong><p><a class="action-link" href="{{ route('shipments.show',$carton->shipmentAllocation->shipment_id) }}">{{ $carton->shipmentAllocation->shipment->reference }}</a> · {{ ucfirst($carton->shipmentAllocation->shipment->status) }}</p></div></div>
 @endif
 <div class="split-panels">
+@if($canPrint)<div class="section-card"><a class="primary-button" href="{{ route('labels.print',['carton'=>$carton->id]) }}">Preview & print sticker</a><p class="form-hint">Create a current label, download its PDF or send it to the shared workstation.</p></div>@endif
 <section class="section-card"><h2>Carton details</h2>
 <div class="record"><strong>Product</strong><span>{{ $carton->packingJob?->product?->name ?: '—' }}</span></div>
 <div class="record"><strong>Grade</strong><span>{{ $carton->grade ?: '—' }}</span></div>
@@ -34,7 +35,7 @@
 </div>
 @empty<p class="empty-msg">No templates yet. <a class="action-link" href="{{ route('labels.index') }}">Open Sticker Templates</a>.</p>@endforelse
 @endif
-<p class="form-hint">A template using QR codes requires the matching public product, batch or carton page to be enabled. Mixed-batch cartons cannot use a single-batch QR template.</p>
+<p class="form-hint">Private QR templates work without publishing business data. Public QR templates require explicit publication. Mixed-batch cartons need a carton or product QR.</p>
 </section>
 </div>
 @endsection

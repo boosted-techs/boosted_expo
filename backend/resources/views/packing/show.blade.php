@@ -1,6 +1,7 @@
 @extends('layouts.console')
 @section('title', 'Packing Job')
 @section('content')
+@if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'labels.generate'))<div class="form-actions" style="margin-bottom:16px"><a class="secondary-button" href="{{ route('labels.print',['packing'=>$job->id]) }}">Print packing-job stickers</a></div>@endif
 <div class="page-intro"><div><span class="eyebrow">PACKING RECORD</span><h1>{{ $job->reference }}</h1><p>{{ $job->product->name }} · {{ $job->product->base_unit }} · {{ ucfirst(str_replace('_',' ',$job->status)) }}</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('packing.index') }}">All packing jobs</a><a class="secondary-button" href="{{ route('cartons.index') }}">Packed cartons</a></div>
 <section class="section-card"><h2>Available source batches</h2>

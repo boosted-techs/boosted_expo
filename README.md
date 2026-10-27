@@ -26,7 +26,7 @@ no public self-registration routes or default passwords.
 
 ## Current feature inventory
 
-The [export-business roadmap](deploy/EXPORT_BUSINESS_ROADMAP_2026-10-27.md#14-delivery-sequence-and-exit-criteria) records current working/partial/missing scope and delivery gates. Phase 0 is implemented locally: suspended supplier links are blocked, older finance candidates are searchable and paginated, and owners control permitted business currencies. The suite passes 201 tests with 3,230 assertions. Later stages remain open, beginning with priority sticker printing and installation at login.
+The [export-business roadmap](deploy/EXPORT_BUSINESS_ROADMAP_2026-10-27.md#14-delivery-sequence-and-exit-criteria) records current working/partial/missing scope and delivery gates. Phase 0 repairs and Phase 0A printing/installation software are implemented locally. The suite passes 226 PHP tests with 3,436 assertions, plus 9 JavaScript and 4 Python tests. Real printer/device acceptance remains open; later ERP stages begin with the superadmin control centre. Start the GK888t 100 × 50 mm setup using the [printing guide](deploy/zebra_agent/README.md).
 
 ### Existing operational modules
 

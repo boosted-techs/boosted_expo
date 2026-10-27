@@ -28,6 +28,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceAccountingHandoffController;
 use App\Http\Controllers\LabelPrintAgentController;
 use App\Http\Controllers\LabelTemplateController;
+use App\Http\Controllers\LabelWorkflowController;
 use App\Http\Controllers\MfaController;
 use App\Http\Controllers\OperatingPolicyController;
 use App\Http\Controllers\PackingJobController;
@@ -400,6 +401,21 @@ Route::middleware('auth')->group(function () {
             ->whereNumber('carton')->name('cartons.qr.visibility');
 
         Route::get('/labels', [LabelTemplateController::class, 'index'])->name('labels.index');
+        Route::get('/labels/media', [LabelWorkflowController::class, 'profiles'])->name('labels.profiles');
+        Route::get('/labels/print-helper', [LabelWorkflowController::class, 'helper'])->name('labels.agent.download');
+        Route::post('/labels/media', [LabelWorkflowController::class, 'profile'])->name('labels.profiles.store');
+        Route::post('/labels/media/{profile}/test', [LabelWorkflowController::class, 'testProfile'])->whereNumber('profile')->name('labels.profiles.test');
+        Route::put('/labels/dispatch-policy', [LabelWorkflowController::class, 'policy'])->name('labels.policy');
+        Route::get('/labels/print', [LabelWorkflowController::class, 'index'])->name('labels.print');
+        Route::post('/labels/batches', [LabelWorkflowController::class, 'generate'])->name('labels.batches.store');
+        Route::get('/labels/batches/{batch}', [LabelWorkflowController::class, 'show'])->whereNumber('batch')->name('labels.batches.show');
+        Route::post('/labels/batches/{batch}/queue', [LabelWorkflowController::class, 'queue'])->whereNumber('batch')->name('labels.batches.queue');
+        Route::post('/labels/batches/{batch}/output', [LabelWorkflowController::class, 'output'])->whereNumber('batch')->name('labels.batches.output');
+        Route::get('/labels/artwork/{generation}', [LabelWorkflowController::class, 'artwork'])->whereNumber('generation')->name('labels.artwork');
+        Route::get('/labels/scan/{token}', [LabelWorkflowController::class, 'scan'])->name('labels.scan');
+        Route::get('/labels/trace/{token}', [LabelWorkflowController::class, 'trace'])->name('labels.trace');
+        Route::post('/labels/verify/{generation}', [LabelWorkflowController::class, 'verify'])->whereNumber('generation')->name('labels.verify');
+        Route::post('/labels/jobs/{job}/recover', [LabelWorkflowController::class, 'recover'])->whereNumber('job')->name('labels.jobs.recover');
         Route::post('/labels', [LabelTemplateController::class, 'store'])->name('labels.store');
         Route::get('/labels/{template}/edit', [LabelTemplateController::class, 'edit'])
             ->whereNumber('template')->name('labels.edit');

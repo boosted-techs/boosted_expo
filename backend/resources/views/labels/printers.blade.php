@@ -1,68 +1,17 @@
 @extends('layouts.console')
-@section('title','Print Workstations')
+@section('title','Print queue and recovery')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">ZEBRA PRINTING</span><h1>Print workstations</h1>
-<p>Queue original Zebra label files for an authorised workstation on your own local network.</p></div></div>
-<div class="notice"><span>●</span><div><strong>Server-side printing is disabled</strong>
-<p>Your workstation runs a separately installed, opt-in print agent and opens its own local connection to the Zebra device. The ERP does not contact arbitrary printer IP addresses. “Transferred” means the workstation reported sending the bytes to the printer socket, not that a physical sticker was successfully printed.</p></div></div>
-@if(session('new_agent_token') && session('new_agent_id'))
-<section class="section-card">
-<h2>Save this workstation secret now</h2>
-<p>This token is shown only after registration. Save it privately on the designated printing machine, not in your company website or a shared message. It cannot be viewed again.</p>
-<div class="record"><strong>Agent identifier</strong><span>{{ session('new_agent_id') }}</span></div>
-<div class="record"><strong>One-time device token</strong><code style="overflow-wrap:anywhere">{{ session('new_agent_token') }}</code></div>
-</section>
-@endif
-<section class="section-card"><h2>Registered workstations</h2>
-@if($canManage)
-<form method="POST" action="{{ route('labels.printers.create') }}" class="form-stack form-narrow">@csrf
-<label class="field"><span>Workstation name</span><input name="name" maxlength="100" minlength="3" required placeholder="Packing floor Zebra ZT230"></label>
-<button class="primary-button">Register local print workstation</button></form>
-@endif
-<div class="table-wrap"><table class="data-table"><thead><tr><th>Workstation</th><th>Connected last</th><th>Status</th>@if($canManage)<th>Access</th>@endif</tr></thead><tbody>
-@forelse($agents as $agent)<tr><td><strong>{{ $agent->name }}</strong>
-<small>Device #{{ $agent->id }}</small></td>
-<td>{{ $agent->last_seen_at?->format('d M Y H:i')?:'Not connected' }}</td>
-<td>{{ $agent->active?'Authorised':'Revoked' }}</td>
-@if($canManage)<td>@if($agent->active)
-<form method="POST" action="{{ route('labels.printers.revoke',$agent->id) }}">@csrf
-<button class="secondary-button">Revoke workstation</button></form>
-@endif</td>@endif</tr>
-@empty<tr><td colspan="{{ $canManage?4:3 }}" class="empty-msg">No registered workstations.</td></tr>@endforelse
-</tbody></table></div></section>
-@if($canPrint)
-<section class="section-card form-narrow"><h2>Queue a saved label</h2>
-<p>Generate a carton label first; this queue always uses that saved, fingerprinted ZPL file, not a live regenerated template.</p>
-<form method="POST" action="{{ route('labels.printers.jobs') }}" class="form-stack">@csrf
-<input type="hidden" name="request_key" value="{{ \Illuminate\Support\Str::uuid() }}">
-<label class="field"><span>Printer workstation</span><select name="agent_id" required><option value="">Select a registered workstation</option>
-@foreach($agents as $agent) @if($agent->active)<option value="{{ $agent->id }}">{{ $agent->name }}</option>@endif @endforeach
-</select></label>
-<label class="field"><span>Previously generated label</span><select name="generation_id" required>
-<option value="">Select original label snapshot</option>
-@foreach($generations as $generation)
-<option value="{{ $generation->id }}">{{ $generation->carton?->carton_code?:'Carton' }} · Label #{{ $generation->id }} · {{ $generation->created_at->format('d M H:i') }}</option>
-@endforeach</select></label>
-<button class="primary-button">Queue label for workstation</button>
-</form>
-</section>
-@endif
-<section class="section-card"><h2>Delivery audit</h2>
-<p class="muted">A queued label can be attempted more than once if a workstation crashes before acknowledging it. Before reprinting, confirm whether the carton is already labelled to prevent duplicates.</p>
-<div class="table-wrap"><table class="data-table"><thead><tr><th>Queued</th><th>Carton</th><th>Workstation</th><th>Attempts</th><th>Reported status</th></tr></thead><tbody>
-@forelse($jobs as $job)<tr>
-<td>{{ $job->created_at->format('d M Y H:i') }}</td>
-<td>{{ $job->generation?->carton?->carton_code??'Unknown carton' }}</td>
-<td>{{ $job->agent?->name??'Revoked workstation' }}</td>
-<td>{{ $job->attempts }}</td>
-<td>{{ match($job->status){
-'queued'=>'Waiting for agent','leased'=>'Sent to agent; awaiting acknowledgement',
-'transferred'=>'Workstation reported socket delivery; physical print unverified',
-'failed'=>'Failed - inspect printer before requeue','cancelled'=>'Cancelled',
-default=>$job->status} }}
-@if($job->failure_note)<small>{{ $job->failure_note }}</small>@endif</td>
-</tr>
-@empty<tr><td colspan="5" class="empty-msg">No print deliveries recorded.</td></tr>@endforelse
-</tbody></table></div>{{ $jobs->links() }}</section>
-<p class="form-hint">Agent instructions: deploy/zebra_agent/README.md. Direct printing requires a supported network Zebra printer on the workstation's trusted local network. You can still download individual ZPL files from label history without installing an agent.</p>
+<div class="page-intro"><div><h1>Print queue & recovery</h1><p>Windows or Mac sends labels to its installed USB printer or configured network printer. Android can use the same queue.</p></div></div>
+@include('labels._nav')
+<div class="notice"><span>●</span><div><strong>Check paper before retrying</strong><p>“Transferred” means the workstation sent the job to its printer connection or operating-system queue. It does not confirm a physical sticker. Expired deliveries become uncertain and are never automatically printed again.</p></div></div>
+@if(session('new_agent_token') && session('new_agent_id'))<section class="section-card"><h2>Connect this workstation</h2><p>Download the helper on the Windows PC or Mac attached to the printer. Install Python 3 if needed. Run setup, select the printer's installed name and enter this one-time secret privately when prompted.</p><p>Agent #{{ session('new_agent_id') }}</p><code style="overflow-wrap:anywhere">{{ session('new_agent_token') }}</code><p><code>python zebra_agent.py --setup</code></p><p>Server: {{ url('/') }} · Agent: {{ session('new_agent_id') }}</p><p>Then run <code>python zebra_agent.py --enable-physical-print</code>. On a Mac, use <code>python3</code>. Keep the secret on that workstation; it will not be shown again.</p></section>@endif
+@if($canManage)<section class="section-card"><h2>Add a workstation</h2><p>One workstation registration represents one printer and media setup. No printer IP is needed for USB / an installed print queue.</p><a class="secondary-button" href="{{ route('labels.agent.download') }}">Download Windows / Mac print helper</a><form method="POST" action="{{ route('labels.printers.create') }}" class="form-stack" style="margin-top:16px">@csrf<label class="field"><span>Workstation name</span><input name="name" maxlength="100" minlength="3" required placeholder="Packing desk · GK888t"></label><label class="field"><span>Printer and media profile</span><select name="media_profile_id"><option value="">Legacy ZPL setup</option>@foreach($profiles as $profile)<option value="{{ $profile->id }}">{{ $profile->name }}</option>@endforeach</select></label><button class="primary-button">Register workstation</button></form></section>@endif
+<section class="section-card"><h2>Workstations</h2>@forelse($agents as $agent)<div class="record"><div><strong>{{ $agent->name }}</strong><small>#{{ $agent->id }} · {{ $agent->active ? 'Authorised' : 'Revoked' }} · Last connected {{ $agent->last_seen_at?->format('d M Y H:i') ?? 'never' }}</small></div>@if($canManage && $agent->active)<form method="POST" action="{{ route('labels.printers.revoke',$agent->id) }}" data-confirm="Revoke this workstation? In-progress jobs will need inspection.">@csrf<button class="secondary-button">Revoke</button></form>@endif</div>@empty<p>No workstations registered.</p>@endforelse</section>
+@if($canPrint)<section class="section-card"><h2>Find a saved sticker</h2><form method="GET" class="form-stack"><label class="field"><span>Carton reference</span><input name="search" value="{{ request('search') }}" maxlength="100"></label><button class="secondary-button">Search all history</button></form><p><a href="{{ route('labels.print') }}">Print a new carton batch</a> when source data has changed.</p>
+<form method="POST" action="{{ route('labels.printers.jobs') }}" class="form-stack">@csrf<input name="request_key" type="hidden" value="{{ \Illuminate\Support\Str::uuid() }}"><label class="field"><span>Workstation</span><select name="agent_id" required>@foreach($agents as $agent)@if($agent->active)<option value="{{ $agent->id }}">{{ $agent->name }}</option>@endif @endforeach</select></label><label class="field"><span>Saved sticker</span><select name="generation_id" required>@foreach($generations as $generation)<option value="{{ $generation->id }}">{{ $generation->carton?->carton_code }} · Sticker #{{ $generation->id }} · {{ $generation->created_at->format('d M H:i') }}</option>@endforeach</select></label><label class="field"><span>Copies</span><input name="copies" type="number" min="1" max="10" value="1" required></label><label class="field"><span>Reprint / replacement reason</span><input name="reason" minlength="10" maxlength="1000" required></label><button class="primary-button">Queue saved sticker</button></form>{{ $generations->links() }}</section>@endif
+<section class="section-card"><h2>Delivery history</h2>@forelse($jobs as $job)
+@php($state = $job->status === 'leased' && $job->lease_until?->isPast() ? 'uncertain' : $job->status)
+<div class="sticker-panel" style="margin-bottom:14px"><strong>#{{ $job->id }} · {{ $job->generation?->carton?->carton_code }} · {{ $job->copies }} copies</strong><p>{{ $job->agent?->name }} · {{ $job->created_at->format('d M Y H:i') }} · {{ $state }} · {{ $job->attempts }} transfer attempts</p>@if($job->failure_note)<p>{{ $job->failure_note }}</p>@endif
+@if($canPrint && in_array($state,['queued','failed','uncertain','transferred'],true))<details><summary>Resolve / cancel / reprint</summary><form method="POST" action="{{ route('labels.jobs.recover',$job->id) }}" class="form-stack">@csrf<input name="request_key" type="hidden" value="{{ \Illuminate\Support\Str::uuid() }}"><label class="field"><span>Action</span><select name="action">@if(in_array($state,['queued','failed','uncertain']))<option value="cancel">Cancel further delivery</option>@endif @if($state==='uncertain')<option value="resolve_transferred">I confirmed the original transfer — do not resend</option>@endif @if(in_array($state,['failed','uncertain','transferred']))<option value="retry">Create a separate reprint job</option>@endif</select></label><label class="field"><span>Inspection and reason</span><textarea name="reason" minlength="10" maxlength="1000" required></textarea></label><label class="check-row"><input name="checked_printer" type="checkbox" value="1" required> I checked the printer, operating-system queue and physical stickers for duplicates</label><button class="secondary-button">Record recovery action</button></form></details>@endif
+</div>@empty<p>No print jobs yet.</p>@endforelse{{ $jobs->links() }}</section>
 @endsection

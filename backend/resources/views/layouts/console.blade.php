@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>@yield('title', 'Overview') · Boosted One</title>
 <link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
-<link rel="manifest" href="/manifest.webmanifest">
+<x-pwa-meta />
 <script src="/assets/theme-init.js"></script>
 </head>
 <body>
@@ -148,6 +148,7 @@ $sections = config('expo.sections');
   </div>
 </header>
 <main class="content">
+  <x-pwa-install />
   @if(session('status'))<div class="flash success" role="status">{{ session('status') }}</div>@endif
   @if($errors->any())<div class="flash error" role="alert"><strong>Some details need attention.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
   @yield('content')

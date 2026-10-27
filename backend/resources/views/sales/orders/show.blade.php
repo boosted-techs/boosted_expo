@@ -1,6 +1,7 @@
 @extends('layouts.console')
 @section('title','Sales Order Fulfilment')
 @section('content')
+@if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'labels.generate'))<div class="form-actions" style="margin-bottom:16px"><a class="secondary-button" href="{{ route('labels.print',['order'=>$order->id]) }}">Print order stickers</a></div>@endif
 <div class="page-intro"><div><span class="eyebrow">CONFIRMED CUSTOMER ORDER</span><h1>{{ $order->reference }}</h1><p>{{ $order->customer->name }} · {{ $order->currency }} {{ $order->grand_total }}</p></div><span class="tiny-pill">CONFIRMED</span></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('sales-orders.index') }}">All orders</a>
 <a class="secondary-button" href="{{ route('sales-quotes.show',$order->sales_quotation_id) }}">Accepted quotation</a>

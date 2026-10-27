@@ -178,3 +178,5 @@ body { font-size:17px; line-height:1.62; }
   .auth-mobile-brand .brand-icon { background: var(--green); color: white; }
   .auth-mobile-brand small { color: var(--muted); }
 }
+
+.install-card{border:1px solid #9fbca9;background:var(--surface,#f2f8f3);padding:18px;border-radius:12px;margin:18px 0}.install-card[hidden],.install-help[hidden]{display:none}.install-card p,.install-help p{font-size:.9rem;line-height:1.5;margin:8px 0 14px}.install-help{margin:14px 0;font-size:.85rem}.install-help summary{cursor:pointer;text-decoration:underline}.sticker-preview{max-width:100%;height:auto;border:1px solid #9aaa9f;image-rendering:auto;background:white}.sticker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}.sticker-panel{border:1px solid #c9d4cc;border-radius:10px;padding:16px}.label-field-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}.label-field-settings input,.label-field-settings select{width:100%}

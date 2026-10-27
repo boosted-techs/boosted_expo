@@ -7,6 +7,7 @@
 <title>@yield('title', 'Sign in') · Boosted One</title>
 <link rel="stylesheet" href="/assets/expo.css"><link rel="stylesheet" href="/assets/modules.css">
 <script src="/assets/theme-init.js"></script>
+<x-pwa-meta />
 </head><body>
 <div class="auth-shell">
   <aside class="auth-side">
@@ -20,6 +21,7 @@
       @if(session('status'))<div class="flash success" role="status">{{ session('status') }}</div>@endif
       @if($errors->any())<div class="flash error" role="alert"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
       @yield('content')
+      <x-pwa-install />
     </div>
   </main>
 </div>
