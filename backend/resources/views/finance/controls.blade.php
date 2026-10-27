@@ -18,7 +18,7 @@
 <div class="form-columns"><label class="field"><span>Account currency</span><x-currency-select :value="old('currency', $business->base_currency)" /></label>
 <label class="field"><span>Masked reference (optional)</span><input name="masked_reference" maxlength="32" placeholder="****1234" autocomplete="off"></label></div>
 <button class="secondary-button">Add independent bank ledger</button>
-</form>
+<label><input type="checkbox" name="use_legacy_bank" value="1"> Assign this identity to the existing historical bank ledger after verifying it contains only this account and currency.</label></form>
 @endif
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Account</th><th>Institution</th><th>Currency</th><th>Reference</th><th>Ledger</th><th>Status</th></tr></thead><tbody>
 @forelse($banks as $bank)

@@ -9,6 +9,7 @@ use App\Models\FinanceBankMatch;
 use App\Models\FinanceBankProfile;
 use App\Models\FinanceBankStatement;
 use App\Models\FinanceJournalLine;
+use App\Models\FinanceWorkflowLeg;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -38,6 +39,7 @@ class FinanceBankLedgerProofs
         $baseClosing = BigDecimal::zero();
         $movements = [];
         $digestLines = [];
+        $openingLegs = FinanceWorkflowLeg::query()->where('business_id', $business->id)->whereHas('workflow', fn ($q) => $q->where('kind', 'cutover_opening'))->pluck('id')->all();
         $query = FinanceJournalLine::query()
             ->where('finance_journal_lines.business_id', $business->id)
             ->where('finance_journal_lines.account_id', $statement->account_id)
@@ -60,10 +62,11 @@ class FinanceBankLedgerProofs
             $date = substr((string) $line->posted_on, 0, 10);
             $closing = $closing->plus($native);
             $baseClosing = $baseClosing->plus($base);
-            if ($date < $from) {
+            $openingSource = in_array($line->source_type, ['opening_balance', 'foreign_bank_opening'], true) || ($line->source_type === 'workflow_leg' && in_array($line->source_id, $openingLegs, true));
+            if ($date < $from || ($date === $from && $openingSource)) {
                 $opening = $opening->plus($native);
                 $baseOpening = $baseOpening->plus($base);
-            } elseif (! $native->isZero()) {
+            } elseif (! $openingSource && ! $native->isZero()) {
                 // FX revaluation changes only the base-currency book valuation.
                 // It must NEVER appear as an invented bank transfer in the
                 // original account currency or require a bank-statement row.
@@ -95,7 +98,7 @@ class FinanceBankLedgerProofs
                 'finance_bank_matches.source_type', 'finance_bank_matches.source_id',
             ]);
         $lineCount = $statement->lines()->count();
-        abort_unless($matched->count() === $lineCount && $lineCount > 0, 422,
+        abort_unless($matched->count() === $lineCount, 422,
             'Every imported bank line must have an independently confirmed transaction match.');
         $expected = [];
         foreach ($matched as $match) {
@@ -172,6 +175,7 @@ class FinanceBankLedgerProofs
             $this->assertBalancesMatch($snapshot);
             $check = FinanceBankLedgerCheck::query()->where('business_id', $business->id)
                 ->where('statement_id', $statement->id)->lockForUpdate()->first();
+            abort_if($check?->superseded_by_check_id, 422, 'This historical proof was formally superseded. Use its reviewed replacement.');
             $staleVerified = $check && $check->status === 'verified' && ! $this->isCurrent($check);
             abort_unless(! $check || $check->status === 'rejected' || $staleVerified, 422,
                 'This bank ledger verification is already awaiting review or remains current.');
@@ -201,7 +205,7 @@ class FinanceBankLedgerProofs
 
     public function isCurrent(FinanceBankLedgerCheck $check): bool
     {
-        if ($check->status !== 'verified') {
+        if ($check->status !== 'verified' || $check->superseded_by_check_id) {
             return false;
         }
         try {
@@ -214,6 +218,37 @@ class FinanceBankLedgerProofs
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    public function supersede(FinanceBankLedgerCheck $old, FinanceBankLedgerCheck $replacement, int $actor, string $note): void
+    {
+        DB::transaction(function () use ($old, $replacement, $actor, $note) {
+            Business::query()->whereKey($old->business_id)->lockForUpdate()->firstOrFail();
+            $old = FinanceBankLedgerCheck::query()->where('business_id', $old->business_id)->lockForUpdate()->findOrFail($old->id);
+            $replacement = FinanceBankLedgerCheck::query()->where('business_id', $old->business_id)->lockForUpdate()->findOrFail($replacement->id);
+            abort_unless($old->id !== $replacement->id && $old->status === 'verified' && ! $old->superseded_by_check_id && $old->prepared_by !== $actor && $replacement->prepared_by !== $actor, 422, 'A separate reviewer must supersede the original verified evidence once.');
+            $a = $old->statement;
+            $b = $replacement->statement;
+            abort_unless(! $a->lines()->exists() && $a->account_id === $b->account_id && $a->currency === $b->currency && $b->period_from <= $a->period_from && $b->period_to >= $a->period_to && $this->isCurrent($replacement), 422, 'Only an empty balance statement can be superseded by current independently verified evidence covering the same account and period.');
+            $snapshot = ['old_id' => $old->id, 'old_sha' => $old->sha256, 'replacement_id' => $replacement->id, 'replacement_sha' => $replacement->sha256, 'business_id' => $old->business_id, 'account_id' => $a->account_id, 'currency' => $a->currency, 'actor' => $actor, 'note' => $note];
+            $old->update(['superseded_by_check_id' => $replacement->id, 'superseded_by' => $actor, 'superseded_at' => now(), 'supersession_note' => $note, 'supersession_snapshot' => $snapshot, 'supersession_hash' => app(FinanceWorkflows::class)->hash($snapshot)]);
+            $this->event($old, $actor, 'balance_evidence_superseded', $note, $snapshot);
+            app(PlatformAccess::class)->audit($old->business_id, $actor, 'finance.bank.balance_superseded', $note, $old->data_snapshot, $snapshot);
+        }, 3);
+    }
+
+    public function isSuperseded(FinanceBankLedgerCheck $old): bool
+    {
+        if (! $old->superseded_by_check_id || ! $old->supersession_snapshot || ! hash_equals((string) $old->supersession_hash, app(FinanceWorkflows::class)->hash($old->supersession_snapshot))) {
+            return false;
+        }
+        $s = $old->supersession_snapshot;
+        if ($s['old_id'] !== $old->id || $s['old_sha'] !== $old->sha256 || $s['replacement_id'] !== $old->superseded_by_check_id || $s['actor'] !== $old->superseded_by || $s['note'] !== $old->supersession_note || ! $old->superseded_at || $old->statement->lines()->exists()) {
+            return false;
+        }
+        $replacement = FinanceBankLedgerCheck::query()->where('business_id', $old->business_id)->find($old->superseded_by_check_id);
+
+        return $replacement && $replacement->statement->account_id === $old->statement->account_id && $replacement->statement->currency === $old->statement->currency && $replacement->statement->period_from <= $old->statement->period_from && $replacement->statement->period_to >= $old->statement->period_to && $this->isCurrent($replacement);
     }
 
     public function review(FinanceBankLedgerCheck $check, bool $approve, int $actor,
@@ -239,7 +274,7 @@ class FinanceBankLedgerProofs
                 'reviewed_by' => $actor, 'review_notes' => $notes,
                 'verified_at' => $approve ? now() : null,
             ]);
-            $this->event($check,$actor,$approve ? 'verified' : 'rejected',$notes,
+            $this->event($check, $actor, $approve ? 'verified' : 'rejected', $notes,
                 $approve ? $check->data_snapshot : null);
 
             return $check;

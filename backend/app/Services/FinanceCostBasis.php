@@ -4,11 +4,15 @@ namespace App\Services;
 
 use App\Models\FinanceBalanceAdjustment;
 use App\Models\FinanceBillReceipt;
+use App\Models\FinanceCostLayer;
+use App\Models\FinanceInventoryRelief;
 use App\Models\FinanceJournal;
 use App\Models\FinanceSupplierBill;
 use App\Models\GoodsReceipt;
 use App\Models\StockAdjustment;
 use App\Models\StockBatch;
+use App\Models\StockBatchDepletion;
+use App\Models\StockBatchOrigin;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Validation\ValidationException;
@@ -17,20 +21,57 @@ class FinanceCostBasis
 {
     public function batchBasis(StockBatch $batch): array
     {
-        $receipt = GoodsReceipt::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->first();
-        abort_unless($receipt, 422, 'This batch needs a verified source receipt before cost adjustment.');
-        $originalUnit = $this->receiptUnitBase($receipt);
-        $quantity = BigDecimal::of((string) $receipt->accepted_quantity);
-        $cost = app(FinanceMath::class)->money($quantity->multipliedBy($originalUnit));
+        $origin = StockBatchOrigin::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->first();
+        if ($origin) {
+            abort_unless(hash_equals($origin->snapshot_hash, app(FinanceWorkflows::class)->hash($origin->data_snapshot)), 422, 'Original stock cost evidence changed.');
+            if ($origin->workflow_id) {
+                abort_unless($origin->workflow?->posting_status === 'posted', 422, 'Post the stock origin valuation before consuming this batch.');
+            }
+            $quantity = BigDecimal::of((string) $origin->quantity);
+            $cost = BigDecimal::of((string) $origin->base_cost);
+            abort_unless($quantity->isGreaterThan(0) && $cost->isGreaterThan(0), 422, 'The stock origin needs positive verified quantity and value.');
+            abort_unless(BigDecimal::of($origin->data_snapshot['quantity'])->isEqualTo($quantity) && BigDecimal::of($origin->data_snapshot['base_cost'])->isEqualTo($cost) && (int) $origin->data_snapshot['batch_id'] === $batch->id, 422, 'The source cost fields changed.');
+            $originalUnit = $cost->dividedBy($quantity, 12, RoundingMode::HalfUp);
+        } else {
+            $receipt = GoodsReceipt::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->first();
+            abort_unless($receipt, 422, 'This batch needs a verified source receipt or opening/return cost layer before valuation.');
+            $originalUnit = $this->receiptUnitBase($receipt);
+            $quantity = BigDecimal::of((string) $receipt->accepted_quantity);
+            $cost = app(FinanceMath::class)->money($quantity->multipliedBy($originalUnit));
+        }
         foreach (StockAdjustment::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->where('posting_status', 'posted')->orderBy('id')->get() as $adjustment) {
             $delta = BigDecimal::of((string) $adjustment->quantity_delta);
             $quantity = $quantity->plus($delta);
             $cost = $delta->isGreaterThan(0) ? $cost->plus((string) $adjustment->amount) : $cost->minus((string) $adjustment->amount);
         }
-        abort_unless(! $quantity->isLessThan(0) && ! $cost->isLessThan(0), 422, 'Approved count adjustments exceed this batch cost layer.');
-        $unit = $quantity->isGreaterThan(0) ? $cost->dividedBy($quantity, 12, RoundingMode::HalfUp) : $originalUnit;
+        foreach (StockBatchDepletion::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->where(fn ($q) => $q->whereNull('workflow_id')->orWhereHas('workflow', fn ($q) => $q->where('posting_status', 'posted')))->get() as $depletion) {
+            $quantity = $quantity->minus((string) $depletion->quantity);
+            $cost = $cost->minus((string) $depletion->base_cost);
+        }
+        abort_unless(! $quantity->isLessThan(0), 422, 'Stock departures exceed this batch quantity layer.');
+        foreach (FinanceCostLayer::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->get() as $layer) {
+            $cost = $cost->plus((string) $layer->base_amount);
+        }
+        abort_unless(! $cost->isLessThan(0), 422, 'Batch cost allocations exceed its cost.');
+        $relievedQty = BigDecimal::zero();
+        $relievedCost = BigDecimal::zero();
+        foreach (FinanceInventoryRelief::query()->where('business_id', $batch->business_id)->where('posting_status', 'posted')->cursor() as $relief) {
+            foreach ($relief->data_snapshot['lines'] ?? [] as $line) {
+                if ((int) $line['batch_id'] === $batch->id) {
+                    $relievedQty = $relievedQty->plus($line['quantity']);
+                    $relievedCost = $relievedCost->plus($line['base_cost']);
+                }
+            }
+        }
+        foreach (FinanceCostLayer::query()->where('business_id', $batch->business_id)->where('batch_id', $batch->id)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->get() as $layer) {
+            $relievedCost = $relievedCost->plus((string) $layer->cogs_amount)->plus((string) $layer->waste_amount);
+        }
+        $remainingQuantity = $quantity->minus($relievedQty);
+        $remainingCost = $cost->minus($relievedCost);
+        abort_unless(! $remainingQuantity->isLessThan(0) && ! $remainingCost->isLessThan(0), 422, 'Posted consumption exceeds the source batch quantity or value.');
+        $unit = $remainingQuantity->isGreaterThan(0) ? $remainingCost->dividedBy($remainingQuantity, 12, RoundingMode::HalfUp) : ($quantity->isGreaterThan(0) ? $cost->dividedBy($quantity, 12, RoundingMode::HalfUp) : $originalUnit);
 
-        return compact('quantity', 'cost', 'unit');
+        return compact('quantity', 'cost', 'unit', 'remainingQuantity', 'remainingCost');
     }
 
     public function receiptUnitBase(GoodsReceipt $receipt): BigDecimal

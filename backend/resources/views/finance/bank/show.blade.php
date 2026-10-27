@@ -7,7 +7,7 @@
 <section class="section-card"><h2>Find matching transactions</h2>
 @include('finance._record-search', ['field' => 'candidate_search', 'page' => 'page', 'label' => 'Find transaction by record or payment reference'])
 <p class="form-hint">Candidates match the account, currency and amounts of the bank lines on this page. Browse older candidates below when needed.</p>
-@foreach(['Assets / borrowing'=>$registerEntries,'Money records'=>$operations, 'Payments' => $payments, 'Shipment costs' => $costs, 'Payroll settlements' => $payrollSettlements, 'Corrections' => $reversals, 'Partial returns' => $partials] as $candidateLabel => $candidateRows)
+@foreach(['Cash / currency / owner funding'=>$workflowLegs,'Assets / borrowing'=>$registerEntries,'Money records'=>$operations, 'Payments' => $payments, 'Shipment costs' => $costs, 'Payroll settlements' => $payrollSettlements, 'Corrections' => $reversals, 'Partial returns' => $partials] as $candidateLabel => $candidateRows)
 @if($candidateRows->hasPages())<p>{{ $candidateLabel }} · {{ $candidateRows->total() }} candidates</p>{{ $candidateRows->links() }}@endif
 @endforeach
 </section>
@@ -61,7 +61,7 @@ placeholder="Paste the detached signature issued by the trusted bank or bank sta
 <small>{{ $ledgerCheck->review_notes?:'Awaiting an independent review note.' }}</small></div>
 <span class="tiny-pill">{{ $isLedgerCheckCurrent?'BOOK BALANCE VERIFIED':($ledgerCheck->status==='verified'?'OUTDATED PROOF':'NOT YET VERIFIED') }}</span></div>
 @endif
-@if($canProofSubmit && (!$ledgerCheck || $ledgerCheck->status==='rejected' ||
+@if($canProofSubmit && !$ledgerCheck?->superseded_by_check_id && (!$ledgerCheck || $ledgerCheck->status==='rejected' ||
 ($ledgerCheck->status==='verified' && !$isLedgerCheckCurrent)) &&
 $ledgerPreview['opening_matches'] && $ledgerPreview['closing_matches'] &&
 $ledgerPreview['movement_matches'])
@@ -91,6 +91,10 @@ $ledgerCheck->prepared_by!==auth()->id())
 @else
 <p class="form-hint">A full balance proof requires a named, single-currency bank ledger with traceable posted source transactions. Shared historical accounts with mixed currencies require controlled reconstruction before proof can be requested.</p>
 @endif
+@if($ledgerCheck?->superseded_by_check_id)<p>Historical balance evidence superseded: {{ $ledgerCheck->supersession_note }}</p>
+@elseif($ledgerCheck && $ledgerCheck->status==='verified' && $statement->lines()->count()===0 && $canProofReview && $replacementChecks->isNotEmpty())
+<details><summary>Replace incorrect empty balance evidence</summary><form method="POST" action="{{ route('finance.bank.proof.supersede',$ledgerCheck->id) }}" class="form-stack">@csrf<label class="field"><span>Independently verified replacement covering this period</span><select name="replacement_id" required>@foreach($replacementChecks as $replacement)<option value="{{ $replacement->id }}">{{ $replacement->statement->reference }} · {{ $replacement->statement->period_to->format('d M Y') }} · {{ $replacement->statement->currency }} {{ $replacement->statement->closing_balance }}</option>@endforeach</select></label><label class="field"><span>Why the earlier declared balance was incorrect</span><textarea name="notes" minlength="20" maxlength="2000" required></textarea></label><button class="secondary-button">Approve replacement evidence</button></form></details>
+@endif
 <p class="form-hint">This is an independent internal accounting check only. It does not authenticate the uploaded CSV against a bank or replace bank-issued confirmation.</p>
 </section>
 @endif
@@ -107,6 +111,8 @@ $ledgerCheck->prepared_by!==auth()->id())
 <option value="payment:{{ $p->id }}">Payment {{ $p->reference }} · {{ $p->currency }} {{ $p->amount }}</option>@endif @endforeach
 @foreach($costs as $cost)@if($line->direction==='debit' && \Brick\Math\BigDecimal::of((string)$cost->amount)->isEqualTo((string)$line->amount))
 <option value="shipment_cost:{{ $cost->id }}">Cost {{ $cost->reference }} · {{ $cost->currency }} {{ $cost->amount }}</option>@endif @endforeach
+@foreach($workflowLegs as $record)@if($line->direction===($record->cash_direction==='in'?'credit':'debit') && \Brick\Math\BigDecimal::of((string)$record->amount)->isEqualTo((string)$line->amount))<option value="workflow_leg:{{ $record->id }}">{{ $record->workflow->reference }} · {{ str_replace('_',' ',$record->workflow->kind) }} · {{ $record->currency }} {{ $record->amount }}</option>@endif
+@endforeach
 @foreach($registerEntries as $record)@if($line->direction===($record->cash_direction==='in'?'credit':'debit') && \Brick\Math\BigDecimal::of((string)$record->cash_amount)->isEqualTo((string)$line->amount))<option value="register_entry:{{ $record->id }}">{{ $record->reference }} · {{ $record->kind }} · {{ $record->currency }} {{ $record->cash_amount }}</option>@endif
 @endforeach
 @foreach($operations as $operation)@if(\Brick\Math\BigDecimal::of((string)$operation->amount)->isEqualTo((string)$line->amount))

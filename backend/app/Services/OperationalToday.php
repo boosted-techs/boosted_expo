@@ -9,6 +9,7 @@ use App\Models\PartnerFollowup;
 use App\Models\SalesOrder;
 use App\Models\StaffPerson;
 use App\Models\StaffShift;
+use App\Models\StockExceptionCase;
 use App\Support\BusinessPermissions;
 
 class OperationalToday
@@ -25,6 +26,8 @@ class OperationalToday
         $shifts = StaffShift::query()->where('business_id', $b)->whereNotNull('published_at')->when(! $manager, fn ($q) => $q->where('user_id', $member->user_id))->where('status', 'scheduled')->where('starts_at', '<=', now()->addDay())->with('person', 'user', 'attendances')->orderBy('starts_at')->limit(20)->get();
         $followups = PartnerFollowup::query()->where('business_id', $b)->where('status', '!=', 'resolved')->when(! $manager, fn ($q) => $q->where('staff_person_id', $person ?? 0))->with('person')->orderBy('due_at')->limit(20)->get();
 
-        return compact('followups', 'tasks', 'orders', 'trips', 'shifts');
+        $stockCases = $access->allows($member, 'stock.view') ? StockExceptionCase::query()->where('business_id', $b)->whereNotIn('status', ['closed', 'completed', 'rejected', 'withdrawn'])->when(! $manager, fn ($q) => $q->where('staff_person_id', $person ?? 0))->with('person')->orderBy('due_on')->limit(20)->get() : collect();
+
+        return compact('stockCases', 'followups', 'tasks', 'orders', 'trips', 'shifts');
     }
 }

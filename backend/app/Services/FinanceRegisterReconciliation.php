@@ -10,7 +10,7 @@ class FinanceRegisterReconciliation
 {
     public function report(Business $business, string $through, array $ledgerBalances): array
     {
-        $keys = ['asset_cost' => 'Equipment cost', 'asset_accumulated' => 'Accumulated depreciation', 'asset_payable' => 'Equipment payable', 'loan_principal' => 'External borrowing principal', 'owner_borrowing' => 'Owner borrowing principal', 'loan_interest_payable' => 'Accrued borrowing interest'];
+        $keys = ['loans_receivable' => 'Principal owed to the business', 'loan_interest_receivable' => 'Lending interest receivable', 'loan_fees_receivable' => 'Earned lending fees receivable', 'loan_fees_payable' => 'Accrued lender fees', 'loan_deferred_cost' => 'Deferred borrowing cost', 'asset_cost' => 'Equipment cost', 'asset_accumulated' => 'Accumulated depreciation', 'asset_payable' => 'Equipment payable', 'loan_principal' => 'External borrowing principal', 'owner_borrowing' => 'Owner borrowing principal', 'loan_interest_payable' => 'Accrued borrowing interest'];
         $expected = array_fill_keys(array_keys($keys), BigDecimal::zero());
         $invalid = 0;
         foreach (FinanceRegisterEntry::query()->where('business_id', $business->id)->whereIn('posting_status', ['posted', 'reversed'])->whereDate('event_on', '<=', $through)->orderBy('id')->cursor() as $entry) {

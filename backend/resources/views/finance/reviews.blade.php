@@ -10,12 +10,13 @@
 <a class="secondary-button" href="{{ route('finance.transaction-reversals.index') }}">Payment corrections</a>
 <a class="secondary-button" href="{{ route('finance.fx-revaluations.index') }}">Foreign bank revaluation</a>
 <a class="secondary-button" href="{{ route('finance.monetary-revaluations.index') }}">Receivables & payables FX</a></div>
-<div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>The person proposing a posting cannot approve it; the approver cannot post it. Posted journals cannot be edited. An invoice may only be proposed for revenue recognition after shipment dispatch is recorded, and the reviewer must assess the agreed terms and transfer evidence. For foreign currencies, select an approved historical rate effective no later than the posting date.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>The person proposing a posting cannot approve it; the approver cannot post it. Posted journals cannot be edited. An invoice may only be proposed for revenue recognition after shipment dispatch is recorded, and the reviewer must assess the agreed terms and transfer evidence. For foreign currencies, select an approved historical rate effective no later than the posting date. The system uses posted weighted money-account values and releases the settled portion of earlier bank FX revaluations. An approved foreign cash basis is locked; changed balances require a fresh review.</p></div></div>
 @if($canSubmit)
 <section class="section-card"><h2>Source documents awaiting finance posting</h2>
 <p class="muted">Submitting a document here does not affect the ledger. Enter a meaningful audit explanation and, where applicable, the exact approved exchange rate.</p>
 @include('finance._record-search', ['field' => 'source_search', 'page' => 'page', 'label' => 'Find source document by reference'])
 @php $sourceSections=[
+ ['type'=>'finance_workflow','name'=>'Cash, owner funding, production costs and exception outcomes','rows'=>$workflows],
  ['type'=>'stock_adjustment','name'=>'Independently reviewed stock counts','rows'=>$stockAdjustments],
  ['type'=>'register_entry','name'=>'Asset and borrowing transactions','rows'=>$registerEntries],
  ['type'=>'money_operation','name'=>'Deposits, advances, expenses and transfers','rows'=>$operations],
@@ -58,6 +59,7 @@
  $eligible=$section['type']!=='commercial_invoice' ||
   in_array($source->shipment?->status,['dispatched','delivered'],true);
 @endphp
+@if($section['type']==='finance_workflow')<p><a class="action-link" href="{{ route('finance.treasury.show',$source->id) }}">Open complete source and accounting legs · {{ $source->reference }}</a></p>@endif
 <details class="finance-details">
 <summary><strong>{{ $source->reference }}</strong> · {{ $currency }} {{ $amount }} ·
 @if($eligible && !in_array($id,$hasPending)) Ready for submission
@@ -65,10 +67,10 @@
 @else Review already submitted @endif</summary>
 @if($eligible && !in_array($id,$hasPending))
 <form method="POST" action="{{ route('finance.reviews.request',['type'=>$section['type'],'source'=>$source->id]) }}" class="form-stack">@csrf
-<label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ in_array($section['type'],['register_entry','money_operation'],true) ? $source->event_on->toDateString() : (in_array($section['type'],['fx_revaluation','monetary_revaluation'],true) ? $source->valued_on->format('Y-m-d') : (in_array($section['type'],['transaction_reversal','partial_bank_return'],true) && $source->return_bank_line_id ? ($section['type']==='transaction_reversal' ? $source->original_snapshot['bank_return_evidence']['return_transaction_on'] : $source->data_snapshot['return_date']) : now()->format('Y-m-d'))) }}" required max="{{ now()->format('Y-m-d') }}"></label>
+<label class="field"><span>Journal / recognition date</span><input type="date" name="posting_on" value="{{ in_array($section['type'],['finance_workflow','register_entry','money_operation'],true) ? $source->event_on->toDateString() : (in_array($section['type'],['fx_revaluation','monetary_revaluation'],true) ? $source->valued_on->format('Y-m-d') : (in_array($section['type'],['transaction_reversal','partial_bank_return'],true) && $source->return_bank_line_id ? ($section['type']==='transaction_reversal' ? $source->original_snapshot['bank_return_evidence']['return_transaction_on'] : $source->data_snapshot['return_date']) : now()->format('Y-m-d'))) }}" required max="{{ now()->format('Y-m-d') }}"></label>
 @if(in_array($section['type'],['credit_note','balance_adjustment','transaction_reversal','partial_bank_return'],true))
 <p class="form-hint">This correction must preserve the exact original approved exchange rate. A second rate cannot be selected.</p>
-@elseif(in_array($section['type'],['register_entry','money_operation','foreign_bank_opening','fx_revaluation','monetary_revaluation'],true))
+@elseif(in_array($section['type'],['finance_workflow','register_entry','money_operation','foreign_bank_opening','fx_revaluation','monetary_revaluation'],true))
 <input type="hidden" name="exchange_rate_id" value="{{ $source->exchange_rate_id }}">
 <p class="form-hint">Prepared approved rate: 1 {{ $currency }} = {{ $source->rate_to_base }} {{ $business->base_currency }} (locked rate reference #{{ $source->exchange_rate_id }}). It cannot be changed. For revaluation, choose the exact valuation date rather than today's date.</p>
 @elseif($currency!==$business->base_currency)
@@ -94,10 +96,10 @@
 <section class="section-card"><h2>Posting review register</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Type</th><th>Document</th><th>Posting date</th><th>Status</th><th>Exchange rate</th><th>Evidence</th><th>Controls</th></tr></thead><tbody>
 @forelse($requests as $review)
-<tr><td>{{ ucwords(str_replace('_',' ',$review->source_type)) }}</td><td>@if($review->source_type==='register_entry')<a href="{{ route('finance.register.show',$review->source_id) }}">Asset / loan record #{{ $review->source_id }}</a>@elseif($review->source_type==='money_operation')<a href="{{ route('finance.money.show',$review->source_id) }}">Money record #{{ $review->source_id }}</a>@else #{{ $review->source_id }} @endif</td><td>{{ $review->posting_on->format('d M Y') }}</td>
+<tr><td>{{ ucwords(str_replace('_',' ',$review->source_type)) }}</td><td>@if($review->source_type==='finance_workflow')<a href="{{ route('finance.treasury.show',$review->source_id) }}">Money / exception event #{{ $review->source_id }}</a>@elseif($review->source_type==='register_entry')<a href="{{ route('finance.register.show',$review->source_id) }}">Asset / loan record #{{ $review->source_id }}</a>@elseif($review->source_type==='money_operation')<a href="{{ route('finance.money.show',$review->source_id) }}">Money record #{{ $review->source_id }}</a>@else #{{ $review->source_id }} @endif</td><td>{{ $review->posting_on->format('d M Y') }}</td>
 <td><span class="tiny-pill">{{ ucfirst($review->status) }}</span></td>
 <td>{{ $review->exchangeRate ? ($review->exchangeRate->currency.' @ '.$review->exchangeRate->rate_to_base) : 'Base currency' }}</td>
-<td><small>{{ $review->basis_notes }}</small></td>
+<td><small>{{ $review->basis_notes }}</small>@if($review->cash_carrying_snapshot)<details><summary>Approved money-account values</summary>@foreach($review->cash_carrying_snapshot['sources'] as $source)@foreach($source['accounts'] as $account)<p>{{ $account['label']??$account['key'] }} · before {{ $source['currency'] }} {{ $account['basis_units'] }} · book value {{ $business->base_currency }} {{ $account['basis_base'] }} · deferred FX released / transferred {{ $account['unrealized_released'] }}.</p>@endforeach @endforeach<p>Changed account balances require another approval before posting.</p></details>@endif</td>
 <td>
 @if($review->status==='pending' && $canApprove && $review->requested_by!==auth()->id())
 <form method="POST" action="{{ route('finance.reviews.approve',$review->id) }}" class="form-stack" style="min-width:175px">@csrf
@@ -114,7 +116,8 @@ data-confirm="Post this independently approved journal? Ledger postings cannot b
 <span class="form-hint">Posted — locked</span>
 @else<span class="form-hint">Awaiting another authorised person</span>
 @endif
-@if(in_array($review->source_type,['register_entry','stock_adjustment','money_operation'],true) && (($review->status==='pending' && $canSubmit && $review->requested_by===auth()->id())||($review->status==='approved' && $canApprove && $review->approved_by===auth()->id())))<form method="POST" action="{{ route('finance.reviews.withdraw',$review->id) }}" class="form-stack">@csrf<label class="field"><span>Withdraw request / approval with reason</span><input name="reason" required minlength="20" maxlength="3000"></label><button class="text-button">Withdraw unposted review</button></form>@endif
+@if(in_array($review->source_type,['finance_workflow','register_entry','stock_adjustment','money_operation'],true) && (($review->status==='pending' && $canSubmit && $review->requested_by===auth()->id())||($review->status==='approved' && $canApprove && $review->approved_by===auth()->id())))<form method="POST" action="{{ route('finance.reviews.withdraw',$review->id) }}" class="form-stack">@csrf<label class="field"><span>Withdraw request / approval with reason</span><input name="reason" required minlength="20" maxlength="3000"></label><button class="text-button">Withdraw unposted review</button></form>@endif
+@if($review->status==='approved' && $review->cash_carrying_snapshot && $canApprove && $review->approved_by===auth()->id())<details><summary>Review changed money balances</summary><form method="POST" action="{{ route('finance.reviews.refresh-cash',$review->id) }}" class="form-stack">@csrf<label class="field"><span>Why another balance review is needed</span><textarea name="reason" minlength="20" maxlength="3000" required></textarea></label><button class="secondary-button">Reopen approval for current review</button></form></details>@endif
 </td></tr>
 @empty<tr><td colspan="7" class="empty-msg">No finance posting reviews yet.</td></tr>@endforelse
 </tbody></table></div>{{ $requests->links() }}

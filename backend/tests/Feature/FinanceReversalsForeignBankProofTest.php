@@ -1314,6 +1314,9 @@ class FinanceReversalsForeignBankProofTest extends TestCase
                 ['type' => 'shipment_cost', 'id' => $cost->id, 'amount' => '100', 'direction' => 'debit'],
             ]);
             $this->proof($ctx, $original);
+            Carbon::setTestNow(Carbon::parse('2026-09-30 12:00:00', 'Africa/Kampala'));
+            $oldClosing = $this->reconciledStatement($ctx, $bank, '900', '900', []);
+            $this->proof($ctx, $oldClosing);
             Carbon::setTestNow($originalClock);
             $this->as($ctx)->post(route('finance.controls.periods.store'), [
                 'period_from' => '2026-09-01', 'period_to' => '2026-09-30',
@@ -1396,6 +1399,15 @@ class FinanceReversalsForeignBankProofTest extends TestCase
             $this->assertTrue(app(FinanceBankLedgerProofs::class)->isCurrent(
                 FinanceBankLedgerCheck::query()->where('statement_id', $original->id)
                     ->firstOrFail()));
+            Carbon::setTestNow(Carbon::parse('2026-09-30 12:00:00', 'Africa/Kampala'));
+            $correctClosing = $this->reconciledStatement($ctx, $bank, '930', '930', []);
+            $this->proof($ctx, $correctClosing);
+            Carbon::setTestNow($originalClock);
+            $oldProof = FinanceBankLedgerCheck::where('statement_id', $oldClosing->id)->firstOrFail();
+            $newProof = FinanceBankLedgerCheck::where('statement_id', $correctClosing->id)->firstOrFail();
+            $this->as($ctx)->post(route('finance.bank.proof.supersede', $oldProof->id), ['replacement_id' => $newProof->id, 'notes' => 'Original preparer cannot approve replacement balance evidence.'])->assertForbidden();
+            $this->as($ctx, 'owner')->post(route('finance.bank.proof.supersede', $oldProof->id), ['replacement_id' => $newProof->id, 'notes' => 'Independently checked the corrected bank-issued month-end balance after the late return was found.'])->assertRedirect()->assertSessionHasNoErrors();
+            $this->assertTrue(app(FinanceBankLedgerProofs::class)->isSuperseded($oldProof->fresh()));
             $this->as($ctx)->post(route('finance.controls.periods.submit', $period->id), [
                 'reason' => 'Revised September trial balance and newly reconciled bank return were independently checked.',
             ])->assertRedirect()->assertSessionHasNoErrors();
@@ -1419,30 +1431,30 @@ class FinanceReversalsForeignBankProofTest extends TestCase
         try {
             Carbon::setTestNow($clock->copy()->subDay());
             $ctx = $this->context();
-            $bank = $this->bank($ctx,'UGX');
-            $this->localOpening($ctx,$bank,'1000');
-            $cost = $this->postedCost($ctx,$bank,'100');
-            $statement = $this->reconciledStatement($ctx,$bank,'1000','900',[
+            $bank = $this->bank($ctx, 'UGX');
+            $this->localOpening($ctx, $bank, '1000');
+            $cost = $this->postedCost($ctx, $bank, '100');
+            $statement = $this->reconciledStatement($ctx, $bank, '1000', '900', [
                 ['type' => 'shipment_cost', 'id' => $cost->id, 'amount' => '100', 'direction' => 'debit'],
             ]);
-            $this->proof($ctx,$statement);
+            $this->proof($ctx, $statement);
             $date = now()->toDateString();
-            $this->as($ctx)->post(route('finance.controls.periods.store'),[
+            $this->as($ctx)->post(route('finance.controls.periods.store'), [
                 'period_from' => $date, 'period_to' => $date,
             ])->assertRedirect()->assertSessionHasNoErrors();
             $period = FinancePeriod::firstOrFail();
-            $this->post(route('finance.controls.periods.submit',$period->id),[
+            $this->post(route('finance.controls.periods.submit', $period->id), [
                 'reason' => 'Close original month/day after independent evidence and bank proof.',
             ])->assertRedirect()->assertSessionHasNoErrors();
-            $this->as($ctx,'owner')->post(route('finance.controls.periods.review',['period' => $period->id, 'action' => 'approve']),[
+            $this->as($ctx, 'owner')->post(route('finance.controls.periods.review', ['period' => $period->id, 'action' => 'approve']), [
                 'reason' => 'Independently confirm the source and closed-period trial balance.',
             ])->assertRedirect()->assertSessionHasNoErrors();
-            $this->assertSame('closed',$period->fresh()->status);
-            $originalJournal = FinanceJournal::query()->where('business_id',$ctx['business']->id)
-                ->where('source_type','shipment_cost')->where('source_id',$cost->id)->firstOrFail();
+            $this->assertSame('closed', $period->fresh()->status);
+            $originalJournal = FinanceJournal::query()->where('business_id', $ctx['business']->id)
+                ->where('source_type', 'shipment_cost')->where('source_id', $cost->id)->firstOrFail();
             Carbon::setTestNow($clock);
             $today = now()->toDateString();
-            $this->as($ctx)->post(route('finance.bank.import'),[
+            $this->as($ctx)->post(route('finance.bank.import'), [
                 'bank_profile_id' => $bank->id, 'currency' => 'UGX',
                 'period_from' => $today, 'period_to' => $today,
                 'opening_balance' => '900', 'closing_balance' => '930',
@@ -1450,23 +1462,23 @@ class FinanceReversalsForeignBankProofTest extends TestCase
                     "date,direction,amount,reference,description\n".
                     "{$today},credit,30,POSTCLOSE-RETURN,Return paid after the original accounting period closed\n"),
             ])->assertRedirect()->assertSessionHasNoErrors();
-            $return = FinanceBankStatement::query()->where('business_id',$ctx['business']->id)
+            $return = FinanceBankStatement::query()->where('business_id', $ctx['business']->id)
                 ->orderByDesc('id')->firstOrFail()->lines()->firstOrFail();
-            $this->post(route('finance.transaction-reversals.prepare',[
+            $this->post(route('finance.transaction-reversals.prepare', [
                 'type' => 'shipment_cost', 'id' => $cost->id,
-            ]),[
+            ]), [
                 'return_bank_line_id' => $return->id,
                 'reason' => 'An externally evidenced partial bank refund occurred after the source period was closed.',
                 'external_evidence' => 'Bank return took place in the currently open period, without changing original closed-period source entries.',
             ])->assertRedirect()->assertSessionHasNoErrors();
             $partial = FinancePartialBankReturn::firstOrFail();
-            $this->reviewPost($ctx,'partial_bank_return',$partial->id,null,$today);
-            $this->assertSame('closed',$period->fresh()->status);
+            $this->reviewPost($ctx, 'partial_bank_return', $partial->id, null, $today);
+            $this->assertSame('closed', $period->fresh()->status);
             $this->assertTrue($originalJournal->fresh()->lines()->exists());
-            $newJournal = FinanceJournal::query()->where('business_id',$ctx['business']->id)
-                ->where('source_type','partial_bank_return')->firstOrFail();
-            $this->assertSame($today,$newJournal->posted_on->toDateString());
-            $this->assertNotSame($originalJournal->id,$newJournal->id);
+            $newJournal = FinanceJournal::query()->where('business_id', $ctx['business']->id)
+                ->where('source_type', 'partial_bank_return')->firstOrFail();
+            $this->assertSame($today, $newJournal->posted_on->toDateString());
+            $this->assertNotSame($originalJournal->id, $newJournal->id);
         } finally {
             Carbon::setTestNow();
         }

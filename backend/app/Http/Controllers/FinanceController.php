@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Business;
+use App\Models\CashCustody;
 use App\Models\CommercialInvoice;
 use App\Models\ExportShipment;
 use App\Models\FinanceAccount;
@@ -28,6 +29,7 @@ use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinanceWorkflow;
 use App\Models\PurchaseOrder;
 use App\Models\StockAdjustment;
 use App\Models\TransportLeg;
@@ -193,6 +195,7 @@ class FinanceController extends Controller
             ->orderByDesc('id')->paginate(15, ['*'], 'shipment_page')->withQueryString();
         $invoiceBalances = $invoices->mapWithKeys(fn ($i) => [$i->id => (string) $finance->outstanding($i)]);
         $billBalances = $payableBills->mapWithKeys(fn ($i) => [$i->id => (string) $finance->outstanding($i)]);
+        $cashCustodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
         $bankProfiles = FinanceBankProfile::query()->where('business_id', $business->id)
             ->where('active', true)->orderBy('label')->get();
         $canCreate = app(BusinessPermissions::class)->allows(
@@ -204,7 +207,7 @@ class FinanceController extends Controller
 
         return view('finance.documents', compact('transportLegs',
             'business', 'bills', 'purchases', 'payments', 'costs', 'invoices',
-            'payableBills', 'shipments', 'invoiceBalances', 'billBalances', 'canCreate', 'paymentKey', 'supplierPaymentKey', 'bankProfiles'
+            'payableBills', 'shipments', 'invoiceBalances', 'billBalances', 'canCreate', 'paymentKey', 'supplierPaymentKey', 'bankProfiles', 'cashCustodies'
         ));
     }
 
@@ -234,7 +237,7 @@ class FinanceController extends Controller
             'commercial_invoice_id' => ['required_if:direction,in', 'nullable', 'integer'],
             'supplier_bill_id' => ['required_if:direction,out', 'nullable', 'integer'],
             'cash_account_key' => ['required', Rule::in(['bank', 'cash'])],
-            'bank_profile_id' => ['nullable', 'integer', 'min:1'],
+            'bank_profile_id' => ['nullable', 'integer', 'min:1'], 'cash_custody_id' => ['nullable', 'integer', 'min:1'],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'],
             'payment_on' => ['required', 'date', 'before_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
             'external_reference' => ['required', 'string', 'min:3', 'max:150'],
@@ -252,6 +255,7 @@ class FinanceController extends Controller
         $this->check($request, 'finance.documents.create');
         $request->merge(['currency' => strtoupper(trim((string) $request->input('currency')))]);
         $data = $request->validate([
+            'idempotency_key' => ['nullable', 'uuid'],
             'shipment_id' => ['required', 'integer'], 'transport_leg_id' => ['nullable', 'integer'],
             'category' => ['required', Rule::in([
                 'freight', 'packing_material', 'ground_transport', 'handling', 'airline_fees', 'inspection', 'other',
@@ -260,7 +264,7 @@ class FinanceController extends Controller
             'currency' => ['required', 'string', app(BusinessCurrencies::class)->rule($request->attributes->get('activeBusiness'))],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'],
             'cash_account_key' => ['required', Rule::in(['bank', 'cash'])],
-            'bank_profile_id' => ['nullable', 'integer', 'min:1'],
+            'bank_profile_id' => ['nullable', 'integer', 'min:1'], 'cash_custody_id' => ['nullable', 'integer', 'min:1'],
             'paid_on' => ['required', 'date', 'before_or_equal:'.now($request->attributes->get('activeBusiness')->timezone)->toDateString()],
             'external_reference' => ['required', 'string', 'min:3', 'max:150'],
         ]);
@@ -341,6 +345,7 @@ class FinanceController extends Controller
             ->orderByDesc('id')->paginate(15, ['*'], 'source_foreignBankOpenings_page')->withQueryString();
         $operations = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_money_page')->withQueryString();
         $registerEntries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_register_page')->withQueryString();
+        $workflows = FinanceWorkflow::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_workflow_page')->withQueryString();
         $stockAdjustments = StockAdjustment::query()->where('business_id', $business->id)->where('status', 'approved')->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_stock_adjustment_page')->withQueryString();
         $hasPending = FinancePostingRequest::query()->where('business_id', $business->id)
             ->whereIn('status', ['pending', 'approved'])
@@ -351,7 +356,7 @@ class FinanceController extends Controller
             'canSubmit', 'canApprove', 'canPost', 'hasPending', 'reliefs', 'creditNotes',
             'openingBalances', 'balanceAdjustments', 'payrollRuns', 'payrollSettlements', 'payrollReversals',
             'transactionReversals', 'foreignBankOpenings', 'fxRevaluations',
-            'partialReturns', 'monetaryRevaluations', 'operations', 'registerEntries', 'stockAdjustments'
+            'partialReturns', 'monetaryRevaluations', 'operations', 'registerEntries', 'stockAdjustments', 'workflows'
         ));
     }
 
@@ -392,6 +397,16 @@ class FinanceController extends Controller
         $posting->review($record, false, $request->user()->id, $data['notes']);
 
         return redirect()->route('finance.reviews')->with('status', 'Posting rejected with an audit note.');
+    }
+
+    public function refreshCashReview(Request $request, int $review, FinancePosting $posting): RedirectResponse
+    {
+        $this->check($request, 'finance.reviews.approve');
+        $data = $request->validate(['reason' => ['required', 'string', 'min:20', 'max:3000']]);
+        $record = FinancePostingRequest::query()->where('business_id', $this->business($request)->id)->findOrFail($review);
+        $posting->refreshCashApproval($record, $request->user()->id, $data['reason']);
+
+        return back()->with('status', 'Unposted foreign cash approval returned to the review queue. Approve its current basis again before posting.');
     }
 
     public function withdraw(Request $request, int $review, FinancePosting $posting): RedirectResponse

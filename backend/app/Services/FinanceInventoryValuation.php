@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Models\Business;
 use App\Models\ExportShipment;
+use App\Models\FinanceCostLayer;
 use App\Models\FinanceInventoryRelief;
 use App\Models\FinanceJournal;
 use App\Models\FinanceSupplierBill;
 use App\Models\GoodsReceipt;
 use App\Models\PackingWasteEntry;
 use App\Models\StockBatch;
+use App\Models\StockBatchOrigin;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -85,25 +87,35 @@ class FinanceInventoryValuation
                         ->plus((string) $line['base_cost']);
                 }
             }
+            foreach (FinanceCostLayer::query()->where('business_id', $business->id)->whereIn('batch_id', $batchIds)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->get() as $layer) {
+                $reserved[$layer->batch_id]['base_cost'] = ($reserved[$layer->batch_id]['base_cost'] ?? BigDecimal::zero())->plus((string) $layer->cogs_amount)->plus((string) $layer->waste_amount);
+            }
+            abort_if(FinanceCostLayer::query()->where('business_id', $business->id)->whereIn('batch_id', $batchIds)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'not_posted'))->exists(), 422, 'Finish pending batch cost allocations before valuing stock consumption.');
             $items = [];
             $total = BigDecimal::zero();
             foreach ($batches as $batch) {
                 $receipt = GoodsReceipt::query()->where('business_id', $business->id)
                     ->where('batch_id', $batch->id)->with('purchaseOrder')->first();
-                if (! $receipt || ! $receipt->purchaseOrder) {
-                    throw ValidationException::withMessages(['inventory' => 'Batch '.$batch->batch_code.' has no verified purchase receipt.']);
-                }
-                $purchase = $receipt->purchaseOrder;
-                $bill = FinanceSupplierBill::query()->where('business_id', $business->id)
-                    ->where('purchase_order_id', $purchase->id)
-                    ->where('posting_status', 'posted')->first();
-                if (! $bill) {
-                    throw ValidationException::withMessages(['inventory' => 'Post the supplier bill for '.$purchase->reference.' before valuing stock.']);
-                }
-                $journal = FinanceJournal::query()->where('business_id', $business->id)
-                    ->where('source_type', 'supplier_bill')->where('source_id', $bill->id)->first();
-                if (! $journal) {
-                    throw ValidationException::withMessages(['inventory' => 'Missing the posted journal for supplier bill '.$bill->reference.'.']);
+                $origin = StockBatchOrigin::query()->where('business_id', $business->id)->where('batch_id', $batch->id)->first();
+                $purchase = null;
+                $bill = null;
+                $journal = null;
+                if (! $origin) {
+                    if (! $receipt || ! $receipt->purchaseOrder) {
+                        throw ValidationException::withMessages(['inventory' => 'Batch '.$batch->batch_code.' has no verified purchase receipt.']);
+                    }
+                    $purchase = $receipt->purchaseOrder;
+                    $bill = FinanceSupplierBill::query()->where('business_id', $business->id)
+                        ->where('purchase_order_id', $purchase->id)
+                        ->where('posting_status', 'posted')->first();
+                    if (! $bill) {
+                        throw ValidationException::withMessages(['inventory' => 'Post the supplier bill for '.$purchase->reference.' before valuing stock.']);
+                    }
+                    $journal = FinanceJournal::query()->where('business_id', $business->id)
+                        ->where('source_type', 'supplier_bill')->where('source_id', $bill->id)->first();
+                    if (! $journal) {
+                        throw ValidationException::withMessages(['inventory' => 'Missing the posted journal for supplier bill '.$bill->reference.'.']);
+                    }
                 }
                 $basis = app(FinanceCostBasis::class)->batchBasis($batch);
                 $received = $basis['quantity'];
@@ -116,7 +128,7 @@ class FinanceInventoryValuation
                 // Use the posted supplier bill's net payable valuation, including
                 // independently posted pre-consumption price concessions.
                 $unitBase = $basis['unit'];
-                $totalBatch = $math->money($received->multipliedBy($unitBase));
+                $totalBatch = $basis['cost'];
                 $cost = $qty->plus($previousQty)->isEqualTo($received)
                     ? $totalBatch->minus($previousCost)
                     : $math->money($qty->multipliedBy($unitBase));
@@ -127,20 +139,21 @@ class FinanceInventoryValuation
                 $total = $total->plus($cost);
                 $items[] = [
                     'batch_id' => $batch->id, 'batch_code' => $batch->batch_code,
-                    'purchase_id' => $purchase->id, 'purchase_reference' => $purchase->reference,
-                    'supplier_bill_id' => $bill->id,
-                    'supplier_bill_reference' => $bill->reference,
-                    'original_currency' => $purchase->currency,
+                    'purchase_id' => $purchase?->id, 'purchase_reference' => $purchase?->reference ?? 'Verified '.$origin?->kind.' stock origin', 'origin_id' => $origin?->id,
+                    'supplier_bill_id' => $bill?->id,
+                    'supplier_bill_reference' => $bill?->reference,
+                    'original_currency' => $purchase?->currency ?? $business->base_currency,
                     'quantity' => (string) $qty, 'unit' => $batch->product->base_unit,
-                    'rate_to_base' => (string) $journal->rate_to_base,
+                    'rate_to_base' => (string) ($journal?->rate_to_base ?? '1'),
                     'base_cost' => (string) $cost, 'basis_quantity' => (string) $basis['quantity'], 'basis_cost' => (string) $basis['cost'],
                 ];
             }
             $snapshot = [
                 'kind' => $kind, 'source_id' => $sourceId,
+                'expense_account' => $kind === 'cogs' && ExportShipment::query()->where('business_id', $business->id)->findOrFail($sourceId)->salesOrder?->order_type === 'replacement' ? 'quality_claim_loss' : ($kind === 'cogs' ? 'cogs' : 'waste_loss'),
                 'base_currency' => $business->base_currency, 'lines' => $items,
-                'method' => 'purchase_order_unit_cost_at_posted_supplier_bill_rate',
-                'caveat' => 'Excludes unassigned overheads and post-receipt cost adjustments.',
+                'method' => 'posted_produce_and_reviewed_production_cost_layers',
+                'caveat' => 'Includes posted batch cost allocations. Unassigned costs remain period expenses.',
             ];
             $encoded = json_encode($snapshot, JSON_THROW_ON_ERROR);
 
@@ -162,6 +175,8 @@ class FinanceInventoryValuation
         $actual = $this->sourceQuantities($business, $relief->kind,
             $relief->kind === 'cogs' ? $relief->shipment_id : $relief->waste_entry_id);
         $snapshot = $relief->data_snapshot;
+        $expectedExpense = $relief->kind === 'cogs' && ExportShipment::query()->where('business_id', $business->id)->findOrFail($relief->shipment_id)->salesOrder?->order_type === 'replacement' ? 'quality_claim_loss' : ($relief->kind === 'cogs' ? 'cogs' : 'waste_loss');
+        abort_unless(($snapshot['expense_account'] ?? ($relief->kind === 'cogs' ? 'cogs' : 'waste_loss')) === $expectedExpense, 422, 'The shipment cost classification changed.');
         $snapshotQuantities = [];
         $total = BigDecimal::zero();
         foreach ($snapshot['lines'] as $line) {

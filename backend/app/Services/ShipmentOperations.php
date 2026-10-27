@@ -243,6 +243,7 @@ class ShipmentOperations
             $shipment = $this->lock($shipment);
             abort_unless($shipment->status === 'ready', 422, 'Mark the shipment ready before dispatch.');
             $this->assertNoHeldProduce($shipment);
+            $credit = app(FinanceTradeControls::class)->dispatchCredit($shipment, $userId);
             app(ShipmentDispatchApproval::class)->assertDispatchAllowed($shipment, $userId);
             $readiness = app(ShipmentReadiness::class)->assertReady($shipment, Carbon::parse($actualDeparture, 'UTC')->timezone(Business::query()->findOrFail($shipment->business_id)->timezone)->toDateString());
             $allocations = $shipment->allocations()->orderBy('carton_id')
@@ -266,7 +267,7 @@ class ShipmentOperations
             ]);
             $this->event($shipment, $userId, 'dispatched', [
                 'carton_count' => $allocations->count(),
-                'actual_departure_at' => $actualDeparture, 'document_readiness' => $readiness,
+                'actual_departure_at' => $actualDeparture, 'document_readiness' => $readiness, 'credit_review' => $credit,
                 'recorded_manually' => true,
             ]);
         }, 3);

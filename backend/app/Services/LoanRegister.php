@@ -9,16 +9,19 @@ use App\Models\LoanInstalment;
 use App\Support\BusinessCurrencies;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class LoanRegister
 {
-    public const KINDS = ['loan_drawdown' => 'Record a loan drawdown', 'loan_opening' => 'Record an existing loan opening', 'loan_interest' => 'Accrue agreed interest', 'loan_repayment' => 'Record a loan repayment', 'loan_revaluation' => 'Revalue the loan at an approved rate', 'register_reversal' => 'Correct the latest posted entry'];
+    public const KINDS = ['loan_writeoff' => 'Record an agreed creditor waiver / loan balance correction', 'loan_drawdown' => 'Record a loan drawdown', 'loan_opening' => 'Record an existing loan opening', 'loan_fee_accrual' => 'Record an agreed unpaid fee', 'loan_fee_amortization' => 'Allocate a deferred borrowing fee', 'loan_capitalise_interest' => 'Capitalise agreed accrued interest', 'loan_interest' => 'Accrue agreed interest', 'loan_repayment' => 'Record a loan repayment', 'loan_revaluation' => 'Revalue the loan at an approved rate', 'register_partial_return' => 'Record a partial actual cash return', 'register_reversal' => 'Correct the latest posted entry'];
 
     public function create(Business $business, array $data, int $actor): LoanFacility
     {
         return DB::transaction(function () use ($business, $data, $actor) {
             app(OrderOperations::class)->lockForWork($business->id, 'finance');
+            $data['loan_direction'] = $data['loan_direction'] ?? 'borrow';
+            abort_unless(in_array($data['loan_direction'], ['borrow', 'lend'], true), 422, 'Choose money borrowed or money lent out.');
             abort_unless(in_array($data['currency'], app(BusinessCurrencies::class)->enabled($business), true), 422, 'Enable the loan currency first.');
             abort_unless(! LoanFacility::query()->where('business_id', $business->id)->where('reference', $data['reference'])->exists(), 422, 'This facility reference is already in use.');
             $loan = LoanFacility::create([...$data, 'business_id' => $business->id, 'created_by' => $actor, 'status' => 'active']);
@@ -30,29 +33,46 @@ class LoanRegister
 
     public function account(LoanFacility $loan): string
     {
+        if ($loan->loan_direction === 'lend') {
+            return 'loans_receivable';
+        }
+
         return $loan->lender_kind === 'owner' ? 'owner_borrowing' : 'loan_principal';
     }
 
     public function state(LoanFacility $loan, ?array $position = null): array
     {
+        if ($loan->loan_direction === 'lend') {
+            return app(LoansReceivable::class)->state($loan, $position);
+        }
         $p = $position ?? app(FinanceRegisterPostings::class)->position($loan);
         $key = $this->account($loan);
         $principal = ($p['balances'][$key]['units'] ?? BigDecimal::zero())->negated();
         $principalBase = ($p['balances'][$key]['base'] ?? BigDecimal::zero())->negated();
         $interest = ($p['balances']['loan_interest_payable']['units'] ?? BigDecimal::zero())->negated();
         $interestBase = ($p['balances']['loan_interest_payable']['base'] ?? BigDecimal::zero())->negated();
-        $unreal = ['principal' => BigDecimal::zero(), 'interest' => BigDecimal::zero()];
+        $fees = ($p['balances']['loan_fees_payable']['units'] ?? BigDecimal::zero())->negated();
+        $feesBase = ($p['balances']['loan_fees_payable']['base'] ?? BigDecimal::zero())->negated();
+        $deferred = $p['balances']['loan_deferred_cost']['base'] ?? BigDecimal::zero();
+        $unreal = ['principal' => BigDecimal::zero(), 'interest' => BigDecimal::zero(), 'fees' => BigDecimal::zero()];
         $drawn = BigDecimal::zero();
         foreach ($p['entries'] as $entry) {
             foreach ($unreal as $component => $value) {
                 $unreal[$component] = $value->plus((string) ($entry->data_snapshot['effects'][$component.'_unreal'] ?? '0'));
             }
-            if ($entry->posting_status === 'posted' && in_array($entry->kind, ['loan_drawdown', 'loan_opening'], true)) {
+            if ($entry->posting_status === 'posted' && in_array($entry->kind, ['loan_drawdown', 'loan_opening', 'loan_capitalise_interest'], true)) {
                 $drawn = $drawn->plus((string) $entry->amount);
             }
         }
 
-        return [...$p, 'principal' => $principal, 'principal_base' => $principalBase, 'interest' => $interest, 'interest_base' => $interestBase, 'unreal' => $unreal, 'drawn' => $drawn];
+        foreach ($p['entries']->where('kind', 'register_partial_return')->where('posting_status', 'posted') as $returned) {
+            $original = $p['entries']->firstWhere('id', $returned->original_entry_id);
+            if ($original?->posting_status === 'posted' && $original->kind === 'loan_drawdown') {
+                $drawn = $drawn->minus((string) $returned->cash_amount);
+            }
+        }
+
+        return [...$p, 'fees' => $fees, 'fees_base' => $feesBase, 'deferred_fees_base' => $deferred, 'principal' => $principal, 'principal_base' => $principalBase, 'interest' => $interest, 'interest_base' => $interestBase, 'unreal' => $unreal, 'drawn' => $drawn];
     }
 
     public function instalmentBalances(LoanInstalment $instalment, bool $includePending = true): array
@@ -61,6 +81,15 @@ class LoanRegister
         foreach (FinanceRegisterEntry::query()->where('business_id', $instalment->business_id)->where('instalment_id', $instalment->id)->whereIn('posting_status', $includePending ? ['not_posted', 'posted'] : ['posted'])->where('kind', 'loan_repayment')->get() as $payment) {
             foreach ($balances as $key => $value) {
                 $balances[$key] = $value->minus((string) ($payment->data_snapshot['details'][$key] ?? '0'));
+            }
+        }
+
+        foreach (FinanceRegisterEntry::query()->where('business_id', $instalment->business_id)->where('instalment_id', $instalment->id)->where('kind', 'register_partial_return')->where('posting_status', 'posted')->get() as $returned) {
+            $original = FinanceRegisterEntry::query()->where('business_id', $instalment->business_id)->findOrFail($returned->original_entry_id);
+            if ($original->posting_status === 'posted') {
+                foreach ($balances as $key => $value) {
+                    $balances[$key] = $value->plus((string) ($returned->data_snapshot['details']['component_returns'][$key] ?? '0'));
+                }
             }
         }
 
@@ -88,7 +117,7 @@ class LoanRegister
                 $planned = $planned->plus($this->instalmentBalances($instalment, false)['principal']);
             }
             $state = $this->state($loan);
-            $capacity = $loan->revolving ? BigDecimal::of((string) $loan->limit_amount) : BigDecimal::of((string) $loan->limit_amount)->minus($state['drawn'])->plus($state['principal']);
+            $capacity = $loan->revolving ? BigDecimal::of((string) $loan->limit_amount) : BigDecimal::max('0', BigDecimal::of((string) $loan->limit_amount)->minus($state['drawn']))->plus($state['principal']);
             abort_unless(! $planned->isGreaterThan($capacity), 422, 'Scheduled unpaid principal exceeds outstanding and undrawn facility capacity.');
 
             return LoanInstalment::create([...$data, 'business_id' => $business->id, 'loan_id' => $loan->id, 'created_by' => $actor]);
@@ -114,6 +143,15 @@ class LoanRegister
 
     public function financial(Business $business, LoanFacility $loan, string $kind, array $data, array $position): array
     {
+        if ($kind === 'loan_writeoff') {
+            return app(LoansReceivable::class)->writeOff($business, $loan, $data, $position);
+        }
+        if ($loan->loan_direction === 'lend') {
+            return app(LoansReceivable::class)->financial($business, $loan, $kind, $data, $position);
+        }
+        $agreement = app(LoanAgreementAmendments::class)->terms($loan, $data['event_on']);
+        $loan = clone $loan;
+        $loan->forceFill($agreement);
         abort_unless(isset(self::KINDS[$kind]) && $loan->status === 'active', 422, 'Choose a transaction for an active borrowing facility.');
         abort_unless($data['event_on'] >= $loan->starts_on->toDateString(), 422, 'The event cannot precede the facility agreement.');
         $state = $this->state($loan, $position);
@@ -121,8 +159,9 @@ class LoanRegister
         $math = app(FinanceMath::class);
         $ledger = app(FinanceLedger::class);
         $rateId = isset($data['exchange_rate_id']) ? (int) $data['exchange_rate_id'] : null;
-        $rate = app(FinanceRates::class)->rate($business, $loan->currency, $rateId, $data['event_on']);
-        $prepared = ['currency' => $loan->currency, 'exchange_rate_id' => $rateId, 'rate_to_base' => $rate, 'amount' => '0.00', 'lines' => [], 'effects' => []];
+        $eventCurrency = $kind === 'loan_fee_amortization' ? $business->base_currency : $loan->currency;
+        $rate = app(FinanceRates::class)->rate($business, $eventCurrency, $rateId, $data['event_on']);
+        $prepared = ['agreement' => $agreement, 'currency' => $eventCurrency, 'exchange_rate_id' => $rateId, 'rate_to_base' => $rate, 'amount' => '0.00', 'lines' => [], 'effects' => []];
         $lines = [];
         if (in_array($kind, ['loan_drawdown', 'loan_opening'], true)) {
             $amount = $math->money($data['amount'] ?? '0');
@@ -140,12 +179,53 @@ class LoanRegister
                 $lines[] = $ledger->line($cash->system_key, (string) $amount, '0', (string) $base, '0', 'Actual loan drawdown received');
             }
             $lines[] = $ledger->line($key, '0', (string) $amount, '0', (string) $base, 'Borrowing principal, not sales income');
+        } elseif ($kind === 'loan_fee_accrual') {
+            $amount = $math->money($data['amount'] ?? '0');
+            $policy = $data['fee_policy'] ?? 'expense';
+            abort_unless($amount->isGreaterThan(0) && in_array($policy, ['expense', 'straight_line', 'reviewed_schedule'], true), 422, 'Choose a positive agreed fee and its reviewed book treatment.');
+            $base = $math->base($amount, $rate);
+            $account = $policy === 'expense' ? 'loan_fee_expense' : 'loan_deferred_cost';
+            $lines = [$ledger->line($account, (string) $amount, '0', (string) $base, '0', 'Agreed borrowing fee under reviewed book policy'), $ledger->line('loan_fees_payable', '0', (string) $amount, '0', (string) $base, 'Unpaid lender fee')];
+            $prepared['amount'] = (string) $amount;
+            $prepared['details'] = ['due_on' => $data['due_on'] ?? null, 'fee_policy' => $policy, 'original_base' => (string) $base];
+            if ($policy !== 'expense') {
+                abort_unless(! empty($data['amortization_start_on']) && substr($data['amortization_start_on'], 8, 2) === '01' && ! empty($data['amortization_months']) && substr($data['amortization_start_on'], 0, 7) >= substr($data['event_on'], 0, 7), 422, 'A deferred fee needs its first allocation month and full agreed allocation period.');
+                $prepared['details']['amortization_start_on'] = $data['amortization_start_on'];
+                $prepared['details']['amortization_months'] = (int) $data['amortization_months'];
+            }
+        } elseif ($kind === 'loan_fee_amortization') {
+            $fee = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->where('kind', 'loan_fee_accrual')->where('posting_status', 'posted')->findOrFail($data['original_entry_id'] ?? 0);
+            $policy = $fee->data_snapshot['details'];
+            abort_unless(in_array($policy['fee_policy'] ?? null, ['straight_line', 'reviewed_schedule'], true), 422, 'Choose a posted deferred fee.');
+            $used = BigDecimal::zero();
+            $months = 0;
+            foreach ($position['entries']->where('kind', 'loan_fee_amortization')->where('posting_status', 'posted')->where('original_entry_id', $fee->id) as $part) {
+                $used = $used->plus((string) $part->amount);
+                $months++;
+            }$remaining = BigDecimal::of($policy['original_base'])->minus($used);
+            $period = Carbon::parse($policy['amortization_start_on'])->addMonthsNoOverflow($months);
+            abort_unless($months < $policy['amortization_months'] && $data['event_on'] >= $period->copy()->endOfMonth()->toDateString() && ($data['depreciation_month'] ?? $period->format('Y-m')) === $period->format('Y-m'), 422, 'Choose the next completed borrowing-fee allocation month.');
+            $amount = $policy['fee_policy'] === 'straight_line' ? $math->money($remaining->dividedBy($policy['amortization_months'] - $months, 14, RoundingMode::HalfUp)) : $math->money($data['amount'] ?? '0');
+            abort_unless($amount->isGreaterThan(0) && ! $amount->isGreaterThan($remaining) && ($months !== $policy['amortization_months'] - 1 || $amount->isEqualTo($remaining)), 422, 'The reviewed schedule must allocate the remaining fee exactly, without exceeding it.');
+            $lines = [$ledger->line('loan_fee_expense', (string) $amount, '0', (string) $amount, '0', 'Deferred borrowing cost for '.$period->format('Y-m')), $ledger->line('loan_deferred_cost', '0', (string) $amount, '0', (string) $amount, 'Allocate original reviewed deferred fee')];
+            $prepared['amount'] = (string) $amount;
+            $prepared['original_entry_id'] = $fee->id;
+            $prepared['details'] = ['fee_policy' => $policy['fee_policy'], 'month' => $period->format('Y-m'), 'source_hash' => $fee->snapshot_hash];
+        } elseif ($kind === 'loan_capitalise_interest') {
+            $amount = $math->money($data['amount'] ?? '0');
+            abort_unless($amount->isGreaterThan(0) && ! $amount->isGreaterThan($state['interest']) && ! $state['principal']->plus($amount)->isGreaterThan((string) $loan->limit_amount), 422, 'Capitalisation must remain within accrued interest and the amended principal limit.');
+            $base = $this->portion($state['interest_base'], $amount, $state['interest']);
+            $u = $this->portion($state['unreal']['interest'], $amount, $state['interest']);
+            $lines = [$ledger->line('loan_interest_payable', (string) $amount, '0', (string) $base, '0', 'Capitalise accrued interest under the lender agreement'), $ledger->line($key, '0', (string) $amount, '0', (string) $base, 'Transfer accrued debt to principal without another cash drawdown or expense')];
+            $prepared['amount'] = (string) $amount;
+            $prepared['effects'] = ['interest_unreal' => (string) $u->negated(), 'principal_unreal' => (string) $u];
         } elseif ($kind === 'loan_interest') {
             abort_unless($state['drawn']->isGreaterThan(0), 422, 'Post drawn or opening principal before recognising interest.');
             $amount = $math->money($data['amount'] ?? '0');
             abort_unless($amount->isGreaterThan(0), 422, 'Enter agreed interest from the lender evidence.');
             $base = $math->base($amount, $rate);
             $prepared['amount'] = (string) $amount;
+            $prepared['details'] = ['due_on' => $data['due_on'] ?? null];
             $lines = [$ledger->line('loan_interest_expense', (string) $amount, '0', (string) $base, '0', 'Interest expense from agreed lender terms'), $ledger->line('loan_interest_payable', '0', (string) $amount, '0', (string) $base, 'Accrued unpaid interest')];
         } elseif ($kind === 'loan_repayment') {
             $principal = $math->money($data['principal'] ?? '0');
@@ -181,8 +261,15 @@ class LoanRegister
                 }
             }
             if ($fees->isGreaterThan(0)) {
-                $portion = $math->base($fees, $rate);
-                $lines[] = $ledger->line('loan_fee_expense', (string) $fees, '0', (string) $portion, '0', 'Explicit lender fees expensed as incurred');
+                $feesAccrued = ($data['fees_treatment'] ?? 'paid') === 'accrued';
+                abort_unless(! $feesAccrued || ! $fees->isGreaterThan($state['fees']), 422, 'Fee settlement exceeds the accrued unpaid fee.');
+                $portion = $feesAccrued ? $this->portion($state['fees_base'], $fees, $state['fees']) : $math->base($fees, $rate);
+                if ($feesAccrued) {
+                    $u = $this->portion($state['unreal']['fees'], $fees, $state['fees']);
+                    $reclass = $reclass->plus($u);
+                    $effects['fees_unreal'] = (string) $u->negated();
+                }
+                $lines[] = $ledger->line($feesAccrued ? 'loan_fees_payable' : 'loan_fee_expense', (string) $fees, '0', (string) $portion, '0', 'Explicit lender fees expensed as incurred');
                 $debitBase = $debitBase->plus($portion);
             }
             $lines[] = $ledger->line($cash->system_key, '0', (string) $total, '0', (string) $cashBase, 'Actual principal, interest and fee cash paid');
@@ -199,7 +286,7 @@ class LoanRegister
                 $lines[] = $ledger->line('unrealized_fx_loss', '0', '0', '0', (string) $reclass->negated(), 'Release settled unrealised borrowing loss');
                 $lines[] = $ledger->line('fx_loss', '0', '0', (string) $reclass->negated(), '0', 'Realised previously accrued loss');
             }
-            $prepared = [...$prepared, 'amount' => (string) $total, 'cash_account_id' => $cash->id, 'cash_direction' => 'out', 'cash_amount' => (string) $total, 'effects' => $effects, 'details' => ['principal' => (string) $principal, 'interest' => (string) $interest, 'fees' => (string) $fees, 'interest_treatment' => $accrued ? 'accrued' : 'paid_as_incurred', 'fee_policy' => 'expense_as_incurred']];
+            $prepared = [...$prepared, 'amount' => (string) $total, 'cash_account_id' => $cash->id, 'cash_direction' => 'out', 'cash_amount' => (string) $total, 'effects' => $effects, 'details' => ['principal' => (string) $principal, 'interest' => (string) $interest, 'fees' => (string) $fees, 'interest_treatment' => $accrued ? 'accrued' : 'paid_as_incurred', 'fee_policy' => ($data['fees_treatment'] ?? 'paid') === 'accrued' ? 'settle_previously_accrued_fee' : 'expense_as_incurred']];
             if (! empty($data['instalment_id'])) {
                 $instalment = LoanInstalment::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->findOrFail($data['instalment_id']);
                 $remaining = $this->instalmentBalances($instalment);
@@ -213,7 +300,7 @@ class LoanRegister
             abort_unless($loan->currency !== $business->base_currency, 422, 'Base-currency loans do not need FX revaluation.');
             $netChange = BigDecimal::zero();
             $effects = [];
-            foreach (['principal' => $key, 'interest' => 'loan_interest_payable'] as $component => $account) {
+            foreach (['principal' => $key, 'interest' => 'loan_interest_payable', 'fees' => 'loan_fees_payable'] as $component => $account) {
                 $units = $state[$component];
                 if (! $units->isGreaterThan(0)) {
                     continue;

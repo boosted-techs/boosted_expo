@@ -17,6 +17,7 @@ class FinanceCreditNotes
 {
     public function ensureNoPayments(CommercialInvoice $invoice): void
     {
+        app(FinanceTradeCredits::class)->assertNoCredit($invoice->business_id, 'commercial_invoice_id', $invoice->id);
         if (FinanceOperation::query()->where('business_id', $invoice->business_id)->where('commercial_invoice_id', $invoice->id)->whereIn('posting_status', ['not_posted', 'posted'])->exists()) {
             throw ValidationException::withMessages(['invoice' => 'A deposit is allocated to this invoice. Resolve the allocation before a full credit.']);
         }
@@ -116,6 +117,6 @@ class FinanceCreditNotes
         $invoice->accountingHandoff()->update(['posting_status' => 'credited']);
         $note->refresh()->load('invoice');
         $html = view('finance.credit-print', ['note' => $note])->render();
-        $note->update(['html_snapshot' => $html, 'sha256' => hash('sha256',$html)]);
+        $note->update(['html_snapshot' => $html, 'sha256' => hash('sha256', $html)]);
     }
 }

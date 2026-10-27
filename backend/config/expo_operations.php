@@ -10,6 +10,7 @@ return [
     'backup_schedule' => env('EXPO_BACKUP_SCHEDULE_ENABLED', false),
     // Configure a scheduler and queue worker on a single production cluster.
     'monitor_schedule' => env('EXPO_MONITOR_SCHEDULE_ENABLED', false),
+    'trade_reminder_schedule' => env('EXPO_TRADE_REMINDERS_ENABLED', false),
     'billing_schedule' => env('EXPO_BILLING_SCHEDULE_ENABLED', false),
     'alert_webhook' => env('EXPO_OPS_ALERT_WEBHOOK_URL'),
     'trusted_proxies' => array_values(array_filter(array_map('trim',

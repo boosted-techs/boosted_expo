@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Business;
 use App\Models\Customer;
+use App\Models\PartnerFinanceTerm;
 use App\Models\Product;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
@@ -86,12 +87,12 @@ class SalesWorkflow
                 'notes' => $latest?->notes, 'created_by' => $userId,
             ]);
             $prior = $latest?->lines->keyBy('product_id');
-            foreach ($request->items as $item) {
+            foreach ($request->items->filter(fn ($item) => BigDecimal::of((string) $item->quantity)->isGreaterThan(0)) as $item) {
                 $saved = $prior?->get($item->product_id);
                 SalesQuotationLine::create([
                     'business_id' => $businessId, 'sales_quotation_id' => $quote->id,
                     'product_id' => $item->product_id,
-                    'quantity' => $saved?->quantity ?? $item->quantity,
+                    'quantity' => $operational ? $item->quantity : ($saved?->quantity ?? $item->quantity),
                     'unit_price' => $saved?->unit_price ?? '0',
                     'line_total' => $saved?->line_total ?? '0',
                     'product_name' => $saved?->product_name ?? $item->product->name,
@@ -111,11 +112,12 @@ class SalesWorkflow
                 ->lockForUpdate()->findOrFail($quote->id);
             abort_unless($quote->status === 'draft', 422, 'Only draft quotations can be edited.');
             $request = $quote->salesRequest()->with('items')->firstOrFail();
+            $business = Business::findOrFail($quote->business_id);
             $override = strtoupper($data['currency']) !== $request->customer->currency;
             if ($override && mb_strlen(trim($data['currency_override_reason'] ?? '')) < 10) {
                 throw ValidationException::withMessages(['currency_override_reason' => 'Explain the agreed change from the customer default currency.']);
             }
-            $expected = $request->items->keyBy('product_id');
+            $expected = $request->items->filter(fn ($item) => BigDecimal::of((string) $item->quantity)->isGreaterThan(0))->keyBy('product_id');
             $seen = [];
             foreach ($data['items'] as $line) {
                 $id = (int) $line['product_id'];
@@ -142,11 +144,12 @@ class SalesWorkflow
                         'line_total' => $line['line_total'],
                     ]);
             }
+            $defaultTerms = app(FinanceTradeControls::class)->terms($business, 'customer', $request->customer_id, strtoupper($data['currency']), now($business->timezone)->toDateString());
             $quote->update([
                 'currency' => strtoupper($data['currency']),
                 'currency_override_reason' => $override ? $data['currency_override_reason'] : null,
                 'pricing_exchange_rate_id' => isset($data['pricing_exchange_rate_id']) ? (int) $data['pricing_exchange_rate_id'] : null,
-                'payment_terms_days' => $data['payment_terms_days'] ?? null,
+                'partner_finance_term_id' => $defaultTerms?->id, 'payment_terms_days' => $data['payment_terms_days'] ?? $defaultTerms?->payment_days,
                 'incoterm' => $data['incoterm'] ?? null,
                 'valid_until' => $data['valid_until'] ?? null,
                 'discount_percent' => $data['discount_percent'] ?? 0,
@@ -184,7 +187,7 @@ class SalesWorkflow
             }
             $business = Business::query()->findOrFail($quote->business_id);
             $rate = app(FinanceRates::class)->rate($business, $quote->currency, $quote->pricing_exchange_rate_id, now($business->timezone)->toDateString());
-            $pricing = ['currency_override_reason' => $quote->currency_override_reason, 'currency' => $quote->currency, 'base_currency' => $business->base_currency, 'exchange_rate_id' => $quote->pricing_exchange_rate_id, 'rate_to_base' => $rate, 'pricing_on' => now($business->timezone)->toDateString(), 'base_grand_total' => (string) app(FinanceMath::class)->base((string) $quote->grand_total, $rate), 'payment_terms_days' => $quote->payment_terms_days];
+            $pricing = ['partner_finance_terms' => $quote->partner_finance_term_id ? PartnerFinanceTerm::query()->where('business_id', $quote->business_id)->findOrFail($quote->partner_finance_term_id)->only(['id', 'currency', 'payment_days', 'effective_on', 'agreement']) : null, 'currency_override_reason' => $quote->currency_override_reason, 'currency' => $quote->currency, 'base_currency' => $business->base_currency, 'exchange_rate_id' => $quote->pricing_exchange_rate_id, 'rate_to_base' => $rate, 'pricing_on' => now($business->timezone)->toDateString(), 'base_grand_total' => (string) app(FinanceMath::class)->base((string) $quote->grand_total, $rate), 'payment_terms_days' => $quote->payment_terms_days];
             $quote->update(['pricing_snapshot' => $pricing]);
             $request->quotations()->where('status', 'issued')->update(['status' => 'superseded']);
             $quote->update(['status' => 'issued', 'issued_by' => $userId, 'issued_at' => now()]);
@@ -209,7 +212,7 @@ class SalesWorkflow
             if ($existing) {
                 abort_unless($existing->pricing_status === 'unpriced' && $existing->status === 'confirmed' && $quote->status === 'issued' && $request->status === 'quoted', 422, 'This order already has agreed pricing or is closed.');
                 abort_unless(! $quote->valid_until || $quote->valid_until->toDateString() >= now(Business::query()->findOrFail($quote->business_id)->timezone)->toDateString(), 422, 'The quotation has expired.');
-                $expected = $existing->lines->keyBy('product_id');
+                $expected = $existing->lines->filter(fn ($line) => BigDecimal::of((string) $line->quantity)->isGreaterThan(0))->keyBy('product_id');
                 abort_unless($quote->lines->count() === $expected->count(), 422, 'Pricing must cover the existing operational order.');
                 foreach ($quote->lines as $line) {
                     abort_unless(isset($expected[$line->product_id]) && BigDecimal::of((string) $line->quantity)->isEqualTo(BigDecimal::of((string) $expected[$line->product_id]->quantity)), 422, 'Pricing must retain approved operational quantities; use a controlled quantity amendment separately.');
@@ -229,7 +232,7 @@ class SalesWorkflow
             $order = SalesOrder::create([
                 'business_id' => $quote->business_id, 'reference' => 'SO-'.Str::upper((string) Str::ulid()),
                 'sales_request_id' => $request->id, 'sales_quotation_id' => $quote->id,
-                'customer_id' => $request->customer_id, 'status' => 'confirmed', 'required_on' => $request->required_on, 'destination' => $request->destination,
+                'customer_id' => $request->customer_id, 'status' => 'confirmed', 'pricing_status' => 'accepted', 'required_on' => $request->required_on, 'destination' => $request->destination,
                 'currency' => $quote->currency, 'incoterm' => $quote->incoterm,
                 'discount_percent' => $quote->discount_percent, 'tax_percent' => $quote->tax_percent,
                 'subtotal' => $quote->subtotal, 'discount_amount' => $quote->discount_amount,

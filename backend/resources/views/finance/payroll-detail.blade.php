@@ -2,19 +2,21 @@
 @section('title','Payroll Details')
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">RESTRICTED PAYROLL RECORD</span><h1>{{ $run->reference }}</h1><p>{{ $run->period_from->format('d M Y') }} to {{ $run->period_to->format('d M Y') }} · Revision {{ $run->revision }} · {{ $run->currency }}</p></div>
-<span class="tiny-pill">{{ $run->posting_status==='posted'?'POSTED':($run->posting_status==='reversed'?'REVERSED':'UNPOSTED') }}</span></div>
+<span class="tiny-pill">{{ $run->posting_status==='posted'?'POSTED':($run->posting_status==='reversed'?'REVERSED':($run->posting_status==='withdrawn'?'WITHDRAWN':'UNPOSTED')) }}</span></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.payroll.index') }}">All payroll runs</a>
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.reviews.view'))
 <a class="secondary-button" href="{{ route('finance.reviews') }}">Journal approval queue</a>@endif</div>
-<div class="notice"><span>●</span><div><strong>Accrued wages, not disbursed</strong><p>Posting payroll creates an expense and liabilities for net salary and manual deductions. This system has not verified statutory calculations or paid staff.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Accrued wages, not disbursed</strong><p>Posting payroll creates an expense and liabilities for net salary and the recorded deduction/contribution components. The source snapshot states whether a reviewed statutory policy or manual preparation was used. No bank transfer is executed.</p></div></div>
 <section class="section-card"><h2>Employees and amounts</h2>
-<div class="table-wrap"><table class="data-table"><thead><tr><th>Team member</th><th>Gross</th><th>Manual deductions</th><th>Net payable</th></tr></thead><tbody>
+<div class="table-wrap"><table class="data-table"><thead><tr><th>Team member</th><th>Gross</th><th>Employee deductions</th><th>Net payable</th></tr></thead><tbody>
 @foreach($run->lines as $line)
 <tr><td>@if($run->posting_status==='posted')<a href="{{ route('finance.payroll.payslip',[$run->id,$line->id]) }}" target="_blank" rel="noopener">Payslip</a> · @endif<strong>{{ ($line->name_snapshot??$line->user?->name) }}</strong></td><td>{{ $run->currency }} {{ $line->gross }}</td>
 <td>{{ $line->deductions }}</td><td>{{ $line->net }}</td></tr>@endforeach
 </tbody><tfoot><tr><td><strong>Total</strong></td><td><strong>{{ $run->gross_total }}</strong></td>
 <td><strong>{{ $run->deduction_total }}</strong></td><td><strong>{{ $run->net_total }}</strong></td></tr></tfoot></table></div>
-<h3>Preparation basis</h3><p>{{ $run->notes }}</p><p class="form-hint">Gross earnings come from the recorded preparation basis; deductions are manually verified. Each approved settlement requires external evidence and is a ledger record, not a banking instruction. Payslips preserve the approved amounts. Statutory computation and automatic bank disbursements require separately verified arrangements.</p>
+<h3>Preparation basis</h3><p>{{ $run->notes }}</p><p class="form-hint">Gross earnings come from the recorded preparation basis; the frozen source identifies PAYE, NSSF and any manual deductions. Each approved settlement requires external evidence and is a ledger record, not a banking instruction. Payslips preserve the approved amounts. Employer contributions are a separate business cost. This screen records actual settlement evidence.</p>
+@if($run->posting_status==='not_posted' && app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.payroll.prepare'))<details><summary>Withdraw an unposted payroll for correction</summary><form method="POST" action="{{ route('finance.payroll.withdraw',$run->id) }}" class="form-stack">@csrf<label class="field"><span>Reason and corrected evidence</span><textarea name="reason" minlength="20" maxlength="3000" required></textarea></label><p class="form-hint">A pending run can be withdrawn by its preparer/requester. An approved run needs its approver to withdraw it. Original sources and reviews remain in history.</p><button class="text-button">Withdraw unposted payroll</button></form></details>@endif
+@if(($run->data_snapshot['method']??'')==='approved_inputs_and_statutory_policy')<h3>Statutory and manual components</h3>@foreach($run->lines as $payLine)<details class="finance-details"><summary>{{ $payLine->name_snapshot }} · {{ $payLine->source_snapshot['statutory']['policy_name'] }}</summary><p>PAYE {{ $payLine->source_snapshot['statutory']['paye'] }} · employee NSSF {{ $payLine->source_snapshot['statutory']['nssf_employee'] }} · employer NSSF {{ $payLine->source_snapshot['statutory']['nssf_employer'] }} · other deductions {{ $payLine->source_snapshot['manual_deductions'] }}</p><p>Tax class {{ $payLine->source_snapshot['statutory']['tax_class'] }} · remittance due {{ $payLine->source_snapshot['statutory']['remit_by'] }}</p><p>{{ $payLine->source_snapshot['statutory']['source_note'] }}</p></details>@endforeach @endif
 </section>
 @if($canSettle)
 <section class="section-card">
@@ -24,8 +26,8 @@
 @foreach($run->lines as $line)
 <tr><td>{{ ($line->name_snapshot??$line->user?->name) }}</td><td>{{ $run->currency }} {{ $line->net }}</td><td>{{ $run->currency }} {{ $remaining[$line->id] }}</td></tr>
 @endforeach
-<tr><td><strong>Manual deductions / withholding</strong></td><td>{{ $run->currency }} {{ $run->deduction_total }}</td><td>{{ $run->currency }} {{ $withholdingRemaining }}</td></tr>
-</tbody></table></div>
+<tr><td><strong>Manual deductions / withholding</strong></td><td>{{ $run->currency }} {{ $run->data_snapshot['statutory_totals']['manual']??$run->deduction_total }}</td><td>{{ $run->currency }} {{ $withholdingRemaining }}</td></tr>
+<tr><td>PAYE</td><td>{{ $run->currency }} {{ $run->data_snapshot['statutory_totals']['paye']??'0.00' }}</td><td>{{ $run->currency }} {{ $payeRemaining }}</td></tr><tr><td>NSSF · employee plus employer</td><td>{{ $run->currency }} {{ (string)\Brick\Math\BigDecimal::of((string)($run->data_snapshot['statutory_totals']['nssf_employee']??'0'))->plus((string)($run->data_snapshot['statutory_totals']['nssf_employer']??'0'))->toScale(2) }}</td><td>{{ $run->currency }} {{ $nssfRemaining }}</td></tr></tbody></table></div>
 @if($run->posting_status==='posted' && (!$reversal || $reversal->posting_status==='withdrawn'))
 <div class="split-panels">
 <div><h3>Record evidence of a staff salary payment</h3>
@@ -48,6 +50,7 @@
 <label class="field"><span>Payment date</span><input type="date" name="paid_on"
 min="{{ $run->period_to->format('Y-m-d') }}" max="{{ now()->format('Y-m-d') }}"
 value="{{ now()->format('Y-m-d') }}" required></label></div>
+@if($cashCustodies->isNotEmpty())<label class="field"><span>Named cash float (cash payments only)</span><select name="cash_custody_id"><option value="">Use bank / original cash choice</option>@foreach($cashCustodies as $custody)<option value="{{ $custody->id }}">{{ $custody->name }} · {{ $custody->currency }}</option>@endforeach</select></label>@endif
 @if($banks->isNotEmpty())
 <label class="field"><span>Named bank account (choose when using bank/electronic)</span>
 <select name="bank_profile_id"><option value="">Cash only — no bank selected</option>
@@ -61,9 +64,9 @@ required minlength="20" maxlength="2000" rows="3"
 placeholder="Voucher, banking proof, employee confirmation and transaction date"></textarea></label>
 <button class="primary-button">Record salary settlement for finance review</button>
 </form></div>
-<div><h3>Record remittance of manually entered deductions</h3>
+<div><h3>Record an actual statutory or other deduction remittance</h3>
 <form method="POST" action="{{ route('finance.payroll.settlements.store',$run->id) }}" class="form-stack">@csrf
-<input type="hidden" name="kind" value="withholding">
+<label class="field"><span>Liability being remitted</span><select name="kind"><option value="withholding">Other manually recorded deductions</option><option value="paye">PAYE · available {{ $payeRemaining }}</option><option value="nssf">NSSF employee + employer · available {{ $nssfRemaining }}</option></select></label>
 <input type="hidden" name="idempotency_key" value="{{ (string)\Illuminate\Support\Str::uuid() }}">
 <label class="field"><span>Receiving authority or organisation</span><input name="recipient_name"
 maxlength="150" minlength="3" required placeholder="Enter actual deduction recipient"></label>
@@ -75,6 +78,7 @@ maxlength="150" minlength="3" required placeholder="Enter actual deduction recip
 <label class="field"><span>Payment date</span><input type="date" name="paid_on"
 min="{{ $run->period_to->format('Y-m-d') }}" max="{{ now()->format('Y-m-d') }}"
 value="{{ now()->format('Y-m-d') }}" required></label></div>
+@if($cashCustodies->isNotEmpty())<label class="field"><span>Named cash float (cash payments only)</span><select name="cash_custody_id"><option value="">Use bank / original cash choice</option>@foreach($cashCustodies as $custody)<option value="{{ $custody->id }}">{{ $custody->name }} · {{ $custody->currency }}</option>@endforeach</select></label>@endif
 @if($banks->isNotEmpty())
 <label class="field"><span>Named bank account (when using bank/electronic)</span>
 <select name="bank_profile_id"><option value="">Cash only — no bank selected</option>
@@ -86,14 +90,14 @@ value="{{ now()->format('Y-m-d') }}" required></label></div>
 <label class="field"><span>Supporting remittance evidence</span>
 <textarea name="evidence_note" required minlength="20" maxlength="2000" rows="3"
 placeholder="Receipt number, payee, remittance period and authorisation"></textarea></label>
-<p class="form-hint">No PAYE/NSSF rules or contribution rates are calculated here. Only remittances to an identified recipient for existing manual deductions may be recorded.</p>
+<p class="form-hint">Select the exact accrued component. PAYE, NSSF and other deductions have separate limits; one cannot consume another’s balance.</p>
 <button class="secondary-button">Record deduction remittance for finance review</button>
 </form></div></div>
 @endif
 <h3>Recorded salary payments & deduction remittances</h3>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Purpose</th><th>Payee / employee</th><th>Amount</th><th>Date</th><th>Evidence reference</th><th>Review status</th></tr></thead><tbody>
 @forelse($settlements as $s)
-<tr><td>{{ $s->reference }}</td><td>{{ $s->kind==='salary'?'Employee salary':'Manual withholding' }}</td>
+<tr><td>{{ $s->reference }}</td><td>{{ $s->kind==='salary'?'Employee salary':strtoupper($s->kind) }}</td>
 <td>{{ $s->kind==='salary' ? ($run->lines->firstWhere('id',$s->payroll_line_id)?->name_snapshot??$run->lines->firstWhere('id',$s->payroll_line_id)?->user?->name) : $s->recipient_name }}</td>
 <td>{{ $s->currency }} {{ $s->amount }}</td><td>{{ $s->paid_on->format('d M Y') }}</td>
 <td>{{ $s->external_reference }}</td><td>{{ ucfirst($s->status) }}</td></tr>

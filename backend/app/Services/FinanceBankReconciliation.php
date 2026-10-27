@@ -14,6 +14,7 @@ use App\Models\FinancePayrollSettlement;
 use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinanceWorkflowLeg;
 use Brick\Math\BigDecimal;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -88,11 +89,6 @@ class FinanceBankReconciliation
                     'bank_reference' => $reference ?: null, 'description' => $description,
                 ];
             }
-            if ($rows === []) {
-                throw ValidationException::withMessages([
-                    'file' => 'The statement must include at least one transaction.',
-                ]);
-            }
 
             return [$rows, $credit, $debit];
         } finally {
@@ -120,7 +116,8 @@ class FinanceBankReconciliation
             $opening, $closing, $credit, $debit, $rows) {
             Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
             if (FinanceBankStatement::query()->where('business_id', $business->id)
-                ->where('account_id', $account->id)->where('file_sha256', $sha)->exists()) {
+                ->where('account_id', $account->id)->where('file_sha256', $sha)
+                ->when($rows === [], fn ($q) => $q->whereDate('period_from', $data['period_from'])->whereDate('period_to', $data['period_to'])->where('opening_balance', (string) $opening)->where('closing_balance', (string) $closing))->exists()) {
                 throw ValidationException::withMessages(['file' => 'This bank statement file was already imported.']);
             }
             $statement = FinanceBankStatement::create([
@@ -143,10 +140,11 @@ class FinanceBankReconciliation
         }, 3);
     }
 
-    private function candidate(FinanceBankStatementLine $line, string $type, int $id): FinancePayment|FinanceShipmentCost|FinancePayrollSettlement|FinanceTransactionReversal|FinancePartialBankReturn|FinanceOperation|FinanceRegisterEntry
+    private function candidate(FinanceBankStatementLine $line, string $type, int $id): FinancePayment|FinanceShipmentCost|FinancePayrollSettlement|FinanceTransactionReversal|FinancePartialBankReturn|FinanceOperation|FinanceRegisterEntry|FinanceWorkflowLeg
     {
         $statement = $line->statement;
         $class = match ($type) {
+            'workflow_leg' => FinanceWorkflowLeg::class,
             'register_entry' => FinanceRegisterEntry::class,
             'money_operation','money_transfer_in' => FinanceOperation::class,
             'payment' => FinancePayment::class,'shipment_cost' => FinanceShipmentCost::class,
@@ -156,7 +154,7 @@ class FinanceBankReconciliation
             default => abort(422, 'Unsupported reconciliation type.'),
         };
         $record = $class::query()->where('business_id', $line->business_id)
-            ->when(in_array($type, ['register_entry', 'money_operation', 'money_transfer_in', 'transaction_reversal', 'partial_bank_return'], true),
+            ->when(in_array($type, ['workflow_leg', 'register_entry', 'money_operation', 'money_transfer_in', 'transaction_reversal', 'partial_bank_return'], true),
                 fn ($query) => $query->whereIn('posting_status', ['posted', 'reversed']),
                 fn ($query) => $query->whereIn('status', ['posted', 'reversed']))
             ->lockForUpdate()->findOrFail($id);
@@ -168,6 +166,12 @@ class FinanceBankReconciliation
                 ->where('source_type', $type)->where('source_id', $record->id)
                 ->where('posting_status', 'posted')->exists(), 422,
                 'A reversed bank source must have an immutable approved correction journal.');
+        }
+        $workflowReservation = app(FinanceMoneyCorrections::class)->bankReservation($line->business_id, $line->id);
+        abort_unless(! $workflowReservation || ($record instanceof FinanceWorkflowLeg && $record->id === $workflowReservation->leg_id), 422, 'This bank line is reserved for its specific documented money correction.');
+        if ($record instanceof FinanceWorkflowLeg) {
+            $bound = DB::table('finance_workflow_bank_evidence')->where('business_id', $line->business_id)->where('leg_id', $record->id)->first();
+            abort_unless(! $bound || $bound->statement_line_id === $line->id, 422, 'Match this correction only to its frozen actual bank return.');
         }
         $registerReserved = FinanceRegisterEntry::query()->where('business_id', $line->business_id)->where('return_bank_line_id', $line->id)->whereIn('posting_status', ['not_posted', 'posted'])->first();
         abort_unless(! $registerReserved || ($record instanceof FinanceRegisterEntry && $record->id === $registerReserved->id), 422, 'This bank line is reserved for a specific asset/loan correction.');
@@ -208,7 +212,11 @@ class FinanceBankReconciliation
             $direction = $record instanceof FinancePayment
                 ? ($record->direction === 'in' ? 'credit' : 'debit') : 'debit';
         }
-        if ($record instanceof FinanceRegisterEntry) {
+        if ($record instanceof FinanceWorkflowLeg) {
+            abort_unless($record->workflow?->posting_status === 'posted' && $record->cash_account_id && $record->event_on->toDateString() === $line->transaction_on->toDateString(), 422, 'Choose a posted workflow money leg on the bank date.');
+            $direction = $record->cash_direction === 'in' ? 'credit' : 'debit';
+            $accountId = $record->cash_account_id;
+        } elseif ($record instanceof FinanceRegisterEntry) {
             abort_unless($record->cash_account_id && BigDecimal::of((string) $record->cash_amount)->isGreaterThan(0), 422, 'This register event has no money movement.');
             $direction = $record->cash_direction === 'in' ? 'credit' : 'debit';
             $accountId = $record->cash_account_id;
@@ -336,7 +344,7 @@ class FinanceBankReconciliation
             $confirmed = FinanceBankMatch::query()->where('business_id', $statement->business_id)
                 ->whereIn('statement_line_id', $statement->lines()->pluck('id'))
                 ->where('status', 'confirmed')->count();
-            abort_unless($all > 0 && $all === $confirmed, 422,
+            abort_unless($all === $confirmed, 422,
                 'Each imported bank line must be independently confirmed before closing.');
             abort_unless($statement->imported_by !== $actor, 422,
                 'A different authorised person must complete reconciliation.');

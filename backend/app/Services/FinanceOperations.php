@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Business;
+use App\Models\BusinessMembership;
 use App\Models\CommercialInvoice;
 use App\Models\Customer;
 use App\Models\ExportShipment;
@@ -13,6 +14,7 @@ use App\Models\FinanceJournal;
 use App\Models\FinanceOperation;
 use App\Models\FinancePostingRequest;
 use App\Models\FinanceSupplierBill;
+use App\Models\MarketAccountability;
 use App\Models\MarketTrip;
 use App\Models\SalesOrder;
 use App\Models\StaffPerson;
@@ -41,6 +43,7 @@ class FinanceOperations
         'expense' => 'Record an expense payable / staff claim',
         'paid_expense' => 'Record an expense already paid',
         'expense_payment' => 'Pay an expense / staff claim',
+        'market_reimbursement' => 'Record a market purchase paid personally by staff',
         'transfer' => 'Transfer between accounts in one currency',
     ];
 
@@ -48,16 +51,29 @@ class FinanceOperations
 
     public const CHILDREN = ['customer_apply', 'customer_refund', 'supplier_apply', 'supplier_return', 'staff_apply', 'staff_expense', 'staff_return', 'expense_payment'];
 
-    public function remaining(FinanceOperation $parent, bool $pending = true, ?int $except = null): BigDecimal
+    public function remaining(FinanceOperation $parent, bool $pending = true, ?int $except = null, ?int $exceptWorkflow = null): BigDecimal
     {
-        $balance = BigDecimal::of((string) $parent->amount);
+        $balance = BigDecimal::of((string) $parent->amount)->minus(app(FinanceMoneyCorrections::class)->corrected($parent, $pending));
         foreach (FinanceOperation::query()->where('business_id', $parent->business_id)->where('parent_id', $parent->id)
             ->whereIn('posting_status', $pending ? ['not_posted', 'posted'] : ['posted'])
-            ->when($except, fn ($q) => $q->whereKeyNot($except))->pluck('amount') as $amount) {
-            $balance = $balance->minus((string) $amount);
+            ->when($except, fn ($q) => $q->whereKeyNot($except))->get() as $child) {
+            $balance = $balance->minus((string) $child->amount)->plus(app(FinanceMoneyCorrections::class)->corrected($child));
         }
 
+        $balance = $balance->minus(app(FinanceOpeningItems::class)->usedByTarget($parent->business_id, 'expense_id', $parent->id, $pending, $exceptWorkflow)['amount']);
+
         return $balance->toScale(2);
+    }
+
+    public function remainingControlBase(FinanceOperation $parent): BigDecimal
+    {
+        $journal = FinanceJournal::query()->where('business_id', $parent->business_id)->where('source_type', 'money_operation')->where('source_id', $parent->id)->firstOrFail();
+        $base = app(FinanceMath::class)->base((string) $parent->amount, (string) $journal->rate_to_base)->minus(app(FinanceMoneyCorrections::class)->corrected($parent, false, null, 'control_base'));
+        foreach (FinanceOperation::query()->where('business_id', $parent->business_id)->where('parent_id', $parent->id)->where('posting_status', 'posted')->get() as $used) {
+            $base = $base->minus((string) $used->consumed_base)->plus(app(FinanceMoneyCorrections::class)->corrected($used, false, null, 'control_base'));
+        }
+
+        return $base->minus(app(FinanceOpeningItems::class)->usedByTarget($parent->business_id, 'expense_id', $parent->id, false)['base']);
     }
 
     public function prepare(Business $business, array $data, int $actor): FinanceOperation
@@ -91,7 +107,7 @@ class FinanceOperations
                     'staff_apply','staff_expense','staff_return' => 'staff_advance',
                     'expense_payment' => 'expense',
                 };
-                abort_unless($parent->posting_status === 'posted' && $parent->kind === $expected && $parent->currency === $currency, 422, 'Choose a posted source of the correct kind and currency.');
+                abort_unless($parent->posting_status === 'posted' && in_array($parent->kind, $kind === 'expense_payment' ? ['expense', 'market_reimbursement'] : [$expected], true) && $parent->currency === $currency, 422, 'Choose a posted source of the correct kind and currency.');
                 abort_unless($date >= $parent->event_on->toDateString(), 422, 'The allocation or return cannot precede its source.');
                 abort_unless(! $amount->isGreaterThan($this->remaining($parent)), 422, 'This exceeds the unused source balance, including pending entries.');
             }
@@ -100,6 +116,7 @@ class FinanceOperations
                 'kind' => $kind, 'currency' => $currency, 'amount' => (string) $amount, 'event_on' => $date,
                 'due_on' => $data['due_on'] ?? null, 'description' => $data['description'],
                 'external_reference' => $data['external_reference'], 'category' => $data['category'] ?? null,
+                'advance_request_id' => isset($data['advance_request_id']) ? (int) $data['advance_request_id'] : null,
                 'parent_id' => $parent?->id, 'created_by' => $actor, 'posting_status' => 'not_posted',
                 'idempotency_key' => $data['idempotency_key'], 'payload_hash' => $payloadHash,
             ];
@@ -115,13 +132,20 @@ class FinanceOperations
                 $entry[$field] = $id ? (int) $id : null;
             }
             $party = match ($kind) {
-                'customer_deposit' => 'customer_id','supplier_advance' => 'supplier_id','staff_advance' => 'staff_person_id',default => null
+                'customer_deposit' => 'customer_id','supplier_advance' => 'supplier_id','staff_advance','market_reimbursement' => 'staff_person_id',default => null
             };
             abort_unless(! $party || $entry[$party], 422, 'Select the recipient of this advance or deposit.');
             if ($entry['shipment_id']) {
                 $shipment = ExportShipment::query()->where('business_id', $business->id)->findOrFail($entry['shipment_id']);
                 abort_unless(! $entry['sales_order_id'] || $entry['sales_order_id'] === $shipment->sales_order_id, 422, 'Shipment and order do not match.');
                 $entry['sales_order_id'] = $entry['sales_order_id'] ?? $shipment->sales_order_id;
+            }
+            $entry['owner_user_id'] = $parent?->owner_user_id ?? (! empty($data['owner_user_id']) ? (int) $data['owner_user_id'] : null);
+            if ($entry['owner_user_id']) {
+                abort_unless(in_array($kind, ['expense', 'expense_payment'], true), 422, 'Owner-paid business claims use an unpaid expense and its reimbursement. Capital, drawings and borrowing have separate tasks.');
+                if (! $parent) {
+                    abort_unless(BusinessMembership::query()->where('business_id', $business->id)->where('user_id', $entry['owner_user_id'])->where('role', 'owner')->where('active', true)->exists(), 422, 'Choose an active owner of this business.');
+                }abort_unless(! $entry['staff_person_id'] && ! $entry['supplier_id'] && ! $entry['customer_id'], 422, 'Choose the owner who paid personally as the single claimant.');
             }
             if (! $parent && in_array($kind, ['customer_deposit', 'supplier_advance', 'staff_advance', 'expense', 'paid_expense'], true)) {
                 $partyFields = array_filter([$entry['customer_id'], $entry['supplier_id'], $entry['staff_person_id']]);
@@ -136,7 +160,10 @@ class FinanceOperations
             if (in_array($kind, ['expense', 'staff_expense', 'paid_expense'], true)) {
                 abort_unless(! empty($entry['category']), 422, 'Choose an expense category.');
             }
-            if (in_array($kind, ['customer_apply', 'supplier_apply', 'staff_apply'], true)) {
+            if ($entry['market_trip_id'] && in_array($kind, ['staff_advance', 'staff_apply', 'staff_expense', 'staff_return', 'market_reimbursement'], true)) {
+                abort_if(MarketAccountability::query()->where('business_id', $business->id)->where('market_trip_id', $entry['market_trip_id'])->where('status', 'closed')->exists(), 422, 'Reopen the financial accountability before adding new market purchases, claims or advances.');
+            }
+            if (in_array($kind, ['customer_apply', 'supplier_apply', 'staff_apply', 'market_reimbursement'], true)) {
                 $customer = $kind === 'customer_apply';
                 $column = $customer ? 'commercial_invoice_id' : 'supplier_bill_id';
                 $document = ($customer ? CommercialInvoice::class : FinanceSupplierBill::class)::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($data[$column] ?? 0);
@@ -149,12 +176,13 @@ class FinanceOperations
             }
             $entry['exchange_rate_id'] = $rateId;
             $entry['rate_to_base'] = app(FinanceRates::class)->rate($business, $currency, $rateId, $date);
+            app(FinanceTradeControls::class)->issueCheck($business, $entry, $data, $amount, (string) $entry['rate_to_base']);
             if (in_array($kind, self::CASH, true)) {
-                abort_unless($currency === $business->base_currency || ! empty($data['bank_profile_id']), 422, 'Foreign-currency money needs a named account in that currency.');
+                abort_unless($currency === $business->base_currency || ! empty($data['cash_custody_id']) || ! empty($data['bank_profile_id']), 422, 'Foreign-currency money needs a named account in that currency.');
                 if ($kind === 'transfer') {
                     abort_unless($currency === $business->base_currency || ! empty($data['destination_bank_profile_id']), 422, 'The receiving account must also have this currency.');
                 }
-                $account = app(FinanceBankProfiles::class)->account($business, isset($data['bank_profile_id']) ? (int) $data['bank_profile_id'] : null, $data['cash_account_key'] ?? 'cash', $currency);
+                $account = ! empty($data['cash_custody_id']) ? app(FinanceTreasury::class)->moneyAccount($business, [...$data, 'account_key' => $data['cash_account_key'] ?? 'cash']) : app(FinanceBankProfiles::class)->account($business, isset($data['bank_profile_id']) ? (int) $data['bank_profile_id'] : null, $data['cash_account_key'] ?? 'cash', $currency);
                 $entry['cash_account_id'] = $account->id;
                 if ($kind === 'transfer') {
                     $dest = app(FinanceBankProfiles::class)->account($business, isset($data['destination_bank_profile_id']) ? (int) $data['destination_bank_profile_id'] : null, $data['destination_account_key'] ?? 'bank', $currency);
@@ -218,6 +246,7 @@ class FinanceOperations
             abort_unless($entry['market_trip_id'] && $document->purchase->market_trip_id === $entry['market_trip_id'], 422, 'The market bill must belong to the advance market trip.');
         }
         $column = $document instanceof CommercialInvoice ? 'commercial_invoice_id' : 'supplier_bill_id';
+        app(FinanceTradeCredits::class)->assertNoPending($business->id, $column, $document->id);
         abort_if(FinanceBalanceAdjustment::query()->where('business_id', $business->id)->where($column, $document->id)->where('posting_status', 'not_posted')->exists(), 422, 'Complete the pending document adjustment first.');
         abort_unless(! $amount->isGreaterThan(app(FinanceDocuments::class)->outstanding($document, $pending)), 422, 'This exceeds the available document balance.');
     }
@@ -249,7 +278,12 @@ class FinanceOperations
         if (in_array($kind, self::CASH, true)) {
             $cash = FinanceAccount::query()->where('business_id', $business->id)->findOrFail($operation->cash_account_id);
             app(FinanceBankProfiles::class)->assertPaymentAccount($cash, $operation->currency);
+            if (str_starts_with($cash->system_key, 'cash_') && ! in_array($kind, ['customer_deposit', 'supplier_return', 'staff_return'], true)) {
+                $available = app(FinanceWorkflows::class)->accountBasis($business->id, $cash->id, $operation->event_on->toDateString());
+                abort_unless(! $available['units']->isLessThan($amount), 422, 'The cash voucher exceeds the actual posted float. Fund it or correct the vouchers first.');
+            }
         }
+        app(FinanceTradeControls::class)->issueCheck($business, $data['entry'], $data['entry'], $amount, (string) $operation->rate_to_base, $operation->id);
         if (in_array($kind, self::CHILDREN, true)) {
             $parent = FinanceOperation::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($operation->parent_id);
             abort_unless($parent->posting_status === 'posted' && ! $amount->isGreaterThan($this->remaining($parent, false, $operation->id)), 422, 'The source balance is no longer available.');
@@ -257,10 +291,7 @@ class FinanceOperations
             abort_unless($operation->event_on->toDateString() >= $journal->posted_on->toDateString(), 422, 'The settlement cannot precede its source journal.');
             $latest = FinanceJournal::query()->where('business_id', $business->id)->where('source_type', 'money_operation')->whereIn('source_id', FinanceOperation::query()->where('business_id', $business->id)->where('parent_id', $parent->id)->where('posting_status', 'posted')->select('id'))->max('posted_on');
             abort_unless(! $latest || $operation->event_on->toDateString() >= substr((string) $latest, 0, 10), 422, 'The new settlement cannot precede a previously posted allocation or return.');
-            $parentBase = $math->base((string) $parent->amount, (string) $journal->rate_to_base);
-            foreach (FinanceOperation::query()->where('business_id', $business->id)->where('parent_id', $parent->id)->where('posting_status', 'posted')->whereKeyNot($operation->id)->pluck('consumed_base') as $used) {
-                $parentBase = $parentBase->minus((string) $used);
-            }
+            $parentBase = $this->remainingControlBase($parent);
             $remaining = $this->remaining($parent, false, $operation->id);
             $carrying = $amount->isEqualTo($remaining) ? $parentBase : $math->money($parentBase->multipliedBy($amount)->dividedBy($remaining, 14, RoundingMode::HalfUp));
             $operation->update(['consumed_base' => (string) $carrying]);
@@ -277,6 +308,15 @@ class FinanceOperations
                 'paid_expense' => ['general_expense', $cash->system_key],
                 'transfer' => [$this->destination($business, $operation)->system_key, $cash->system_key],
             };
+        } elseif ($kind === 'market_reimbursement') {
+            $document = FinanceSupplierBill::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($operation->supplier_bill_id);
+            $this->assertDocument($business, $document, $kind, $data['entry'], $amount, false);
+            $settlement = app(FinanceSettledCarrying::class)->portion($business, $document, $amount, $operation->event_on->toDateString());
+            $debit = 'payable';
+            $credit = 'expense_payable';
+            $debitBase = $settlement['base'];
+            $creditBase = $base;
+            $extra = $settlement['reclass'];
         } elseif (in_array($kind, ['customer_apply', 'supplier_apply', 'staff_apply'], true)) {
             $customer = $kind === 'customer_apply';
             $document = ($customer ? CommercialInvoice::class : FinanceSupplierBill::class)::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($customer ? $operation->commercial_invoice_id : $operation->supplier_bill_id);

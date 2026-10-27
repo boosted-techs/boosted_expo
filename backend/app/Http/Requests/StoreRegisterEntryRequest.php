@@ -17,6 +17,8 @@ class StoreRegisterEntryRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'cash_custody_id' => ['nullable', 'integer', 'min:1'], 'cash_witness' => ['nullable', 'string', 'min:10', 'max:1000'], 'due_on' => ['nullable', 'date_format:Y-m-d'],
+            'fees_treatment' => ['nullable', 'in:paid,accrued'], 'fee_policy' => ['nullable', 'in:expense,straight_line,reviewed_schedule'], 'amortization_start_on' => ['nullable', 'date_format:Y-m-d'], 'amortization_months' => ['nullable', 'integer', 'between:1,600'],
             'asset_id' => ['nullable', 'integer', 'min:1'], 'loan_id' => ['nullable', 'integer', 'min:1'], 'instalment_id' => ['nullable', 'integer', 'min:1'],
             'original_entry_id' => ['nullable', 'integer', 'min:1'], 'return_bank_line_id' => ['nullable', 'integer', 'min:1'],
             'event_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:'.now($this->attributes->get('activeBusiness')->timezone)->toDateString()],

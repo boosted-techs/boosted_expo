@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class AssetRegister
 {
-    public const KINDS = ['asset_purchase' => 'Record equipment acquisition', 'asset_opening' => 'Record existing equipment opening value', 'asset_payment' => 'Pay an unpaid equipment bill', 'asset_depreciation' => 'Post one month of depreciation', 'asset_disposal' => 'Dispose / write off equipment', 'register_reversal' => 'Correct the latest posted entry'];
+    public const KINDS = ['asset_purchase' => 'Record equipment acquisition', 'asset_opening' => 'Record existing equipment opening value', 'asset_payment' => 'Pay an unpaid equipment bill', 'asset_depreciation' => 'Post one month of depreciation', 'asset_disposal' => 'Dispose / write off equipment', 'register_partial_return' => 'Record a partial actual cash return', 'register_reversal' => 'Correct the latest posted entry'];
 
     public function create(Business $business, array $data, int $actor): BusinessAsset
     {
@@ -127,7 +127,7 @@ class AssetRegister
         $state = $this->state($asset, $position);
         $math = app(FinanceMath::class);
         $ledger = app(FinanceLedger::class);
-        $currency = in_array($kind, ['asset_opening', 'asset_depreciation', 'asset_disposal'], true) ? $business->base_currency : ($kind === 'asset_payment' ? $state['origin']?->currency : strtoupper($data['currency'] ?? ''));
+        $currency = in_array($kind, ['asset_opening', 'asset_depreciation'], true) ? $business->base_currency : ($kind === 'asset_payment' ? $state['origin']?->currency : strtoupper($data['currency'] ?? ($kind === 'asset_disposal' ? $business->base_currency : '')));
         abort_unless($currency && in_array($currency, app(BusinessCurrencies::class)->enabled($business), true), 422, 'Choose an enabled business currency.');
         $rateId = isset($data['exchange_rate_id']) ? (int) $data['exchange_rate_id'] : null;
         $rate = app(FinanceRates::class)->rate($business, $currency, $rateId, $data['event_on']);
@@ -158,7 +158,7 @@ class AssetRegister
             } else {
                 $lines[] = $ledger->line('asset_payable', '0', (string) $amount, '0', (string) $base, 'Equipment acquisition payable');
             }
-            $prepared['details'] = ['policy' => ['method' => 'straight_line_monthly', 'remaining_months' => $asset->useful_life_months, 'residual_base' => (string) $asset->residual_base, 'starts_on' => $asset->depreciation_start_on?->toDateString()]];
+            $prepared['details'] = ['due_on' => $data['due_on'] ?? null, 'policy' => ['method' => 'straight_line_monthly', 'remaining_months' => $asset->useful_life_months, 'residual_base' => (string) $asset->residual_base, 'starts_on' => $asset->depreciation_start_on?->toDateString()]];
         } else {
             abort_unless($state['origin'] && ! $state['disposed'], 422, 'Post the asset opening/acquisition before later financial events.');
             if ($kind === 'asset_payment') {
@@ -185,21 +185,30 @@ class AssetRegister
                 abort_unless($state['payable']->isZero(), 422, 'Settle or separately resolve the equipment bill before disposal.');
                 $proceeds = $math->money($data['amount'] ?? '0');
                 abort_unless(! $proceeds->isLessThan(0), 422, 'Proceeds cannot be negative.');
+                abort_unless($proceeds->isGreaterThan(0) || $currency === $business->base_currency, 422, 'A write-off without proceeds uses the reporting currency.');
+                $proceedsBase = $math->base($proceeds, $rate);
+                $units = fn (BigDecimal $value) => $currency === $business->base_currency ? $value : $math->money($value->dividedBy($rate, 14, RoundingMode::HalfUp));
                 if ($proceeds->isGreaterThan(0)) {
                     $cash = app(FinanceRegisterPostings::class)->cash($business, $currency, $data);
-                    $lines[] = $ledger->line($cash->system_key, (string) $proceeds, '0', (string) $proceeds, '0', 'Actual disposal proceeds');
+                    $lines[] = $ledger->line($cash->system_key, (string) $proceeds, '0', (string) $proceedsBase, '0', 'Actual disposal proceeds');
                     $prepared = [...$prepared, 'cash_account_id' => $cash->id, 'cash_direction' => 'in', 'cash_amount' => (string) $proceeds];
                 }
                 if ($state['accumulated']->isGreaterThan(0)) {
-                    $lines[] = $ledger->line('asset_accumulated', (string) $state['accumulated'], '0', (string) $state['accumulated'], '0', 'Remove accumulated depreciation');
+                    $lines[] = $ledger->line('asset_accumulated', (string) $units($state['accumulated']), '0', (string) $state['accumulated'], '0', 'Remove historical accumulated depreciation');
                 }
-                $lines[] = $ledger->line('asset_cost', '0', (string) $state['cost'], '0', (string) $state['cost'], 'Derecognise disposed asset');
-                $gain = $proceeds->minus($state['book']);
-                if ($gain->isGreaterThan(0)) {
-                    $lines[] = $ledger->line('asset_disposal_gain', '0', (string) $gain, '0', (string) $gain, 'Disposal gain');
-                } elseif ($gain->isLessThan(0)) {
-                    $lines[] = $ledger->line('asset_disposal_loss', (string) $gain->negated(), '0', (string) $gain->negated(), '0', 'Disposal or write-off loss');
+                $lines[] = $ledger->line('asset_cost', '0', (string) $units($state['cost']), '0', (string) $state['cost'], 'Remove historical equipment cost');
+                $gain = $proceedsBase->minus($state['book']);
+                if (! $gain->isZero()) {
+                    $v = (string) $units($gain->abs());
+                    $lines[] = $ledger->line($gain->isGreaterThan(0) ? 'asset_disposal_gain' : 'asset_disposal_loss', $gain->isLessThan(0) ? $v : '0', $gain->isGreaterThan(0) ? $v : '0', $gain->isLessThan(0) ? (string) $gain->abs() : '0', $gain->isGreaterThan(0) ? (string) $gain : '0', 'Disposal result at the approved proceeds rate');
                 }
+                $unitNet = BigDecimal::zero();
+                foreach ($lines as $line) {
+                    $unitNet = $unitNet->plus($line['debit'])->minus($line['credit']);
+                }if (! $unitNet->isZero()) {
+                    $lines[] = $ledger->line($unitNet->isGreaterThan(0) ? 'fx_gain' : 'fx_loss', $unitNet->isLessThan(0) ? (string) $unitNet->abs() : '0', $unitNet->isGreaterThan(0) ? (string) $unitNet : '0', '0', '0', 'Document-currency rounding of nonmonetary asset values');
+                }
+                $prepared['details'] = ['proceeds_currency' => $currency, 'proceeds_base' => (string) $proceedsBase, 'historical_cost_base' => (string) $state['cost'], 'historical_accumulated_base' => (string) $state['accumulated'], 'book_base' => (string) $state['book']];
                 $prepared['amount'] = (string) $proceeds;
             }
         }
@@ -213,7 +222,7 @@ class AssetRegister
         if ($difference->isGreaterThan(0)) {
             $lines[] = app(FinanceLedger::class)->line('fx_gain', '0', '0', '0', (string) $difference, 'Realised equipment payable FX gain');
         } elseif ($difference->isLessThan(0)) {
-            $lines[] = app(FinanceLedger::class)->line('fx_loss','0','0',(string) $difference->negated(),'0','Realised equipment payable FX loss');
+            $lines[] = app(FinanceLedger::class)->line('fx_loss', '0', '0', (string) $difference->negated(), '0', 'Realised equipment payable FX loss');
         }
     }
 }

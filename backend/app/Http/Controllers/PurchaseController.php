@@ -6,10 +6,12 @@ use App\Models\Business;
 use App\Models\MarketTrip;
 use App\Models\OrderSupply;
 use App\Models\Product;
+use App\Models\PurchaseAmendment;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Services\OrderSourcing;
 use App\Services\ProcurementMath;
+use App\Services\PurchaseAmendments;
 use App\Support\BusinessCurrencies;
 use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
@@ -128,6 +130,25 @@ class PurchaseController extends Controller
             ->with('status', 'Purchase recorded. Goods will enter stock only after receiving.');
     }
 
+    public function amend(Request $request, int $purchase, PurchaseAmendments $amendments): RedirectResponse
+    {
+        $this->check($request, 'purchases.create');
+        $data = $request->validate(['quantity' => ['required', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999'], 'unit_price' => ['required', 'numeric', 'gt:0', 'decimal:0,4', 'max:99999999999'], 'supplier_id' => ['nullable', 'integer', 'min:1'], 'vendor_name' => ['nullable', 'string', 'max:160'], 'vendor_phone' => ['nullable', 'string', 'max:50'], 'expected_on' => ['nullable', 'date_format:Y-m-d'], 'agreement_reference' => ['required', 'string', 'min:3', 'max:200'], 'reason' => ['required', 'string', 'min:20', 'max:3000'], 'request_key' => ['required', 'uuid']]);
+        $amendments->propose($request->attributes->get('activeBusiness'), $this->own($request, $purchase), $data, $request->user()->id);
+
+        return back()->with('status', 'Purchase amendment prepared for independent agreement review.');
+    }
+
+    public function reviewAmendment(Request $request, int $amendment, string $decision, PurchaseAmendments $amendments): RedirectResponse
+    {
+        $this->check($request, 'purchases.amend.review');
+        $data = $request->validate(['note' => ['required', 'string', 'min:20', 'max:3000']]);
+        $b = $request->attributes->get('activeBusiness');
+        $amendments->review($b, PurchaseAmendment::query()->where('business_id', $b->id)->findOrFail($amendment), $decision === 'approve', $data['note'], $request->user()->id);
+
+        return back()->with('status', 'Purchase agreement reviewed with original terms preserved.');
+    }
+
     public function show(Request $request, int $purchase): View
     {
         $this->check($request, 'purchases.view');
@@ -137,6 +158,11 @@ class PurchaseController extends Controller
             app(ProcurementMath::class)->sum($purchase->receipts->pluck('received_quantity')->all())
         );
 
-        return view('purchases.show', compact('purchase', 'remaining', 'canReceive'));
+        $amendments = PurchaseAmendment::query()->where('business_id', $purchase->business_id)->where('purchase_order_id', $purchase->id)->latest('id')->paginate(15);
+        $canAmend = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'purchases.create');
+        $canReview = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'purchases.amend.review');
+        $suppliers = Supplier::query()->where('business_id', $purchase->business_id)->where('active', true)->orderBy('name')->get();
+
+        return view('purchases.show', compact('purchase', 'remaining', 'canReceive', 'amendments', 'canAmend', 'canReview', 'suppliers'));
     }
 }

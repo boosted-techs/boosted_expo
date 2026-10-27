@@ -26,7 +26,7 @@
 @else
 @if(count($missingAccounts)>0 && $canSetup)
 <section class="section-card"><h2>Update accounting categories</h2>
-<p class="muted">This company's finance chart needs {{ count($missingAccounts) }} additional standard account(s), including newly supported inventory loss categories. Existing accounts and journal entries are preserved.</p>
+<p class="muted">This company's finance chart needs {{ count($missingAccounts) }} additional standard account(s), for the supported money, payroll, cost and loan workflows. Existing accounts and journal entries are preserved.</p>
 <form method="POST" action="{{ route('finance.setup') }}">@csrf
 <button class="secondary-button">Add missing finance accounts safely</button></form></section>
 @endif

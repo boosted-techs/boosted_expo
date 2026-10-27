@@ -149,7 +149,7 @@ class OrderWorkspaceController extends Controller
                 $record->update(['released_at' => now()]);
             } else {
                 $record = OrderSupply::query()->where('business_id', $o->business_id)->whereIn('sales_order_line_id', $lineIds)->where('status', 'active')->findOrFail($data['record_id']);
-                abort_if($record->origin_supply_id, 422, 'Resolve the originating trip target as well before releasing purchased market supply.');
+                abort_if($record->origin_supply_id && OrderSupply::query()->where('business_id', $o->business_id)->whereKey($record->origin_supply_id)->where('status', 'active')->exists(), 422, 'Resolve the originating trip target as well before releasing purchased market supply.');
                 $record->update(['status' => 'released']);
             }
             app(OrderOperations::class)->event($o, $request->user()->id, 'supply.released', $data['reason'], ['kind' => $data['kind'], 'record_id' => $record->id]);

@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CashCustody;
 use App\Models\FinanceBankProfile;
 use App\Models\FinanceExchangeRate;
 use App\Models\FinanceRegisterEntry;
+use App\Models\LoanAgreementAmendment;
 use App\Models\LoanFacility;
 use App\Models\LoanInstalment;
+use App\Services\LoanAgreementAmendments;
 use App\Services\LoanRegister;
 use App\Support\BusinessCurrencies;
 use App\Support\BusinessPermissions;
@@ -37,10 +40,10 @@ class LoanRegisterController extends Controller
     {
         $this->check($r, 'finance.documents.create');
         $business = $r->attributes->get('activeBusiness');
-        $data = $r->validate(['reference' => ['required', 'string', 'min:3', 'max:65'], 'lender_name' => ['required', 'string', 'min:3', 'max:150'], 'lender_kind' => ['required', 'in:external,owner'], 'currency' => ['required', app(BusinessCurrencies::class)->rule($business)], 'limit_amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'], 'revolving' => ['nullable', 'boolean'], 'starts_on' => ['required', 'date_format:Y-m-d'], 'matures_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:starts_on'], 'agreement_reference' => ['required', 'string', 'min:5', 'max:200'], 'terms' => ['required', 'string', 'min:20', 'max:5000']]);
+        $data = $r->validate(['loan_direction' => ['nullable', 'in:borrow,lend'], 'reference' => ['required', 'string', 'min:3', 'max:65'], 'lender_name' => ['required', 'string', 'min:3', 'max:150'], 'lender_kind' => ['required', 'in:external,owner'], 'currency' => ['required', app(BusinessCurrencies::class)->rule($business)], 'limit_amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'], 'revolving' => ['nullable', 'boolean'], 'starts_on' => ['required', 'date_format:Y-m-d'], 'matures_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:starts_on'], 'agreement_reference' => ['required', 'string', 'min:5', 'max:200'], 'terms' => ['required', 'string', 'min:20', 'max:5000']]);
         $loan = $register->create($business, $data, $r->user()->id);
 
-        return redirect()->route('finance.loans.show', $loan->id)->with('status', 'Borrowing agreement registered. Only posted drawdowns/openings create a loan balance.');
+        return redirect()->route('finance.loans.show', $loan->id)->with('status', 'Loan agreement registered. Record its actual money movement or verified opening to create a balance.');
     }
 
     public function show(Request $r, int $loan): View
@@ -53,10 +56,34 @@ class LoanRegisterController extends Controller
         $remaining = $instalments->mapWithKeys(fn ($i) => [$i->id => app(LoanRegister::class)->instalmentBalances($i)]);
         $entries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->latest('id')->paginate(25, ['*'], 'entry_page')->withQueryString();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('status', 'approved')->where('currency', $loan->currency)->orderByDesc('effective_on')->get();
+        $custodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
         $banks = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->where('currency', $loan->currency)->orderBy('label')->get();
         $canManage = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
 
-        return view('finance.loans.show', compact('business', 'loan', 'state', 'instalments', 'remaining', 'entries', 'rates', 'banks', 'canManage'));
+        $amendments = LoanAgreementAmendment::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->latest('id')->paginate(20, ['*'], 'amendment_page')->withQueryString();
+        $canReview = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.reviews.approve');
+
+        return view('finance.loans.show', compact('business', 'loan', 'state', 'instalments', 'remaining', 'entries', 'rates', 'banks', 'custodies', 'canManage', 'amendments', 'canReview'));
+    }
+
+    public function amend(Request $r, int $loan, LoanAgreementAmendments $service): RedirectResponse
+    {
+        $this->check($r, 'finance.documents.create');
+        $b = $r->attributes->get('activeBusiness');
+        $data = $r->validate(['effective_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:'.now($b->timezone)->toDateString()], 'limit_amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'], 'revolving' => ['nullable', 'boolean'], 'resume_lending' => ['nullable', 'boolean'], 'matures_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:effective_on'], 'agreement_reference' => ['required', 'string', 'min:5', 'max:200'], 'terms' => ['required', 'string', 'min:20', 'max:5000'], 'reason' => ['required', 'string', 'min:20', 'max:3000'], 'request_key' => ['required', 'uuid']]);
+        $service->propose($b, LoanFacility::query()->where('business_id', $b->id)->findOrFail($loan), $data, $r->user()->id);
+
+        return back()->with('status', 'Changed lender terms proposed. A separate reviewer applies them on their effective date.');
+    }
+
+    public function reviewAmendment(Request $r, int $amendment, string $decision, LoanAgreementAmendments $service): RedirectResponse
+    {
+        $this->check($r, 'finance.reviews.approve');
+        $data = $r->validate(['note' => ['required', 'string', 'min:20', 'max:3000']]);
+        $b = $r->attributes->get('activeBusiness');
+        $service->review($b, LoanAgreementAmendment::query()->where('business_id', $b->id)->findOrFail($amendment), $decision === 'approve', $data['note'], $r->user()->id);
+
+        return back()->with('status', 'Loan agreement amendment reviewed; posted debt remains supported by its original journals.');
     }
 
     public function cancelSchedule(Request $r, int $instalment, LoanRegister $register): RedirectResponse

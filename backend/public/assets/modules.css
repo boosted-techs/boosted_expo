@@ -193,3 +193,7 @@ body { font-size:17px; line-height:1.62; }
 /* Daily money commands remain readable on narrow packing and office screens. */
 .money-toolbar{margin:18px 0}.money-toolbar>a{flex:0 1 auto}.money-shortcuts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}.money-shortcuts details{border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}.money-shortcuts summary{font-weight:800;cursor:pointer;min-height:30px}.money-shortcuts a{display:block;padding:12px 0;color:var(--green);border-top:1px solid var(--line);line-height:1.4}.money-toolbar input,.money-toolbar select{min-height:44px;max-width:100%;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink)}
 @media(max-width:540px){.money-toolbar>a,.money-toolbar>input,.money-toolbar>select,.money-toolbar>button{flex:1 1 100%;width:100%}}
+
+@media print{.no-print,.pagination,nav[role=navigation]{display:none!important}.table-wrap{overflow:visible!important}thead{display:table-header-group}tr{break-inside:avoid}section.section-card:has(table){break-inside:auto}details>*{display:block!important}details>summary{font-weight:700}body{background:white!important;color:black!important}.content{max-width:none!important}}
+
+@media print{html[data-theme]{--ink:#111!important;--panel:#fff!important;--muted:#555!important;--line:#ddd!important}.section-card{background:white!important;color:black!important}}

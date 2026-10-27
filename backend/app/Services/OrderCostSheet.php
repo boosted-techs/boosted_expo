@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\FinanceCostClaim;
 use App\Models\FinanceInventoryRelief;
 use App\Models\FinanceJournal;
 use App\Models\FinanceOperation;
@@ -35,6 +36,11 @@ class OrderCostSheet
                         $expense = $expense->plus((string) $line->base_debit)->minus((string) $line->base_credit);
                     }
                 }
+                $corrected = app(FinanceMoneyCorrections::class)->corrected($source);
+                $expense = $expense->minus($math->money($expense->multipliedBy($corrected)->dividedBy((string) $source->amount, 14, RoundingMode::HalfUp)));
+                foreach (FinanceCostClaim::query()->where('business_id', $order->business_id)->where('source_type', 'expense')->where('source_id', $source->id)->where('account', 'general_expense')->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->pluck('base_amount') as $capitalized) {
+                    $expense = $expense->minus((string) $capitalized);
+                }
                 $remaining = $expense;
                 foreach ($allocations as $i => $part) {
                     $share = $i === count($allocations) - 1 ? $remaining : $math->money($expense->multipliedBy($part['amount'])->dividedBy((string) $source->amount, 14, RoundingMode::HalfUp));
@@ -58,7 +64,7 @@ class OrderCostSheet
             if (! $relief) {
                 $missingCogs++;
             } else {
-                $cogs = $cogs->plus((string) $relief->base_amount);
+                $cogs = $cogs->plus(app(FinanceManagementReports::class)->shipmentCost($shipment));
             }
         }
         foreach (FinanceShipmentCost::query()->where('business_id', $order->business_id)->whereIn('shipment_id', $shipments)->where('status', 'posted')->get() as $cost) {

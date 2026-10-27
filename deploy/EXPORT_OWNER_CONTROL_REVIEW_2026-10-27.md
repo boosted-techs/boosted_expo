@@ -2,7 +2,7 @@
 
 **Date:** 27 October 2026, Africa/Kampala  
 **Purpose:** audit the [first system audit](EXPORT_BUSINESS_AUDIT_2026-10-27.md), [revised roadmap](EXPORT_BUSINESS_ROADMAP_2026-10-27.md), and current local routes/implementations against the questions an exporter owner and platform owner must answer.  
-**Deliverable:** additional requirements and release acceptance criteria. This review changes documentation only; it does not implement printing, dashboards or PWA installation.
+**Deliverable:** owner/platform requirements and acceptance criteria, followed by dated implementation evidence. The original review was documentation only; the implementation follow-ups below describe later software delivery and its limits.
 
 ## 1. Can the proposed system serve a Ugandan exporter?
 
@@ -323,3 +323,14 @@ Stock counts preserve the original observation and require independent stock and
 These controls extend R05/R07/R08 and parts of R15 to the precise boundaries in the [Phase 4 roadmap entry](EXPORT_BUSINESS_ROADMAP_2026-10-27.md#phase-4-implementation--exceptions-equipment-and-borrowing--27-october-2026). Full goods returns/claims/recall, partial repacking, all correction cases, financial classifications, owner equity/drawings, complete cost/cash/funding controls and cutover remain open. Broad owner control requires these as well as the existing Phase 1 superadmin controls. No additional unscoped platform access to private tenant data was introduced.
 
 Local verification: **326 tests / 4,791 assertions**, three backed-up additive migrations, preserved original row/column values in 134 existing non-migration tables and a clean SQLite foreign-key check. Keep **Phase 4 — in progress**, with the Phase 3 backlog and Phase 0A/5 device, PostgreSQL and real exporter acceptance gates visible.
+
+
+## Phase 3/4 completion follow-up — 27 October 2026
+
+The [latest completion matrix](EXPORT_BUSINESS_ROADMAP_2026-10-27.md#completion-pass--phase-3-finance-and-phase-4-exceptionsreporting) supersedes the older Phase 3/4 software backlog in the follow-ups above. The owner now has accountable daily cash, actual currency exchange/fees and owner money; customer/supplier due dates and credit/collection control; advance and market closure; approved monthly/output/overtime/statutory payroll; material/labour cost layers; current funding; physical returns, claim/recall evidence and actual replacement orders; equipment, borrowing/lending and reviewed amendments/corrections; dated classification/aging/activity reports and source completeness; and independently reconciled opening import.
+
+These are connected sources with separate preparation/review/posting, not dashboard-only indicators. Claims have responsible people, deadlines and Today visibility; no-charge replacements must be delivered before applicable case closure. Exception CSV/print retains selected observation dates/status/search; financial reports retain native-currency details and UGX carrying values, and identify missing dates/evidence. Closing checks actual sources, journal integrity, stock/material values, bank coverage and cash count proof. Old snapshots and corrections remain available.
+
+R04–R09 and R15 therefore have substantial verified local implementations. **397 tests / 6,802 assertions pass**, with route/Blade/JavaScript/Pint checks and backed-up additive local migrations preserving original values. These do not close actual exporter, production/PostgreSQL, private-file restore or device/printer acceptance. Owner/platform roles remain separate, with no new unscoped superadmin access to wages or finances. Infrastructure cost/health and service-owner acceptance remain at their existing Phase 1 boundaries.
+
+Do not mark every correction scenario complete: automated cost-allocation release after downstream stock splits/returns/count adjustments still requires a reconstruction implementation and is explicitly blocked. Immediate/straight-line/reviewed loan-fee schedules do not claim an effective-interest engine. Missing legacy accounting evidence cannot be silently converted into a verified balance. Current PWA installation works with an honest offline screen; financial offline drafting/sync remains Phase 5. The actual GK888t 100 × 50 mm and Windows/Mac/Android field checks are still required.

@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SalesOrder extends Model
 {
-    protected $fillable = ['pricing_status', 'required_on', 'destination', 'closed_at', 'close_reason', 'business_id', 'reference', 'sales_request_id', 'sales_quotation_id',
+    protected $fillable = ['order_type', 'replacement_case_id', 'replacement_shipment_id', 'pricing_snapshot', 'pricing_status', 'required_on', 'destination', 'closed_at', 'close_reason', 'business_id', 'reference', 'sales_request_id', 'sales_quotation_id',
         'customer_id', 'status', 'currency', 'incoterm', 'discount_percent', 'tax_percent',
         'subtotal', 'discount_amount', 'tax_amount', 'grand_total', 'buyer_confirmation',
         'notes', 'confirmed_by', 'confirmed_at'];
 
     protected function casts(): array
     {
-        return ['confirmed_at' => 'datetime', 'required_on' => 'date', 'closed_at' => 'datetime'];
+        return ['pricing_snapshot' => 'array', 'confirmed_at' => 'datetime', 'required_on' => 'date', 'closed_at' => 'datetime'];
     }
 
     public function customer(): BelongsTo

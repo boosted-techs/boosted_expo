@@ -18,7 +18,7 @@ class StaffPayRateController extends Controller
     public function propose(Request $r, FinanceTimePayroll $payroll): RedirectResponse
     {
         $this->check($r, 'finance.payroll.prepare');
-        $data = $r->validate(['staff_person_id' => ['required', 'integer', 'min:1'], 'basis' => ['required', 'in:hourly,daily'], 'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'], 'starts_on' => ['required', 'date_format:Y-m-d'], 'ends_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:starts_on'], 'agreement_reference' => ['required', 'string', 'min:10', 'max:250']]);
+        $data = $r->validate(['staff_person_id' => ['required', 'integer', 'min:1'], 'basis' => ['required', 'in:hourly,daily,monthly,piece'], 'regular_daily_hours' => ['nullable', 'numeric', 'gt:0', 'max:24', 'decimal:0,2'], 'overtime_multiplier' => ['nullable', 'numeric', 'min:1', 'max:5', 'decimal:0,3'], 'overtime_hourly_amount' => ['nullable', 'numeric', 'gt:0', 'max:999999999999', 'decimal:0,2'], 'unpaid_day_divisor' => ['nullable', 'numeric', 'gt:0', 'max:31', 'decimal:0,2'], 'output_unit' => ['required_if:basis,piece', 'nullable', 'string', 'max:30'], 'work_code' => ['required_if:basis,piece', 'nullable', 'string', 'max:50'], 'supersedes_rate_id' => ['nullable', 'integer', 'min:1'], 'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999'], 'starts_on' => ['required', 'date_format:Y-m-d'], 'ends_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:starts_on'], 'agreement_reference' => ['required', 'string', 'min:10', 'max:250']]);
         $payroll->proposeRate($r->attributes->get('activeBusiness'), $data, $r->user()->id);
 
         return back()->with('status', 'Pay agreement proposed for independent approval.');

@@ -15,6 +15,7 @@ use App\Models\FinancePayrollSettlement;
 use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinanceWorkflowLeg;
 use App\Services\FinanceBankAuthenticity;
 use App\Services\FinanceBankLedgerProofs;
 use App\Services\FinanceBankReconciliation;
@@ -90,6 +91,7 @@ class FinanceBankController extends Controller
             $request->attributes->get('membership'), 'finance.bank.match');
         $canReview = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'finance.bank.review');
+        $workflowLegs = FinanceWorkflowLeg::query()->where('business_id', $statement->business_id)->where('posting_status', 'posted')->where('cash_account_id', $statement->account_id)->where('currency', $statement->currency)->whereIn('amount', $candidateAmounts)->with('workflow')->when($candidateSearch !== '', fn ($q) => $q->whereHas('workflow', fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_workflow_page')->withQueryString();
         $registerEntries = FinanceRegisterEntry::query()->where('business_id', $statement->business_id)->where('cash_account_id', $statement->account_id)->whereIn('posting_status', ['posted', 'reversed'])->where('currency', $statement->currency)->whereIn('cash_amount', $candidateAmounts)->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_register_page')->withQueryString();
         $operations = FinanceOperation::query()->where('business_id', $statement->business_id)->where('posting_status', 'posted')->where('currency', $statement->currency)->whereIn('amount', $candidateAmounts)->where(fn ($q) => $q->where('cash_account_id', $statement->account_id)->orWhere('destination_account_id', $statement->account_id))->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_money_page')->withQueryString();
         $payments = FinancePayment::query()->where('business_id', $statement->business_id)
@@ -135,11 +137,13 @@ class FinanceBankController extends Controller
             ->where('statement_id', $statement->id)->first();
         $isLedgerCheckCurrent = $ledgerCheck
             ? app(FinanceBankLedgerProofs::class)->isCurrent($ledgerCheck) : false;
+        $replacementChecks = FinanceBankLedgerCheck::query()->where('business_id', $statement->business_id)->where('status', 'verified')->where('id', '!=', $ledgerCheck?->id ?? 0)->whereHas('statement', fn ($q) => $q->where('account_id', $statement->account_id)->whereDate('period_from', '<=', $statement->period_from)->whereDate('period_to', '>=', $statement->period_to))->with('statement')->latest('id')->limit(50)->get();
         $ledgerPreview = null;
         if ($statement->status === 'reconciled') {
             try {
                 $ledgerPreview = app(FinanceBankLedgerProofs::class)->preview($statement);
             } catch (\Throwable) {
+                $replacementChecks = FinanceBankLedgerCheck::query()->where('business_id', $statement->business_id)->where('status', 'verified')->where('id', '!=', $ledgerCheck?->id ?? 0)->whereHas('statement', fn ($q) => $q->where('account_id', $statement->account_id)->whereDate('period_from', '<=', $statement->period_from)->whereDate('period_to', '>=', $statement->period_to))->with('statement')->latest('id')->limit(50)->get();
                 $ledgerPreview = null;
             }
         }
@@ -153,8 +157,8 @@ class FinanceBankController extends Controller
 
         return view('finance.bank.show', compact(
             'statement', 'lines', 'canMatch', 'canReview', 'payments', 'costs', 'payrollSettlements',
-            'registerEntries', 'operations', 'reversals', 'partials', 'ledgerCheck', 'ledgerPreview', 'isLedgerCheckCurrent',
-            'canProofSubmit', 'canProofReview', 'matched',
+            'workflowLegs', 'registerEntries', 'operations', 'reversals', 'partials', 'ledgerCheck', 'ledgerPreview', 'isLedgerCheckCurrent',
+            'canProofSubmit', 'canProofReview', 'matched', 'replacementChecks',
             'bankAttestation', 'isBankAuthenticated', 'canUploadBankSignature'
         ));
     }
@@ -165,7 +169,7 @@ class FinanceBankController extends Controller
         $this->check($request, 'finance.bank.match');
         $statement = $this->own($request, $statement);
         $data = $request->validate([
-            'candidate' => ['required', 'regex:/^(register_entry|money_operation|money_transfer_in|payment|shipment_cost|payroll_settlement|transaction_reversal|partial_bank_return):[1-9][0-9]*$/D'],
+            'candidate' => ['required', 'regex:/^(workflow_leg|register_entry|money_operation|money_transfer_in|payment|shipment_cost|payroll_settlement|transaction_reversal|partial_bank_return):[1-9][0-9]*$/D'],
             'note' => ['required', 'string', 'min:10', 'max:1000'],
         ]);
         [$type,$sourceId] = explode(':', $data['candidate'], 2);
@@ -175,6 +179,18 @@ class FinanceBankController extends Controller
             $request->user()->id);
 
         return back()->with('status', 'Match proposed; an independent reviewer must confirm.');
+    }
+
+    public function supersedeProof(Request $request, int $check, FinanceBankLedgerProofs $proofs): RedirectResponse
+    {
+        $this->check($request, 'finance.bank.proof.review');
+        $business = $request->attributes->get('activeBusiness');
+        $data = $request->validate(['replacement_id' => ['required', 'integer'], 'notes' => ['required', 'string', 'min:20', 'max:2000']]);
+        $old = FinanceBankLedgerCheck::query()->where('business_id', $business->id)->findOrFail($check);
+        $replacement = FinanceBankLedgerCheck::query()->where('business_id', $business->id)->findOrFail($data['replacement_id']);
+        $proofs->supersede($old, $replacement, $request->user()->id, $data['notes']);
+
+        return back()->with('status', 'Corrected balance evidence approved; the original statement and review remain in history.');
     }
 
     public function confirm(Request $request, int $match, FinanceBankReconciliation $bank): RedirectResponse

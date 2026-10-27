@@ -26,9 +26,27 @@ class FinancePayroll
             }
             $overlapping = FinancePayrollRun::query()->where('business_id', $business->id)
                 ->whereDate('period_from', '<=', $to)->whereDate('period_to', '>=', $from)
-                ->lockForUpdate()->get();
+                ->with('lines')->lockForUpdate()->get();
+            $requestedPeople = array_map('intval', array_filter(array_column($data['lines'], 'staff_person_id')));
+            $requestedUsers = array_map('intval', array_filter(array_column($data['lines'], 'user_id')));
+            $requestedUsers = array_values(array_unique([...$requestedUsers, ...StaffPerson::query()->where('business_id', $business->id)->whereIn('id', $requestedPeople)->whereNotNull('user_id')->pluck('user_id')->map(fn ($id) => (int) $id)->all()]));
             $revision = 1;
             foreach ($overlapping as $prior) {
+                if ($prior->posting_status === 'withdrawn') {
+                    if ($prior->period_from->toDateString() === $from && $prior->period_to->toDateString() === $to) {
+                        $revision = max($revision, (int) $prior->revision + 1);
+                    }
+
+                    continue;
+                }
+                $sameDates = $prior->period_from->toDateString() === $from && $prior->period_to->toDateString() === $to;
+                if ($sameDates) {
+                    $revision = max($revision, (int) $prior->revision + 1);
+                }
+                $samePerson = $prior->lines->contains(fn ($line) => ($line->staff_person_id && in_array($line->staff_person_id, $requestedPeople, true)) || ($line->user_id && in_array($line->user_id, $requestedUsers, true)));
+                if (! $samePerson) {
+                    continue;
+                }
                 if ($prior->period_from->toDateString() !== $from
                     || $prior->period_to->toDateString() !== $to
                     || $prior->posting_status !== 'reversed') {
@@ -71,11 +89,27 @@ class FinancePayroll
                 throw ValidationException::withMessages(['lines' => 'At least one staff member must be included.']);
             }
             usort($lines, fn ($a, $b) => [$a['user_id'] ?? 0, $a['staff_person_id'] ?? 0] <=> [$b['user_id'] ?? 0, $b['staff_person_id'] ?? 0]);
-            $snapshot = ['period_from' => $from, 'period_to' => $to, 'revision' => $revision, 'currency' => $business->base_currency,
-                'method' => isset($lines[0]['source_snapshot']) ? 'approved_time_and_agreed_rate' : 'staff-entered-gross-and-manual-deductions',
+            $statutory = ['paye' => BigDecimal::zero(), 'nssf_employee' => BigDecimal::zero(), 'nssf_employer' => BigDecimal::zero(), 'manual' => BigDecimal::zero()];
+            foreach ($lines as $line) {
+                $inputs = $line['source_snapshot'] ?? [];
+                if (isset($inputs['statutory'])) {
+                    $tax = $inputs['statutory'];
+                    abort_unless(BigDecimal::of((string) $line['deductions'])->isEqualTo(BigDecimal::of((string) $inputs['manual_deductions'])->plus($tax['paye'])->plus($tax['nssf_employee'])), 422, 'Statutory and manual deductions must match the net wage calculation.');
+                    foreach (['paye', 'nssf_employee', 'nssf_employer'] as $key) {
+                        $statutory[$key] = $statutory[$key]->plus((string) $tax[$key]);
+                    }$statutory['manual'] = $statutory['manual']->plus((string) $inputs['manual_deductions']);
+                } else {
+                    $statutory['manual'] = $statutory['manual']->plus((string) $line['deductions']);
+                }
+            }
+            $snapshot = ['statutory_totals' => array_map(fn ($v) => (string) $v->toScale(2), $statutory), 'period_from' => $from, 'period_to' => $to, 'revision' => $revision, 'currency' => $business->base_currency,
+                'method' => ($lines[0]['source_snapshot']['method'] ?? null) === 'approved_inputs_and_statutory_policy' ? 'approved_inputs_and_statutory_policy' : (isset($lines[0]['source_snapshot']) ? 'approved_time_and_agreed_rate' : 'staff-entered-gross-and-manual-deductions'),
                 'note' => isset($lines[0]['source_snapshot']) ? 'Approved hourly/daily time inputs are frozen; PAYE, NSSF and other statutory deductions remain manually verified.' : 'Gross and deductions are manually verified; attendance and statutory calculations are not automatic.',
                 'lines' => $lines, 'gross' => (string) $gross,
                 'deductions' => (string) $deductions, 'net' => (string) $net];
+            if ($snapshot['method'] === 'approved_inputs_and_statutory_policy') {
+                $snapshot['note'] = 'Approved time, monthly terms, verified output and adjustments use the frozen statutory policy and month-to-date basis. Employer NSSF is a separate business cost. No wages or statutory amounts are automatically remitted.';
+            }
             $run = FinancePayrollRun::create([
                 'business_id' => $business->id, 'reference' => 'PAYROLL-'.Str::upper((string) Str::ulid()),
                 'revision' => $revision, 'period_from' => $from, 'period_to' => $to,
@@ -129,6 +163,9 @@ class FinancePayroll
             && $deductions->isEqualTo((string) $run->deduction_total)
             && $net->isEqualTo((string) $run->net_total)
             && $gross->minus($deductions)->isEqualTo($net), 422, 'Payroll totals do not balance.');
+        if (($data['method'] ?? '') === 'approved_inputs_and_statutory_policy') {
+            app(FinancePayrollInputs::class)->validate($run);
+        }
         $ledger = app(FinanceLedger::class);
         $lines = [$ledger->line('payroll_expense', (string) $gross, '0',
             (string) $gross, '0', 'Accrued employee payroll (not paid)')];
@@ -136,10 +173,18 @@ class FinancePayroll
             $lines[] = $ledger->line(
                 'payroll_payable', '0', (string) $net, '0', (string) $net, 'Net wages payable');
         }
-        if ($deductions->isGreaterThan(0)) {
-            $lines[] = $ledger->line(
-                'payroll_withholding', '0', (string) $deductions, '0', (string) $deductions,
-                'Manually entered withholding/deductions; not yet remitted');
+        $totals = $data['statutory_totals'] ?? ['manual' => (string) $deductions, 'paye' => '0', 'nssf_employee' => '0', 'nssf_employer' => '0'];
+        abort_unless(BigDecimal::of((string) $totals['manual'])->plus($totals['paye'])->plus($totals['nssf_employee'])->isEqualTo($deductions), 422, 'Frozen statutory deductions do not reconcile.');
+        foreach (['manual' => 'payroll_withholding', 'paye' => 'paye_payable', 'nssf_employee' => 'nssf_payable'] as $key => $account) {
+            $amount = BigDecimal::of((string) $totals[$key]);
+            if ($amount->isGreaterThan(0)) {
+                $lines[] = $ledger->line($account, '0', (string) $amount, '0', (string) $amount, 'Accrued '.str_replace('_', ' ', $key).' pending actual remittance');
+            }
+        }
+        $employer = BigDecimal::of((string) $totals['nssf_employer']);
+        if ($employer->isGreaterThan(0)) {
+            $lines[] = $ledger->line('nssf_employer_expense', (string) $employer, '0', (string) $employer, '0', 'Employer contribution, separate from employee deductions');
+            $lines[] = $ledger->line('nssf_payable', '0', (string) $employer, '0', (string) $employer, 'Employer contribution payable');
         }
 
         return $lines;

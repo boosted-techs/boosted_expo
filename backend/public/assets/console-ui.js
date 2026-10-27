@@ -16,3 +16,15 @@ document.addEventListener('click',event=>{
  const button=event.target.closest('button[data-confirm]');
  if(button && !window.confirm(button.dataset.confirm))event.preventDefault();
 });
+
+// Expand report evidence for printing and restore the reader's current view afterward.
+const printOpenedDetails = new Set();
+window.addEventListener('beforeprint', () => {
+  document.querySelectorAll('details[data-print-details]').forEach(detail => {
+    if (!detail.open) { printOpenedDetails.add(detail); detail.open = true; }
+  });
+});
+window.addEventListener('afterprint', () => {
+  printOpenedDetails.forEach(detail => { detail.open = false; });
+  printOpenedDetails.clear();
+});

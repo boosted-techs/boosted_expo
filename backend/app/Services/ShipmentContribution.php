@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\ExportShipment;
+use App\Models\FinanceCreditNote;
+use App\Models\FinanceInventoryRelief;
 use App\Models\FinanceJournal;
 use App\Models\FinancePartialBankReturn;
 use App\Models\FinanceShipmentCost;
-use App\Models\FinanceSupplierBill;
+use App\Models\FinanceTradeCredit;
 use App\Models\GoodsReceipt;
 use Brick\Math\BigDecimal;
 use Illuminate\Validation\ValidationException;
@@ -69,44 +71,18 @@ class ShipmentContribution
                 $baseCost = null;
                 $purchase = null;
                 $bill = null;
-                if (! $receipt || ! $receipt->purchaseOrder) {
-                    $missing[] = $carton->carton_code.': source batch has no purchase receipt.';
-                } else {
-                    $purchase = $receipt->purchaseOrder;
-                    if (! array_key_exists($purchase->id, $billCache)) {
-                        $billCache[$purchase->id] = FinanceSupplierBill::query()
-                            ->where('business_id', $shipment->business_id)
-                            ->where('purchase_order_id', $purchase->id)
-                            ->where('posting_status', 'posted')->first();
+                $purchase = $receipt?->purchaseOrder;
+                try {
+                    $basis = app(FinanceCostBasis::class)->batchBasis($content->batch);
+                    $baseCost = $math->money(BigDecimal::of((string) $content->quantity)->multipliedBy($basis['unit']));
+                    $purchaseCosts = $purchaseCosts->plus($baseCost);
+                } catch (ValidationException $error) {
+                    $missing[] = $carton->carton_code.': '.collect($error->errors())->flatten()->implode(' ');
+                } catch (HttpException $error) {
+                    if ($error->getStatusCode() !== 422) {
+                        throw $error;
                     }
-                    $bill = $billCache[$purchase->id];
-                    if (! $bill) {
-                        $missing[] = $purchase->reference.': source purchase bill has not been posted.';
-                    } else {
-                        if (! array_key_exists($bill->id, $journalCache)) {
-                            $journalCache[$bill->id] = FinanceJournal::query()
-                                ->where('business_id', $shipment->business_id)
-                                ->where('source_type', 'supplier_bill')
-                                ->where('source_id', $bill->id)->first();
-                        }
-                        $journal = $journalCache[$bill->id];
-                        if (! $journal) {
-                            $missing[] = $bill->reference.': missing posted supplier-bill journal.';
-                        } else {
-                            try {
-                                $unit = app(FinanceCostBasis::class)->batchBasis($receipt->batch)['unit'];
-                                $baseCost = $math->money(BigDecimal::of((string) $content->quantity)->multipliedBy($unit));
-                                $purchaseCosts = $purchaseCosts->plus($baseCost);
-                            } catch (ValidationException $error) {
-                                $missing[] = $purchase->reference.': '.collect($error->errors())->flatten()->implode(' ');
-                            } catch (HttpException $error) {
-                                if ($error->getStatusCode() !== 422) {
-                                    throw $error;
-                                }
-                                $missing[] = $purchase->reference.': '.$error->getMessage();
-                            }
-                        }
-                    }
+                    $missing[] = $carton->carton_code.': '.$error->getMessage();
                 }
                 $lines[] = [
                     'carton' => $carton->carton_code, 'batch' => $content->batch?->batch_code,
@@ -118,6 +94,30 @@ class ShipmentContribution
             }
         }
 
+        $costBasis = 'current reviewed source estimate';
+        if (FinanceInventoryRelief::query()->where('business_id', $shipment->business_id)->where('shipment_id', $shipment->id)->where('posting_status', 'posted')->exists()) {
+            $purchaseCosts = app(FinanceManagementReports::class)->shipmentCost($shipment);
+            $costBasis = 'posted shipment cost, late allocations and original-cost returns';
+        }
+        if ($invoice && $salesRevenue !== null) {
+            foreach (FinanceCreditNote::query()->where('business_id', $shipment->business_id)->where('commercial_invoice_id', $invoice->id)->where('posting_status', 'posted')->cursor() as $credit) {
+                $journal = FinanceJournal::query()->where('business_id', $shipment->business_id)->where('source_type', 'credit_note')->where('source_id', $credit->id)->with('lines.account')->firstOrFail();
+                foreach ($journal->lines as $line) {
+                    if ($line->account->system_key === 'export_sales') {
+                        $salesRevenue = $salesRevenue->plus((string) $line->base_credit)->minus((string) $line->base_debit);
+                    }
+                }
+            }
+            foreach (FinanceTradeCredit::query()->where('business_id', $shipment->business_id)->where('commercial_invoice_id', $invoice->id)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->with('workflow.legs')->cursor() as $credit) {
+                foreach ($credit->workflow->legs as $leg) {
+                    foreach ($leg->lines as $line) {
+                        if ($line['account'] === 'sales_returns') {
+                            $salesRevenue = $salesRevenue->minus($line['base_debit'])->plus($line['base_credit']);
+                        }
+                    }
+                }
+            }
+        }
         $costItems = FinanceShipmentCost::query()->where('business_id', $shipment->business_id)
             ->where('shipment_id', $shipment->id)->orderBy('id')->get();
         $postedCosts = BigDecimal::zero();
@@ -169,7 +169,7 @@ class ShipmentContribution
             ? $salesRevenue->minus($purchaseCosts)->minus($postedCosts) : null;
 
         return [
-            'base_currency' => $base,
+            'base_currency' => $base, 'cost_basis' => $costBasis,
             'revenue' => $salesRevenue === null ? null : (string) $salesRevenue,
             'acquisition_cost' => (string) $purchaseCosts,
             'operating_cost' => (string) $postedCosts,

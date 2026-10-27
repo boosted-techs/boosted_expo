@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AssetActivity;
 use App\Models\BusinessAsset;
+use App\Models\CashCustody;
 use App\Models\FinanceBankProfile;
 use App\Models\FinanceExchangeRate;
 use App\Models\FinanceOperation;
@@ -57,10 +58,11 @@ class AssetRegisterController extends Controller
         $activities = AssetActivity::query()->where('business_id', $business->id)->where('asset_id', $asset->id)->with('expense')->latest('id')->paginate(20, ['*'], 'activity_page')->withQueryString();
         $entries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('asset_id', $asset->id)->latest('id')->paginate(20, ['*'], 'entry_page')->withQueryString();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('status', 'approved')->orderByDesc('effective_on')->get();
+        $custodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
         $banks = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->orderBy('label')->get();
         $canManage = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
 
-        return view('finance.assets.show', compact('business', 'asset', 'state', 'people', 'expenses', 'activities', 'entries', 'rates', 'banks', 'canManage'));
+        return view('finance.assets.show', compact('business', 'asset', 'state', 'people', 'expenses', 'activities', 'entries', 'rates', 'banks', 'custodies', 'canManage'));
     }
 
     public function update(Request $r, int $asset, AssetRegister $register): RedirectResponse
@@ -82,6 +84,6 @@ class AssetRegisterController extends Controller
         $data = $r->validate(['kind' => ['required', 'in:assign,return,condition,maintenance_start,maintenance_complete,maintenance_plan'], 'staff_person_id' => ['nullable', 'integer', 'min:1'], 'location' => ['required_if:kind,assign,return', 'nullable', 'string', 'max:150'], 'condition' => ['required_if:kind,condition,return,maintenance_complete', 'nullable', 'in:good,worn,damaged,lost'], 'maintenance_due_on' => ['nullable', 'date_format:Y-m-d'], 'expense_id' => ['nullable', 'integer', 'min:1'], 'event_on' => ['required', 'date_format:Y-m-d'], 'reference' => ['required', 'string', 'min:3', 'max:150'], 'note' => ['required', 'string', 'min:10', 'max:3000'], 'request_key' => ['required', 'uuid']]);
         $register->activity($business, $asset, $data, $r->user()->id);
 
-        return back()->with('status','Asset custody / maintenance history updated. Linked expenses keep their original finance approval.');
+        return back()->with('status', 'Asset custody / maintenance history updated. Linked expenses keep their original finance approval.');
     }
 }

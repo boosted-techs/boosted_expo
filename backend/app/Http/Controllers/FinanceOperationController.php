@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreFinanceOperationRequest;
+use App\Models\AdvanceRequest;
+use App\Models\BusinessMembership;
+use App\Models\CashCustody;
 use App\Models\Customer;
 use App\Models\ExportShipment;
 use App\Models\FinanceBankProfile;
@@ -14,6 +17,7 @@ use App\Models\MarketTrip;
 use App\Models\SalesOrder;
 use App\Models\StaffPerson;
 use App\Models\Supplier;
+use App\Models\User;
 use App\Services\FinanceDocuments;
 use App\Services\FinanceOperations;
 use App\Support\BusinessPermissions;
@@ -65,7 +69,7 @@ class FinanceOperationController extends Controller
             'customer_apply','customer_refund' => 'customer_deposit','supplier_apply','supplier_return' => 'supplier_advance',
             'staff_apply','staff_return','staff_expense' => 'staff_advance','expense_payment' => 'expense',default => null,
         };
-        $parents = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'posted')->where('kind', $parentKind)
+        $parents = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'posted')->whereIn('kind', $kind === 'expense_payment' ? ['expense', 'market_reimbursement'] : [$parentKind])
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')))->latest('id')->paginate(20, ['*'], 'sources')->withQueryString();
         $balances = $parents->mapWithKeys(fn ($p) => [$p->id => (string) app(FinanceOperations::class)->remaining($p)]);
         $invoices = app(FinanceDocuments::class)->outstandingQuery($business, true)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(20, ['*'], 'invoices')->withQueryString();
@@ -74,7 +78,12 @@ class FinanceOperationController extends Controller
         $bankProfiles = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->orderBy('label')->get();
         $submissionKey = (string) Str::uuid();
 
-        return view('finance.money.create', compact('business', 'kind', 'lookups', 'parents', 'balances', 'invoices', 'bills', 'rates', 'bankProfiles', 'submissionKey'));
+        $advanceRequests = AdvanceRequest::query()->where('business_id', $business->id)->where('status', 'approved')->orderByDesc('id')->get();
+        $cashCustodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
+
+        $owners = User::query()->whereIn('id', BusinessMembership::query()->where('business_id', $business->id)->where('role', 'owner')->where('active', true)->select('user_id'))->orderBy('name')->get();
+
+        return view('finance.money.create', compact('business', 'kind', 'lookups', 'parents', 'balances', 'invoices', 'bills', 'rates', 'bankProfiles', 'submissionKey', 'cashCustodies', 'advanceRequests', 'owners'));
     }
 
     public function store(StoreFinanceOperationRequest $request, FinanceOperations $operations): RedirectResponse
@@ -116,9 +125,9 @@ class FinanceOperationController extends Controller
         $children = FinanceOperation::query()->where('business_id', $business->id)->where('parent_id', $operation->id)->latest('id')->paginate(25);
         $balance = app(FinanceOperations::class)->remaining($operation);
         $journal = FinanceJournal::query()->where('business_id', $business->id)->where('source_type', 'money_operation')->where('source_id', $operation->id)->first();
-        $review = FinancePostingRequest::query()->where('business_id',$business->id)->where('source_type','money_operation')->where('source_id',$operation->id)->first();
-        $canSubmit = app(BusinessPermissions::class)->allows($request->attributes->get('membership'),'finance.reviews.request');
+        $review = FinancePostingRequest::query()->where('business_id', $business->id)->where('source_type', 'money_operation')->where('source_id', $operation->id)->first();
+        $canSubmit = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'finance.reviews.request');
 
-        return view('finance.money.show',compact('business','operation','children','balance','journal','review','canSubmit'));
+        return view('finance.money.show', compact('business', 'operation', 'children', 'balance', 'journal', 'review', 'canSubmit'));
     }
 }

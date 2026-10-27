@@ -86,6 +86,7 @@ class FinanceControlController extends Controller
         $this->check($request, 'finance.banks.manage');
         $request->merge(['currency' => strtoupper(trim((string) $request->input('currency')))]);
         $data = $request->validate([
+            'use_legacy_bank' => ['nullable', 'boolean'],
             'label' => ['required', 'string', 'min:3', 'max:100'],
             'institution' => ['required', 'string', 'min:3', 'max:100'],
             'currency' => ['required', 'string', app(BusinessCurrencies::class)->rule($request->attributes->get('activeBusiness'))],
@@ -242,8 +243,8 @@ class FinanceControlController extends Controller
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999999'],
             'reason' => ['required', 'string', 'min:20', 'max:3000'],
         ]);
-        $service->prepare($this->business($request),$kind,$id,
-            $data['amount'],$data['reason'],$request->user()->id);
+        $service->prepare($this->business($request), $kind, $id,
+            $data['amount'], $data['reason'], $request->user()->id);
 
         return back()->with('status',
             'Partial balance concession prepared. It is ineffective until independently approved and posted.');

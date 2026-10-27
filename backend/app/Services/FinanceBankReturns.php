@@ -75,6 +75,7 @@ class FinanceBankReturns
             || $return->transaction_on->toDateString() > now()->toDateString()) {
             throw ValidationException::withMessages(['return_bank_line_id' => 'The imported return must be an open statement line on the same named account and currency, with the opposite direction, exact amount and valid later date.']);
         }
+        abort_if(app(FinanceMoneyCorrections::class)->bankReservation($business->id, $return->id), 422, 'This bank return is reserved for a documented money correction.');
         if (FinanceBankMatch::query()->where('business_id', $business->id)
             ->where('statement_line_id', $return->id)->whereIn('status', ['pending', 'confirmed'])
             ->exists()) {

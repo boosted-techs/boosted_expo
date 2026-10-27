@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FinanceShipmentCost extends Model
 {
-    protected $fillable = ['transport_leg_id', 'business_id', 'shipment_id', 'reference', 'category', 'description',
+    protected $fillable = ['idempotency_key', 'payload_hash', 'transport_leg_id', 'business_id', 'shipment_id', 'reference', 'category', 'description',
         'currency', 'amount', 'cash_account_id', 'paid_on', 'external_reference', 'status', 'created_by', 'posted_at'];
 
     protected function casts(): array

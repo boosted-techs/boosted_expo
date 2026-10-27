@@ -8,6 +8,7 @@ use App\Models\ExportShipment;
 use App\Models\InvoiceAccountingHandoff;
 use App\Models\SalesOrder;
 use App\Models\ShipmentEvent;
+use App\Models\TradeCreditException;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -37,6 +38,7 @@ class CommercialInvoiceIssuance
                 'allocations.carton.contents.batch']);
             abort_unless($shipment->allocations->isNotEmpty(), 422, 'The shipment has no cartons.');
             app(SalesFulfillment::class)->assertCapacity($order, [], true);
+            abort_unless($order->order_type !== 'replacement', 422, 'This is an authorised replacement with no sales charge. Attach required shipment/customs documents through delivery readiness.');
             abort_unless($order->pricing_status === 'accepted' && $order->sales_quotation_id && $order->grand_total !== null, 422, 'Agree selling prices before issuing a commercial invoice.');
             $order->load('lines.product');
 
@@ -85,11 +87,13 @@ class CommercialInvoiceIssuance
             }
             $totals = app(SalesPricing::class)->totals($priced, (string) $order->discount_percent,
                 (string) $order->tax_percent, (string) $data['freight_amount'], (string) $data['insurance_amount']);
+            $credit = app(FinanceTradeControls::class)->credit($shipment->business, $shipment->customer, $order->currency, $totals['grand_total'], $shipment->id, $userId);
             $reference = 'CI-'.Str::upper((string) Str::ulid());
             $snapshot = [
+                'credit_control' => $credit,
                 'reference' => $reference, 'issued_at' => now($shipment->business->timezone)->format('d M Y H:i T'),
                 'due_on' => $order->quotation?->payment_terms_days !== null ? now($shipment->business->timezone)->addDays($order->quotation->payment_terms_days)->toDateString() : null,
-                'payment_terms_days' => $order->quotation?->payment_terms_days,
+                'payment_terms_days' => $order->quotation?->payment_terms_days, 'order_pricing_snapshot' => $order->pricing_snapshot,
                 'business' => [
                     'name' => $shipment->business->name, 'country' => $shipment->business->country_code,
                     'code' => $shipment->business->code,
@@ -143,6 +147,9 @@ class CommercialInvoiceIssuance
                 'issued_by' => $userId, 'issued_at' => now(),
                 'due_on' => $order->quotation?->payment_terms_days !== null ? now($shipment->business->timezone)->addDays($order->quotation->payment_terms_days)->toDateString() : null,
             ]);
+            if ($credit['exception_id']) {
+                TradeCreditException::query()->where('business_id', $shipment->business_id)->whereKey($credit['exception_id'])->update(['commercial_invoice_id' => $invoice->id]);
+            }
             InvoiceAccountingHandoff::create([
                 'business_id' => $shipment->business_id,
                 'commercial_invoice_id' => $invoice->id,

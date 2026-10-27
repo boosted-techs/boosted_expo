@@ -5,14 +5,17 @@ namespace App\Services;
 use App\Models\Business;
 use App\Models\CommercialInvoice;
 use App\Models\FinanceBalanceAdjustment;
+use App\Models\FinanceCreditNote;
 use App\Models\FinanceExchangeRate;
 use App\Models\FinanceJournal;
 use App\Models\FinanceMonetaryRevaluation;
+use App\Models\FinanceMoneyCorrection;
 use App\Models\FinanceOperation;
 use App\Models\FinancePartialBankReturn;
 use App\Models\FinancePayment;
 use App\Models\FinanceSupplierBill;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinanceWorkflowLeg;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -27,11 +30,11 @@ class FinanceMonetaryRevaluations
         return ($type === 'commercial_invoice' ? CommercialInvoice::class : FinanceSupplierBill::class)::query()->where('business_id', $business->id)->findOrFail($id);
     }
 
-    public function position(Business $business, string $type, int $id): array
+    public function position(Business $business, string $type, int $id, ?string $through = null, bool $allowBase = false): array
     {
         $document = $this->document($business, $type, $id);
         abort_unless($document->posting_status === 'posted'
-            && $document->currency !== $business->base_currency, 422,
+            && ($allowBase || $document->currency !== $business->base_currency), 422,
             'Only posted, outstanding foreign-currency invoices and supplier bills can be revalued.');
         $relation = $type === 'commercial_invoice' ? 'commercial_invoice_id' : 'supplier_bill_id';
         $account = $type === 'commercial_invoice' ? 'receivable' : 'payable';
@@ -66,7 +69,33 @@ class FinanceMonetaryRevaluations
         }
         foreach (FinanceOperation::query()->where('business_id', $business->id)->where($relation, $id)->where('posting_status', 'posted')->pluck('id') as $operationId) {
             $sourceIds[] = ['money_operation', $operationId];
+            foreach (FinanceMoneyCorrection::query()->where('business_id', $business->id)->where('operation_id', $operationId)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->get() as $correction) {
+                foreach (FinanceWorkflowLeg::query()->where('business_id', $business->id)->where('workflow_id', $correction->workflow_id)->pluck('id') as $legId) {
+                    $sourceIds[] = ['workflow_leg', $legId];
+                }
+            }
         }
+        foreach (['finance_trade_credits', 'finance_trade_credit_uses', 'finance_opening_item_uses'] as $table) {
+            foreach (DB::table($table.' as t')->join('finance_workflows as w', 'w.id', '=', 't.workflow_id')->where('t.business_id', $business->id)->where('w.business_id', $business->id)->where('t.'.$relation, $id)->where('w.posting_status', 'posted')->get(['w.id']) as $flow) {
+                foreach (FinanceWorkflowLeg::query()->where('business_id', $business->id)->where('workflow_id', $flow->id)->where('currency', $document->currency)->pluck('id') as $legId) {
+                    $sourceIds[] = ['workflow_leg', $legId];
+                }
+            }
+        }
+        foreach (DB::table('finance_workflow_corrections as fc')->join('finance_workflows as cw', 'cw.id', '=', 'fc.workflow_id')->where('fc.business_id', $business->id)->where('cw.business_id', $business->id)->where('cw.posting_status', 'posted')->get() as $correction) {
+            $originalLegs = FinanceWorkflowLeg::query()->where('business_id', $business->id)->where('workflow_id', $correction->original_workflow_id)->pluck('id')->all();
+            if (collect($sourceIds)->contains(fn ($pair) => $pair[0] === 'workflow_leg' && in_array($pair[1], $originalLegs, true))) {
+                foreach (FinanceWorkflowLeg::query()->where('business_id', $business->id)->where('workflow_id', $correction->workflow_id)->where('currency', $document->currency)->pluck('id') as $legId) {
+                    $sourceIds[] = ['workflow_leg', $legId];
+                }
+            }
+        }
+        if ($type === 'commercial_invoice') {
+            foreach (FinanceCreditNote::query()->where('business_id', $business->id)->where('commercial_invoice_id', $id)->where('posting_status', 'posted')->pluck('id') as $creditId) {
+                $sourceIds[] = ['credit_note', $creditId];
+            }
+        }
+        $includedSources = [];
         $book = BigDecimal::zero();
         $units = BigDecimal::zero();
         $unrealized = BigDecimal::zero();
@@ -79,6 +108,10 @@ class FinanceMonetaryRevaluations
             abort_unless($journal->currency === $document->currency, 422,
                 'A related journal has a different document currency.');
             $day = $journal->posted_on->toDateString();
+            if ($through && $day > $through) {
+                continue;
+            }
+            $includedSources[] = [$journalType, $sourceId];
             if ($day > $latest) {
                 $latest = $day;
             }
@@ -112,8 +145,13 @@ class FinanceMonetaryRevaluations
                 ];
             }
         }
+        foreach ($includedSources as [$journalType,$sourceId]) {
+            foreach (DB::table('finance_cash_settlements')->where('business_id', $business->id)->where('source_type', $journalType)->where('source_id', $sourceId)->pluck('unrealized_released') as $released) {
+                $unrealized = $unrealized->plus((string) $released);
+            }
+        }
         $outstanding = app(FinanceDocuments::class)->outstanding($document, false);
-        if (! $outstanding->isEqualTo($units)) {
+        if (! $through && ! $outstanding->isEqualTo($units)) {
             throw ValidationException::withMessages(['document' => 'The document currency balance does not agree with allocated posted journals. Investigate prior corrections before revaluing or settling it.']);
         }
 
@@ -170,6 +208,7 @@ class FinanceMonetaryRevaluations
     {
         $doc = $this->document($business, $type, $id);
         $relation = $type === 'commercial_invoice' ? 'commercial_invoice_id' : 'supplier_bill_id';
+        app(FinanceTradeCredits::class)->assertNoPending($business->id, $relation, $id);
         if (FinancePayment::query()->where('business_id', $business->id)
             ->where($relation, $id)->where('status', 'pending')->exists()
             || FinancePartialBankReturn::query()->where('business_id', $business->id)
@@ -235,16 +274,16 @@ class FinanceMonetaryRevaluations
                 $ledger->line($snap['account_key'], '0', '0',
                     $amount, '0',
                     'Non-cash revaluation of document balance'),
-                $ledger->line('unrealized_fx_gain','0','0','0',$amount,
+                $ledger->line('unrealized_fx_gain', '0', '0', '0', $amount,
                     'Unrealised, non-cash gain on remaining foreign monetary item'),
             ];
         }
 
         return [
-            $ledger->line($snap['account_key'],'0','0',
-                '0',$amount,
+            $ledger->line($snap['account_key'], '0', '0',
+                '0', $amount,
                 'Non-cash revaluation of document balance'),
-            $ledger->line('unrealized_fx_loss','0','0',$amount,'0',
+            $ledger->line('unrealized_fx_loss', '0', '0', $amount, '0',
                 'Unrealised, non-cash loss on remaining foreign monetary item'),
         ];
     }

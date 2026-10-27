@@ -3,14 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\BusinessMembership;
+use App\Models\CashCustody;
 use App\Models\FinanceBankProfile;
 use App\Models\FinancePayrollCorrectionEvent;
 use App\Models\FinancePayrollReversal;
 use App\Models\FinancePayrollRun;
 use App\Models\FinancePayrollSettlement;
 use App\Models\FinancePostingRequest;
+use App\Models\PackingJob;
+use App\Models\PayrollStatutoryPolicy;
+use App\Models\StaffLeave;
+use App\Models\StaffOutput;
+use App\Models\StaffPayAdjustment;
 use App\Models\StaffPayRate;
 use App\Models\StaffPerson;
+use App\Models\StaffShift;
 use App\Services\FinancePayroll;
 use App\Services\FinancePayrollCorrections;
 use App\Services\FinancePayrollSettlements;
@@ -42,7 +49,14 @@ class FinancePayrollController extends Controller
         $rates = StaffPayRate::query()->where('business_id', $business->id)->with('person')->latest('id')->paginate(25, ['*'], 'rates_page')->withQueryString();
         $canApprove = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'finance.reviews.approve');
 
-        return view('finance.payroll', compact('business', 'members', 'runs', 'canPrepare', 'people', 'rates', 'canApprove'));
+        $policies = PayrollStatutoryPolicy::query()->where('business_id', $business->id)->latest('starts_on')->orderByDesc('id')->paginate(20, ['*'], 'policy_page')->withQueryString();
+        $outputs = StaffOutput::query()->where('business_id', $business->id)->with('person')->latest('id')->paginate(25, ['*'], 'output_page')->withQueryString();
+        $adjustments = StaffPayAdjustment::query()->where('business_id', $business->id)->with('person')->latest('id')->paginate(25, ['*'], 'adjustment_page')->withQueryString();
+        $leaves = StaffLeave::query()->where('business_id', $business->id)->where('pay_treatment', 'unverified')->with('person')->latest('starts_at')->paginate(20, ['*'], 'leave_page')->withQueryString();
+        $absences = StaffShift::query()->where('business_id', $business->id)->where('status', 'absent')->where('pay_treatment', 'unverified')->with('person')->latest('starts_at')->paginate(20, ['*'], 'absence_page')->withQueryString();
+        $jobs = PackingJob::query()->where('business_id', $business->id)->where('status', 'completed')->latest('id')->paginate(30, ['*'], 'job_page')->withQueryString();
+
+        return view('finance.payroll', compact('business', 'members', 'runs', 'canPrepare', 'people', 'rates', 'canApprove', 'policies', 'outputs', 'adjustments', 'leaves', 'absences', 'jobs'));
     }
 
     public function prepare(Request $request, FinancePayroll $service): RedirectResponse
@@ -91,12 +105,15 @@ class FinancePayrollController extends Controller
         $settlements = $canSettle ? FinancePayrollSettlement::query()
             ->where('business_id', $business->id)->where('payroll_run_id', $run->id)
             ->orderByDesc('id')->get() : collect();
+        $cashCustodies = $canSettle ? CashCustody::query()->where('business_id', $business->id)->where('active', true)->where('currency', $run->currency)->orderBy('name')->get() : collect();
         $banks = $canSettle ? FinanceBankProfile::query()->where('business_id', $business->id)
             ->where('active', true)->orderBy('label')->get() : collect();
         $remaining = [];
         foreach ($run->lines as $line) {
             $remaining[$line->id] = (string) $settlementService->remaining($run, 'salary', $line->id)->toScale(2);
         }
+        $payeRemaining = (string) $settlementService->remaining($run, 'paye')->toScale(2);
+        $nssfRemaining = (string) $settlementService->remaining($run, 'nssf')->toScale(2);
         $withholdingRemaining = (string) $settlementService->remaining($run, 'withholding')->toScale(2);
         $reversal = FinancePayrollReversal::query()->where('business_id', $business->id)
             ->where('payroll_run_id', $run->id)->first();
@@ -111,8 +128,8 @@ class FinancePayrollController extends Controller
             ->orderBy('id')->get() : collect();
 
         return view('finance.payroll-detail', compact('business', 'run', 'canSettle', 'canCorrect',
-            'settlements', 'banks', 'remaining', 'withholdingRemaining', 'reversal', 'canWithdraw',
-            'correctionEvents'));
+            'settlements', 'banks', 'cashCustodies', 'remaining', 'withholdingRemaining', 'reversal', 'canWithdraw',
+            'correctionEvents', 'payeRemaining', 'nssfRemaining'));
     }
 
     public function payslip(Request $request, int $run, int $line): View
@@ -134,12 +151,12 @@ class FinancePayrollController extends Controller
     {
         $this->check($request, 'finance.payroll.settle');
         $data = $request->validate([
-            'kind' => ['required', 'in:salary,withholding'],
+            'kind' => ['required', 'in:salary,withholding,paye,nssf'],
             'payroll_line_id' => ['nullable', 'integer', 'min:1'],
             'recipient_name' => ['nullable', 'string', 'max:150'],
             'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2', 'max:999999999999999'],
             'cash_account_key' => ['required', 'in:bank,cash'],
-            'bank_profile_id' => ['nullable', 'integer', 'min:1'],
+            'bank_profile_id' => ['nullable', 'integer', 'min:1'], 'cash_custody_id' => ['nullable', 'integer', 'min:1'],
             'paid_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'external_reference' => ['required', 'string', 'min:3', 'max:150'],
             'evidence_note' => ['required', 'string', 'min:20', 'max:2000'],

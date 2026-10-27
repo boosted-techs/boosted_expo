@@ -8,6 +8,7 @@ use App\Models\FinanceJournalLine;
 use App\Models\FinanceOperation;
 use App\Models\FinancePostingRequest;
 use App\Models\FinanceRegisterEntry;
+use App\Models\FinanceWorkflowLeg;
 use App\Models\LoanInstalment;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -22,14 +23,15 @@ class FinanceOwnerPosition
         $cashOut = [];
         $baseCashIn = BigDecimal::zero();
         $baseCashOut = BigDecimal::zero();
-        $moneyIds = $accounts->filter(fn ($a) => in_array($a->system_key, ['cash', 'bank'], true) || str_starts_with($a->system_key, 'bank_'))->modelKeys();
+        $moneyIds = $accounts->filter(fn ($a) => $a->type === 'asset' && (in_array($a->system_key, ['cash', 'bank'], true) || str_starts_with($a->system_key, 'bank_') || str_starts_with($a->system_key, 'cash_')))->modelKeys();
+        $noncashWorkflowLegs = FinanceWorkflowLeg::query()->where('business_id', $business->id)->whereHas('workflow', fn ($q) => $q->whereIn('kind', ['cash_variance', 'cutover_opening']))->pluck('id')->all();
         $lines = FinanceJournalLine::query()->where('finance_journal_lines.business_id', $business->id)->join('finance_journals as j', function ($join) {
             $join->on('j.id', '=', 'finance_journal_lines.journal_id')->on('j.business_id', '=', 'finance_journal_lines.business_id');
-        })->whereDate('j.posted_on', '<=', $date)->get(['finance_journal_lines.*', 'j.currency', 'j.posted_on', 'j.source_type']);
+        })->whereDate('j.posted_on', '<=', $date)->get(['finance_journal_lines.*', 'j.currency', 'j.posted_on', 'j.source_type', 'j.source_id']);
         foreach ($lines as $line) {
             $key = $accounts[$line->account_id]->system_key;
             $balances[$key] = ($balances[$key] ?? BigDecimal::zero())->plus((string) $line->base_debit)->minus((string) $line->base_credit);
-            if (! in_array($line->source_type, ['opening_balance', 'foreign_bank_opening'], true) && (BigDecimal::of((string) $line->debit)->isGreaterThan(0) || BigDecimal::of((string) $line->credit)->isGreaterThan(0)) && in_array($line->account_id, $moneyIds, true) && substr((string) $line->posted_on, 0, 10) === $date) {
+            if (! ($line->source_type === 'workflow_leg' && in_array($line->source_id, $noncashWorkflowLegs, true)) && ! in_array($line->source_type, ['opening_balance', 'foreign_bank_opening'], true) && (BigDecimal::of((string) $line->debit)->isGreaterThan(0) || BigDecimal::of((string) $line->credit)->isGreaterThan(0)) && in_array($line->account_id, $moneyIds, true) && substr((string) $line->posted_on, 0, 10) === $date) {
                 $cashIn[$line->currency] = ($cashIn[$line->currency] ?? BigDecimal::zero())->plus((string) $line->debit);
                 $cashOut[$line->currency] = ($cashOut[$line->currency] ?? BigDecimal::zero())->plus((string) $line->credit);
                 $baseCashIn = $baseCashIn->plus((string) $line->base_debit);
@@ -75,7 +77,7 @@ class FinanceOwnerPosition
                 }
             }
         }
-        foreach (FinanceOperation::query()->where('business_id', $business->id)->where('kind', 'expense')->where('posting_status', 'posted')->get() as $expense) {
+        foreach (FinanceOperation::query()->where('business_id', $business->id)->whereIn('kind', ['expense', 'market_reimbursement'])->where('posting_status', 'posted')->get() as $expense) {
             $remaining = app(FinanceOperations::class)->remaining($expense);
             if (! $remaining->isGreaterThan(0)) {
                 continue;
@@ -107,6 +109,8 @@ class FinanceOwnerPosition
         $registerReconciliation = app(FinanceRegisterReconciliation::class)->report($business, $date, $balances);
         $unaccounted = FinanceOperation::query()->where('business_id', $business->id)->whereIn('kind', ['staff_advance', 'supplier_advance', 'customer_deposit'])->where('posting_status', 'posted')->orderBy('due_on')->get()->map(fn ($operation) => ['operation' => $operation, 'remaining' => app(FinanceOperations::class)->remaining($operation)])->filter(fn ($row) => $row['remaining']->isGreaterThan(0));
 
-        return compact('balances', 'money', 'cashIn', 'cashOut', 'baseCashIn', 'baseCashOut', 'unposted', 'reviews', 'funding', 'missingTerms', 'today', 'overdue', 'unaccounted', 'unallocatedLoanRepayments', 'registerReconciliation');
+        $ownerClaims = FinanceOperation::query()->where('business_id', $business->id)->where('kind', 'expense')->whereNotNull('owner_user_id')->where('posting_status', 'posted')->with('owner')->get()->map(fn ($source) => ['source' => $source, 'remaining' => app(FinanceOperations::class)->remaining($source)])->filter(fn ($r) => $r['remaining']->isGreaterThan(0));
+
+        return compact('ownerClaims', 'balances', 'money', 'cashIn', 'cashOut', 'baseCashIn', 'baseCashOut', 'unposted', 'reviews', 'funding', 'missingTerms', 'today', 'overdue', 'unaccounted', 'unallocatedLoanRepayments', 'registerReconciliation');
     }
 }

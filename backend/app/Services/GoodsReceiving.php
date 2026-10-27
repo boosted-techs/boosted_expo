@@ -43,6 +43,7 @@ class GoodsReceiving
                 throw ValidationException::withMessages(['accepted_quantity' => 'Record a positive received quantity.']);
             }
 
+            app(FinancePeriodControls::class)->assertWritable(Business::findOrFail($order->business_id), $data['received_on']);
             $prior = $math->sum($order->receipts()->pluck('received_quantity')->all());
             $ordered = $math->decimal($order->quantity);
             if ($prior->plus($received)->isGreaterThan($ordered)) {

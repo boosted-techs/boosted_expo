@@ -35,6 +35,7 @@
 <option value="{{ $invoice->id }}">{{ $invoice->reference }} · {{ $invoice->customer->name }} · {{ $invoice->currency }} {{ $invoiceBalances[$invoice->id] }} available</option>@endif @endforeach</select></label>
 <div class="form-columns"><label class="field"><span>Amount in invoice currency</span><input type="number" name="amount" step=".01" min=".01" required></label>
 <label class="field"><span>Recorded into</span><select name="cash_account_key"><option value="bank">Bank / electronic</option><option value="cash">Cash</option></select></label></div>
+@if($cashCustodies->isNotEmpty())<label class="field"><span>Named cash float (cash payments only)</span><select name="cash_custody_id"><option value="">Use bank / original cash choice</option>@foreach($cashCustodies as $custody)<option value="{{ $custody->id }}">{{ $custody->name }} · {{ $custody->currency }}</option>@endforeach</select></label>@endif
 @if($bankProfiles->isNotEmpty())
 <label class="field"><span>Named bank ledger (when using bank/electronic)</span>
 <select name="bank_profile_id"><option value="">Cash only / legacy bank not available</option>
@@ -57,6 +58,7 @@
 <option value="{{ $bill->id }}">{{ $bill->reference }} · {{ $bill->currency }} {{ $billBalances[$bill->id] }} payable</option>@endif @endforeach</select></label>
 <div class="form-columns"><label class="field"><span>Amount in bill currency</span><input name="amount" type="number" step=".01" min=".01" required></label>
 <label class="field"><span>Paid from</span><select name="cash_account_key"><option value="bank">Bank / electronic</option><option value="cash">Cash</option></select></label></div>
+@if($cashCustodies->isNotEmpty())<label class="field"><span>Named cash float (cash payments only)</span><select name="cash_custody_id"><option value="">Use bank / original cash choice</option>@foreach($cashCustodies as $custody)<option value="{{ $custody->id }}">{{ $custody->name }} · {{ $custody->currency }}</option>@endforeach</select></label>@endif
 @if($bankProfiles->isNotEmpty())
 <label class="field"><span>Named bank ledger (when using bank/electronic)</span>
 <select name="bank_profile_id"><option value="">Cash only / legacy bank not available</option>
@@ -70,7 +72,7 @@
 <section class="section-card"><h2>Record a paid shipment cost</h2><p class="muted">Use for expenses you have supporting payment evidence for. This is a manually recorded payment, not bank feed confirmation.</p>
 @include('finance._record-search', ['field' => 'shipment_search', 'page' => 'shipment_page', 'label' => 'Find shipment by reference or AWB'])
 {{ $shipments->links() }}
-<form method="POST" action="{{ route('finance.costs.store') }}" class="form-stack">@csrf
+<form method="POST" action="{{ route('finance.costs.store') }}" class="form-stack">@csrf<input type="hidden" name="idempotency_key" value="{{ (string)Illuminate\Support\Str::uuid() }}">
 <label class="field"><span>Transport leg (optional, must match shipment)</span><select name="transport_leg_id"><option value="">Whole shipment / no specific leg</option>@foreach($transportLegs as $leg)<option value="{{ $leg->id }}">{{ $leg->shipment->reference }} · Leg {{ $leg->sequence }} · {{ $leg->partner_snapshot['name'] }} · {{ $leg->origin }} → {{ $leg->destination }}</option>@endforeach</select></label>
 <label class="field"><span>Shipment</span><select name="shipment_id" required><option value="">Choose shipment</option>@foreach($shipments as $shipment)<option value="{{ $shipment->id }}">{{ $shipment->reference }} · {{ $shipment->destination_country }}</option>@endforeach</select></label>
 <div class="form-columns"><label class="field"><span>Cost category</span><select name="category">
@@ -80,6 +82,7 @@
 <label class="field"><span>Expense description</span><input name="description" maxlength="250" minlength="5" required></label>
 <div class="form-columns"><label class="field"><span>Paid amount</span><input name="amount" type="number" min=".01" step=".01" required></label>
 <label class="field"><span>Paid via</span><select name="cash_account_key"><option value="bank">Bank / electronic</option><option value="cash">Cash</option></select></label></div>
+@if($cashCustodies->isNotEmpty())<label class="field"><span>Named cash float (cash payments only)</span><select name="cash_custody_id"><option value="">Use bank / original cash choice</option>@foreach($cashCustodies as $custody)<option value="{{ $custody->id }}">{{ $custody->name }} · {{ $custody->currency }}</option>@endforeach</select></label>@endif
 @if($bankProfiles->isNotEmpty())
 <label class="field"><span>Named bank ledger (when using bank/electronic)</span>
 <select name="bank_profile_id"><option value="">Cash only / legacy bank not available</option>

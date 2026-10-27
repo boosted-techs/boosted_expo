@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Business;
+use App\Models\CashClose;
 use App\Models\CommercialInvoice;
 use App\Models\FinanceAccount;
 use App\Models\FinanceBalanceAdjustment;
@@ -10,6 +11,7 @@ use App\Models\FinanceBankLedgerCheck;
 use App\Models\FinanceBankProfile;
 use App\Models\FinanceBankStatement;
 use App\Models\FinanceCreditNote;
+use App\Models\FinanceCutover;
 use App\Models\FinanceForeignBankOpening;
 use App\Models\FinanceFxRevaluation;
 use App\Models\FinanceInventoryRelief;
@@ -31,6 +33,7 @@ use App\Models\FinanceRegisterEntry;
 use App\Models\FinanceShipmentCost;
 use App\Models\FinanceSupplierBill;
 use App\Models\FinanceTransactionReversal;
+use App\Models\FinanceWorkflow;
 use App\Models\StockAdjustment;
 use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +43,7 @@ class FinancePeriodControls
 {
     public function assertWritable(Business $business, string $date): void
     {
+        abort_if(FinanceCutover::query()->where('business_id', $business->id)->where('status', 'accepted')->whereDate('effective_on', '>=', $date)->exists(), 422, 'The signed opening cutover locks this history. Record a dated reviewed correction after the opening date.');
         if (FinancePeriod::query()->where('business_id', $business->id)
             ->whereIn('status', ['pending', 'closed'])
             ->whereDate('period_to', '>=', $date)->exists()) {
@@ -102,7 +106,13 @@ class FinancePeriodControls
     private function outstanding(Business $business, string $through): void
     {
         $b = $business->id;
+        $reconciliation = app(FinanceManagementReports::class)->reconciliation($business, $through);
+        if (! $reconciliation['matches']) {
+            $first = $reconciliation['issues'][0];
+            throw ValidationException::withMessages(['period' => $first['reference'].': '.$first['note'].' Review the dated financial report before closing.']);
+        }
         $sources = [
+            [FinanceWorkflow::class, 'posting_status', 'not_posted', 'event_on'],
             [StockAdjustment::class, 'posting_status', 'not_posted', 'event_on'],
             [FinanceOperation::class, 'posting_status', 'not_posted', 'event_on'],
             [FinanceRegisterEntry::class, 'posting_status', 'not_posted', 'event_on'],
@@ -130,6 +140,9 @@ class FinancePeriodControls
                     ' records on or before this closing date. Complete or correct them first.']);
             }
         }
+        if (CashClose::query()->where('business_id', $b)->whereIn('status', ['pending', 'variance_pending'])->whereDate('counted_on', '<=', $through)->exists()) {
+            throw ValidationException::withMessages(['period' => 'Complete pending cash counts and variances before closing.']);
+        }
         $unbilled = DB::table('goods_receipts as gr')->where('gr.business_id', $b)->whereDate('gr.received_on', '<=', $through)->groupBy('gr.purchase_order_id')->havingRaw('ROUND(SUM(gr.accepted_quantity),3) > ROUND((SELECT COALESCE(SUM(bill.accepted_quantity),0) FROM finance_supplier_bills bill WHERE bill.business_id = ? AND bill.purchase_order_id = gr.purchase_order_id AND bill.posting_status = ? AND bill.vendor_invoice_date <= ?),3)', [$b, 'posted', $through])->exists();
         if ($unbilled) {
             throw ValidationException::withMessages(['period' => 'Accepted produce on or before this close date is not fully covered by posted supplier bills. Resolve the receipt cost before closing.']);
@@ -154,7 +167,7 @@ class FinancePeriodControls
                 ->whereDate('period_to', '<=', $through)->get() as $statement) {
                 $check = FinanceBankLedgerCheck::query()->where('business_id', $b)
                     ->where('statement_id', $statement->id)->first();
-                if (! $check || ! app(FinanceBankLedgerProofs::class)->isCurrent($check)) {
+                if (! $check || (! app(FinanceBankLedgerProofs::class)->isCurrent($check) && ! app(FinanceBankLedgerProofs::class)->isSuperseded($check))) {
                     throw ValidationException::withMessages(['period' => 'A named-bank statement is not yet independently verified against its ledger, or its evidence became stale. Complete bank-to-ledger proof before closing the period.']);
                 }
             }

@@ -82,6 +82,7 @@ class FinanceBalanceAdjustments
         abort_unless($doc->business_id === $business->id &&
             $doc->posting_status === 'posted', 422, 'Only posted financial documents can be adjusted.');
         $column = $kind === 'customer' ? 'commercial_invoice_id' : 'supplier_bill_id';
+        app(FinanceTradeCredits::class)->assertNoCredit($business->id, $column, $doc->id);
         if (FinanceOperation::query()->where('business_id', $business->id)->where($column, $doc->id)->whereIn('posting_status', ['not_posted', 'posted'])->exists()) {
             throw ValidationException::withMessages(['adjustment' => 'A deposit or advance is allocated to this document. Resolve it before a price concession.']);
         }
@@ -137,9 +138,9 @@ class FinanceBalanceAdjustments
             $ledger->line('receivable', '0', (string) $adjustment->amount, '0', (string) $base,
                 'Decrease customer balance'),
         ] : [
-            $ledger->line('payable',(string) $adjustment->amount,'0',(string) $base,'0',
+            $ledger->line('payable', (string) $adjustment->amount, '0', (string) $base, '0',
                 'Approved supplier price concession'),
-            $ledger->line('inventory','0',(string) $adjustment->amount,'0',(string) $base,
+            $ledger->line('inventory', '0', (string) $adjustment->amount, '0', (string) $base,
                 'Decrease received inventory value before consumption'),
         ];
     }
