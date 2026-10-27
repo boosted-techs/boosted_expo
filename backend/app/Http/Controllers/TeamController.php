@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BusinessMembership;
+use App\Models\TeamMembershipEvent;
 use App\Services\InviteBusinessUser;
 use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
@@ -18,18 +19,19 @@ class TeamController extends Controller
         abort_unless($access->allows($request->attributes->get('membership'), 'team.view'), 403);
         $business = $request->attributes->get('activeBusiness');
         $members = BusinessMembership::query()->where('business_id', $business->id)->with('user')->get();
-        $pending = $business->invitations()->whereNull('accepted_at')->where('expires_at', '>', now())->latest()->get();
+        $pending = $business->invitations()->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->latest()->get();
         $roles = array_values(array_filter(
             BusinessPermissions::INVITABLE_ROLES,
             fn (string $role) => $access->canInviteRole($request->attributes->get('membership'), $role),
         ));
 
-        $canManage=in_array($request->attributes->get('membership')->role,['owner','admin'],true);
-        $actorRole=$request->attributes->get('membership')->role;
-        $audit=\App\Models\TeamMembershipEvent::query()->where('business_id',$business->id)
+        $canManage = in_array($request->attributes->get('membership')->role, ['owner', 'admin'], true);
+        $actorRole = $request->attributes->get('membership')->role;
+        $audit = TeamMembershipEvent::query()->where('business_id', $business->id)
             ->latest('id')->limit(20)->get();
+
         return view('team.index', compact('business', 'members', 'pending', 'roles',
-            'canManage','actorRole','audit'));
+            'canManage', 'actorRole', 'audit'));
     }
 
     public function invite(Request $request, BusinessPermissions $access, InviteBusinessUser $invites): RedirectResponse
@@ -50,9 +52,8 @@ class TeamController extends Controller
 
         $invites->send($business, $email, $input['role'], $request->user()->id);
 
-        $message = config('mail.default') === 'log'
-            ? 'Invitation recorded in the development mail log (not sent to '.$email.').' 
-            : 'Invitation sent to '.$email;
+        $message = 'Invitation saved for '.$email.'. Delivery attempts are recorded; ask your platform operator to review a failed delivery or resend the invitation.';
+
         return back()->with('status', $message);
     }
 }

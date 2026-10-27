@@ -1,0 +1,6 @@
+@extends('layouts.platform')
+@inject('platformAccess','App\Services\PlatformAccess')
+@section('title','Onboarding requests')
+@section('content')
+<h1>Onboarding requests</h1><section class="section-card">@forelse($requests as $r)<div class="sticker-panel" style="margin-bottom:16px"><h2>{{ $r->business_name }}</h2><p>{{ $r->contact_name }} · {{ $r->contact_email }} · {{ $r->contact_phone }} · {{ $r->status }}</p><p>{{ $r->requirements }}</p>@if($r->business_id)<a href="{{ route('platform.businesses.show',$r->business_id) }}">Manage business</a>@else<form method="POST" action="{{ route('platform.billing.request',$r) }}" class="form-stack">@csrf<select name="status"><option value="contacted">Contacted</option><option value="approved">Approve and invite first owner</option><option value="declined">Decline</option></select><label class="field"><span>Review notes</span><textarea name="admin_notes" maxlength="3000"></textarea></label><button class="primary-button">Record review</button></form>@endif<form method="POST" action="{{ route('platform.billing.request.packages',$r) }}" style="margin-top:12px">@csrf<button class="secondary-button">Send package information</button></form></div>@empty<p>No requests.</p>@endforelse{{ $requests->links() }}</section>
+@endsection

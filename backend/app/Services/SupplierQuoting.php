@@ -17,6 +17,7 @@ class SupplierQuoting
         return DB::transaction(function () use ($request, $supplier, $data, $channel) {
             $business = Business::query()->lockForUpdate()->findOrFail($request->business_id);
             abort_unless($business->is_active, 404);
+            app(PlatformTenancy::class)->assertModuleWrite($business, 'procurement');
             $rfq = SupplyRequest::query()->where('business_id', $request->business_id)
                 ->lockForUpdate()->findOrFail($request->id);
 

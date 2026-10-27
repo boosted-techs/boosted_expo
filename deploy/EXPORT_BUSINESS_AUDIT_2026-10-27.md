@@ -322,3 +322,12 @@ Additional source-confirmed control gaps include a supplier/date reporting and p
 Printing is now an early P1 operating gate. Existing bounded paper dimensions, ZPL snapshots and a leased agent queue are real, but do not supply printer/media profiles, configurable visual layouts, bulk-print manifests, private internal QR, required/stale-label validation, applied-label verification or confirmed physical paper output. The existing latest-60 print-generation selector also needs full searchable history. See R11/R12 and acceptance A42–A47.
 
 The roadmap retains six primary exporter areas and a distinct superadmin workspace. The new owner question/metric contracts, simple financial commands and superadmin service-owner questions turn the existing module plan into explicit operational acceptance criteria. R01–R15 and A36–A53 identify the extra scope; none should be described as complete merely because related routes already exist.
+
+
+## 7. Phase 1 local implementation update
+
+F12 now has a dedicated local implementation: platform dashboard and business tabs, separate lifecycle/security/billing states, owner invitation/recovery, versioned commercial terms, subscription changes/corrections, renewal delivery records, source usage/limits, scoped owner-approved support and platform audit. See the roadmap's Phase 1 implementation entry for the precise delivered scope, counter definitions and remaining release checks.
+
+The original findings above remain the dated audit evidence. This update does not make the entire exporter ERP complete: quantity-only operational orders, split sourcing/market buying, transport custody, full staff rota/attendance/payroll, general expenses, connected costing, assets and loans still follow stages 2–4. Infrastructure health/cost observations remain evidence-led and partly manual; absent evidence is unknown. No production, PostgreSQL concurrency, physical Zebra output or real-device PWA acceptance is claimed.
+
+Local verification: **260 tests and 3,691 assertions pass**, including 34 new platform regression cases. Blade compilation passes; existing local source-table row counts were preserved and SQLite reports no foreign-key violations after the additive migration. Responsive screenshots were reviewed using isolated test fixtures, not real exporter accounts.

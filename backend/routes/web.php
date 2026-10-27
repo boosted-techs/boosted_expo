@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BoostedOneBillingController;
 use App\Http\Controllers\BoostedOnePublicController;
+use App\Http\Controllers\BusinessPlatformController;
 use App\Http\Controllers\BusinessSelectionController;
 use App\Http\Controllers\BusinessSettingsController;
 use App\Http\Controllers\BuyerOrderPortalController;
@@ -34,6 +35,9 @@ use App\Http\Controllers\OperatingPolicyController;
 use App\Http\Controllers\PackingJobController;
 use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Controllers\PlatformBusinessController;
+use App\Http\Controllers\PlatformControlController;
+use App\Http\Controllers\PlatformOperationsController;
+use App\Http\Controllers\PlatformSubscriptionController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\ProductImportController;
@@ -128,8 +132,32 @@ Route::middleware('auth')->group(function () {
     Route::post('/choose-business', [BusinessSelectionController::class, 'store'])->name('businesses.activate');
 
     Route::prefix('platform')->name('platform.')->middleware('platform')->group(function () {
+
+        Route::get('/', [PlatformControlController::class, 'overview'])->name('overview');
+        Route::get('/usage-health', [PlatformOperationsController::class, 'health'])->name('health');
+        Route::post('/health-evidence', [PlatformOperationsController::class, 'evidence'])->name('health.evidence');
+        Route::get('/support', [PlatformOperationsController::class, 'index'])->name('support');
+        Route::post('/cases', [PlatformOperationsController::class, 'case'])->name('cases.store');
+        Route::put('/cases/{case}', [PlatformOperationsController::class, 'case'])->whereNumber('case')->name('cases.update');
+        Route::post('/businesses/{business}/support', [PlatformOperationsController::class, 'requestSupport'])->whereNumber('business')->name('support.request');
+        Route::get('/support/{grant}', [PlatformOperationsController::class, 'support'])->whereNumber('grant')->name('support.view');
+        Route::post('/deliveries/{delivery}/retry', [PlatformOperationsController::class, 'retry'])->whereNumber('delivery')->middleware('throttle:5,1')->name('deliveries.retry');
+        Route::get('/settings', [PlatformOperationsController::class, 'settings'])->name('settings');
+        Route::put('/settings/platform-role', [PlatformOperationsController::class, 'role'])->name('settings.role');
+        Route::get('/businesses/{business}', [PlatformControlController::class, 'show'])->whereNumber('business')->name('businesses.show');
+        Route::put('/businesses/{business}', [PlatformControlController::class, 'update'])->whereNumber('business')->name('businesses.update');
+        Route::post('/businesses/{business}/lifecycle', [PlatformControlController::class, 'lifecycle'])->whereNumber('business')->name('businesses.lifecycle');
+        Route::post('/businesses/{business}/invitations', [PlatformControlController::class, 'invitation'])->whereNumber('business')->name('businesses.invitation');
+        Route::post('/businesses/{business}/billing-access', [PlatformControlController::class, 'billingAccess'])->whereNumber('business')->name('businesses.billing-access');
+        Route::post('/businesses/{business}/allowance', [PlatformControlController::class, 'allowance'])->whereNumber('business')->name('businesses.allowance');
+        Route::post('/businesses/{business}/usage-snapshot', [PlatformControlController::class, 'snapshot'])->whereNumber('business')->name('businesses.snapshot');
+        Route::post('/billing/plans/{plan}/revision', [PlatformSubscriptionController::class, 'revise'])->whereNumber('plan')->name('billing.plans.revise');
+        Route::post('/billing/subscriptions/{subscription}/change', [PlatformSubscriptionController::class, 'subscription'])->whereNumber('subscription')->name('billing.subscriptions.change');
+        Route::post('/billing/invoices/{invoice}/adjustment', [PlatformSubscriptionController::class, 'adjustment'])->whereNumber('invoice')->name('billing.invoices.adjustment');
+
         Route::get('/businesses', [PlatformBusinessController::class, 'index'])->name('businesses.index');
         Route::post('/businesses', [PlatformBusinessController::class, 'store'])->name('businesses.store');
+        Route::get('/onboarding', [BoostedOneBillingController::class, 'onboarding'])->middleware('platform:business')->name('onboarding');
         Route::get('/billing', [BoostedOneBillingController::class, 'index'])->name('billing.index');
         Route::post('/billing/requests/{application}', [BoostedOneBillingController::class, 'requestStatus'])->name('billing.request');
         Route::post('/billing/requests/{application}/send-packages', [BoostedOneBillingController::class, 'sendPackages'])->name('billing.request.packages');
@@ -143,6 +171,11 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware(['business', 'billing'])->group(function () {
+        Route::get('/subscription-status', [BusinessPlatformController::class, 'status'])->name('business.subscription-status');
+        Route::post('/business-support/{grant}', [BusinessPlatformController::class, 'grant'])->whereNumber('grant')->name('business.platform.grant');
+        Route::post('/business-support-request', [BusinessPlatformController::class, 'request'])->name('business.platform.request');
+        Route::post('/business-data-export', [BusinessPlatformController::class, 'export'])->name('business.platform.export');
+
         Route::get('/my-subscription', [BoostedOneBillingController::class, 'customer'])->name('business.billing');
         Route::get('/my-subscription/invoices/{invoice}', [BoostedOneBillingController::class, 'customerInvoice'])->name('business.billing.invoice');
         // Outstanding foreign invoice/bill valuation; never a bank movement.

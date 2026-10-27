@@ -1,31 +1,11 @@
-@extends('layouts.public')
-@section('title', 'Platform business administration')
+@extends('layouts.platform')
+@inject('platformAccess','App\Services\PlatformAccess')
+@section('title','Businesses')
 @section('content')
-<span class="eyebrow">BOOSTED PLATFORM</span>
-<h1>Exporting businesses</h1>
-<p><a href="{{ route('platform.billing.index') }}">Manage onboarding requests, subscriptions and invoices →</a></p>
-<p class="subhead">Only a Boosted platform administrator can add a company and invite its first owner.</p>
-<section class="section-card">
- <h2>Register a business</h2>
- <form action="{{ route('platform.businesses.store') }}" method="POST" class="form-stack">@csrf
-  <label class="field"><span>Business name</span><input name="name" value="{{ old('name') }}" required maxlength="150"></label>
-  <label class="field"><span>Business code</span><input name="code" value="{{ old('code') }}" required placeholder="AFRIMEX" pattern="[A-Za-z0-9_-]+" maxlength="50"></label>
-  <div class="form-columns">
-    <label class="field"><span>Country code</span><input name="country_code" value="{{ old('country_code','UG') }}" maxlength="2" minlength="2" required></label>
-    <label class="field"><span>Base currency</span><input name="base_currency" value="{{ old('base_currency','UGX') }}" maxlength="3" minlength="3" required></label>
-  </div>
-  <label class="field"><span>Timezone</span><input name="timezone" value="{{ old('timezone','Africa/Kampala') }}" required></label>
-  <label class="field"><span>Default QR identity</span><select name="default_qr_level"><option value="product">Product</option><option value="batch" selected>Batch</option><option value="carton">Carton</option></select></label>
-  <label class="field"><span>Owner's email address</span><input name="owner_email" type="email" value="{{ old('owner_email') }}" required autocomplete="off"></label>
-  <button type="submit" class="primary-button">Create and invite owner</button>
- </form>
-</section>
-<section class="section-card">
- <h2>Registered businesses</h2>
- @forelse($businesses as $business)
- <div class="record"><div><strong>{{ $business->name }}</strong><small>{{ $business->code }} · {{ $business->base_currency }} · {{ $business->timezone }}</small></div><span class="tiny-pill">{{ $business->is_active ? 'Active' : 'Suspended' }}</span></div>
- @empty<p class="empty-msg">No exporters registered yet.</p>@endforelse
- {{ $businesses->links() }}
-</section>
-<form method="POST" action="{{ route('logout') }}" class="subtle-form">@csrf<button class="text-button">Sign out</button></form>
+<div class="page-intro"><div><h1>Exporting businesses</h1><p>Find the exporter, inspect its current position, then take a recorded action.</p></div></div>
+@if($platformAccess->allows(auth()->user(),'business'))<p><a class="secondary-button" href="{{ route('platform.onboarding') }}">Review onboarding requests</a></p>@endif
+<section class="section-card"><form method="GET" class="form-stack"><label class="field"><span>Find business name, code or owner contact</span><input name="search" value="{{ request('search') }}" maxlength="120"></label><div class="form-columns">@foreach(['lifecycle'=>['onboarding','operating','closed'],'security'=>['enabled','suspended'],'cover'=>['trial','active','grace','restricted','legacy_review','exempt']] as $field=>$options)<label class="field"><span>{{ ucfirst($field) }}</span><select name="{{ $field }}"><option value="">All</option>@foreach($options as $option)<option value="{{ $option }}" @selected(request($field)===$option)>{{ ucwords(str_replace('_',' ',$option)) }}</option>@endforeach</select></label>@endforeach</div><button class="secondary-button">Find businesses</button></form></section>
+<section class="section-card"><h2>{{ $businesses->total() }} matching businesses</h2>@forelse($businesses as $business)@php($cover=app(\App\Services\PlatformTenancy::class)->state($business))<div class="record"><div><a href="{{ route('platform.businesses.show',$business->id) }}"><strong>{{ $business->name }}</strong></a><small>{{ $business->code }} · {{ $business->lifecycle_status }} · {{ $business->security_suspended_at?'Security suspended':'Security enabled' }} · Billing {{ str_replace('_',' ',$cover['state']) }}</small><small>{{ $business->owner_contact_email??'Owner contact needs review' }} · {{ $business->memberships_count }} active seats · {{ $cover['subscription']?->plan?->name ?? 'No paid agreement' }} · Cover/review {{ $cover['until']?->format('d M Y')??'—' }}</small><small>Last tracked activity: {{ $business->last_platform_activity ? \Carbon\Carbon::parse($business->last_platform_activity)->timezone('Africa/Kampala')->format('d M Y H:i').' EAT' : 'Not measured yet' }}</small></div><a class="secondary-button" href="{{ route('platform.businesses.show',$business->id) }}">Manage</a></div>@empty<p>No businesses match.</p>@endforelse{{ $businesses->links() }}</section>
+@if($platformAccess->allows(auth()->user(),'business'))<details class="section-card"><summary>Register a business</summary><form action="{{ route('platform.businesses.store') }}" method="POST" class="form-stack">@csrf
+@foreach(['name'=>['Business name','text',''],'code'=>['Business code','text',''],'country_code'=>['Country code','text','UG'],'base_currency'=>['Reporting currency','text','UGX'],'timezone'=>['Timezone','text','Africa/Kampala'],'owner_email'=>["Owner email",'email','']] as $key=>[$label,$type,$default])<label class="field"><span>{{ $label }}</span><input name="{{ $key }}" type="{{ $type }}" value="{{ old($key,$default) }}" required maxlength="{{ $key==='owner_email'?255:150 }}"></label>@endforeach<input name="default_qr_level" value="carton" type="hidden"><p>A 14-day trial is recorded. Owner acceptance and setup remain visible on the business record.</p><button class="primary-button">Create business and invite owner</button></form></details>@endif
 @endsection

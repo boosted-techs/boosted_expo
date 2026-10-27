@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class BillingSubscription extends Model
 {
     protected $fillable = [
+        'terms_snapshot', 'scheduled_change', 'paused_at',
         'business_id', 'billing_plan_id', 'billing_email', 'billing_cycle', 'price_ugx',
         'tax_rate', 'status', 'starts_on', 'next_invoice_on', 'paid_through',
         'grace_days', 'agreement_notes', 'cancelled_at',
@@ -16,7 +17,7 @@ class BillingSubscription extends Model
     {
         return [
             'starts_on' => 'date', 'next_invoice_on' => 'date', 'paid_through' => 'date',
-            'cancelled_at' => 'datetime',
+            'cancelled_at' => 'datetime', 'paused_at' => 'datetime', 'legacy_paid_through' => 'date', 'terms_snapshot' => 'array', 'scheduled_change' => 'array',
         ];
     }
 

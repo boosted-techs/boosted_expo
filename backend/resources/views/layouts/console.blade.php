@@ -22,7 +22,7 @@ $sections = config('expo.sections');
     <span class="brand-icon">B<span>↗</span></span>
     <span><strong>Boosted One</strong><small>EXPORT ERP</small></span>
   </a>
-  <p class="nav-label">WORKSPACE</p>
+  <p class="nav-label">WORKSPACE</p><a class="footer-link" href="{{ route('business.subscription-status') }}">Account & support</a>
   <nav aria-label="Main navigation">
     @foreach($sections as $key => $details)
       @if($access->allows($membership, $details[2]))
@@ -149,6 +149,7 @@ $sections = config('expo.sections');
 </header>
 <main class="content">
   <x-pwa-install />
+  @if(request()->attributes->get('platformEntitlement') && !request()->attributes->get('platformEntitlement')['can_write'])<div class="platform-warning">Subscription renewal is due. Existing records remain readable. <a href="{{ route('business.subscription-status') }}">Contact your owner / account support</a>.</div>@endif
   @if(session('status'))<div class="flash success" role="status">{{ session('status') }}</div>@endif
   @if($errors->any())<div class="flash error" role="alert"><strong>Some details need attention.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
   @yield('content')

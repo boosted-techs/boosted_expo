@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Business;
 use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -35,7 +37,9 @@ class ProductImages
         imagewebp($dest, null, 83);
         $blob = ob_get_clean();
         imagedestroy($dest);
-        if ($blob === false) throw new \RuntimeException('Unable to process image.');
+        if ($blob === false) {
+            throw new \RuntimeException('Unable to process image.');
+        }
 
         return $blob;
     }
@@ -47,7 +51,7 @@ class ProductImages
         }
 
         $info = @getimagesize($file->getRealPath());
-        if (! is_array($info) || ! in_array($info['mime'], ['image/jpeg','image/png','image/webp'], true)) {
+        if (! is_array($info) || ! in_array($info['mime'], ['image/jpeg', 'image/png', 'image/webp'], true)) {
             throw ValidationException::withMessages(['photo' => 'Please upload a valid JPEG, PNG or WebP image.']);
         }
         [$width, $height] = $info;
@@ -55,7 +59,9 @@ class ProductImages
             throw ValidationException::withMessages(['photo' => 'Image dimensions are outside the allowed range.']);
         }
         $source = @imagecreatefromstring(file_get_contents($file->getRealPath()));
-        if (! $source) throw ValidationException::withMessages(['photo' => 'This image could not be opened.']);
+        if (! $source) {
+            throw ValidationException::withMessages(['photo' => 'This image could not be opened.']);
+        }
         try {
             $full = $this->resize($source, 1600, $width, $height);
             $small = $this->resize($source, 320, $width, $height);
@@ -68,13 +74,18 @@ class ProductImages
         $thumbnail = $base.'/thumb.webp';
 
         try {
-            Storage::disk('r2')->put($original, $full, ['ContentType' => 'image/webp']);
-            Storage::disk('r2')->put($thumbnail, $small, ['ContentType' => 'image/webp']);
-            return ProductImage::create([
-                'business_id' => $product->business_id, 'product_id' => $product->id,
-                'original_key' => $original, 'thumbnail_key' => $thumbnail,
-                'width' => $width, 'height' => $height,
-            ]);
+            return DB::transaction(function () use ($product, $full, $small, $original, $thumbnail, $width, $height) {
+                $business = Business::query()->lockForUpdate()->findOrFail($product->business_id);
+                app(PlatformUsage::class)->assertMedia($business, strlen($full) + strlen($small));
+                Storage::disk('r2')->put($original, $full, ['ContentType' => 'image/webp']);
+                Storage::disk('r2')->put($thumbnail, $small, ['ContentType' => 'image/webp']);
+
+                return ProductImage::create([
+                    'business_id' => $product->business_id, 'product_id' => $product->id,
+                    'original_key' => $original, 'thumbnail_key' => $thumbnail,
+                    'width' => $width, 'height' => $height, 'stored_bytes' => strlen($full) + strlen($small),
+                ]);
+            }, 3);
         } catch (\Throwable $error) {
             Storage::disk('r2')->delete([$original, $thumbnail]);
             throw $error;

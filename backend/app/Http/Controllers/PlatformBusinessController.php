@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Business;
+use App\Models\PlatformUsageActivity;
 use App\Services\InviteBusinessUser;
+use App\Services\PlatformAccess;
+use App\Services\PlatformTenancy;
 use App\Support\BusinessCurrencies;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,9 +16,27 @@ use Illuminate\View\View;
 
 class PlatformBusinessController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $businesses = Business::query()->latest()->paginate(20);
+        $filters = $request->validate(['search' => ['nullable', 'string', 'max:120'], 'lifecycle' => ['nullable', Rule::in(['onboarding', 'operating', 'closed'])], 'security' => ['nullable', Rule::in(['suspended', 'enabled'])], 'cover' => ['nullable', Rule::in(['trial', 'active', 'grace', 'restricted', 'legacy_review', 'exempt'])]]);
+        $query = Business::query()->with('billingSubscriptions.plan')->withCount(['memberships' => fn ($q) => $q->where('active', true)])
+            ->addSelect(['last_platform_activity' => PlatformUsageActivity::query()->selectRaw('MAX(last_seen_at)')->whereColumn('business_id', 'businesses.id')])
+            ->when($filters['search'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$term.'%')->orWhere('code', 'like', '%'.$term.'%')->orWhere('owner_contact_email', 'like', '%'.$term.'%')))
+            ->when($filters['lifecycle'] ?? null, fn ($q, $v) => $q->where('lifecycle_status', $v))
+            ->when(($filters['security'] ?? null) === 'suspended', fn ($q) => $q->whereNotNull('security_suspended_at'))
+            ->when(($filters['security'] ?? null) === 'enabled', fn ($q) => $q->whereNull('security_suspended_at'));
+        if (! empty($filters['cover'])) {
+            $ids = [];
+            (clone $query)->chunkById(200, function ($rows) use (&$ids, $filters) {
+                foreach ($rows as $row) {
+                    if (app(PlatformTenancy::class)->state($row)['state'] === $filters['cover']) {
+                        $ids[] = $row->id;
+                    }
+                }
+            });
+            $query->whereIn('id', $ids);
+        }
+        $businesses = $query->latest('id')->paginate(25)->withQueryString();
 
         return view('platform.businesses', compact('businesses'));
     }
@@ -39,13 +60,14 @@ class PlatformBusinessController extends Controller
             'country_code' => strtoupper($data['country_code']),
             'base_currency' => strtoupper($data['base_currency']),
             'timezone' => $data['timezone'],
-            'default_qr_level' => $data['default_qr_level'],
+            'default_qr_level' => $data['default_qr_level'], 'lifecycle_status' => 'onboarding', 'billing_mode' => 'trial', 'trial_ends_on' => today('Africa/Kampala')->addDays(14), 'owner_contact_email' => strtolower($data['owner_email']),
         ]));
 
+        app(PlatformAccess::class)->audit($business->id, $request->user()->id, 'business.created', 'Exporter registered and initial owner invitation requested.', [], ['name' => $business->name, 'code' => $business->code]);
         $invites->send($business, $data['owner_email'], 'owner', $request->user()->id);
         $message = config('mail.default') === 'log'
             ? "Created {$business->name}. The invitation was written to the development mail log, not delivered."
-            : "Created {$business->name} and sent an owner invitation.";
+            : "Created {$business->name}. Review owner invitation delivery and acceptance on the business Access tab.";
 
         return redirect()->route('platform.businesses.index')->with('status', $message);
     }

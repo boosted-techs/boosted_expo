@@ -17,7 +17,7 @@ class BusinessSelectionController extends Controller
             ->with('business')->get();
 
         if ($memberships->isEmpty() && $request->user()->is_platform_admin) {
-            return redirect()->route('platform.businesses.index');
+            return redirect()->route('platform.overview');
         }
 
         return view('businesses.choose', compact('memberships'));

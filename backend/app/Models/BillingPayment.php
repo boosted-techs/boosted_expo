@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BillingPayment extends Model
 {
@@ -14,5 +15,10 @@ class BillingPayment extends Model
     protected function casts(): array
     {
         return ['received_on' => 'date'];
+    }
+
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(BillingInvoice::class, 'billing_invoice_id');
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProductImage extends Model
 {
     protected $fillable = [
+        'stored_bytes',
         'business_id', 'product_id', 'original_key', 'thumbnail_key', 'width', 'height',
     ];
 

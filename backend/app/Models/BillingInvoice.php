@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BillingInvoice extends Model
 {
     protected $fillable = [
+        'terms_snapshot', 'credit_ugx', 'refunded_ugx',
         'business_id', 'billing_subscription_id', 'issued_by', 'billing_payment_method_id',
         'invoice_number', 'business_name', 'billing_email', 'plan_name',
         'billing_cycle', 'period_start', 'period_end', 'due_on',
@@ -18,7 +20,7 @@ class BillingInvoice extends Model
     {
         return [
             'period_start' => 'date', 'period_end' => 'date', 'due_on' => 'date',
-            'payment_details' => 'array', 'issued_at' => 'datetime',
+            'payment_details' => 'array', 'terms_snapshot' => 'array', 'issued_at' => 'datetime',
             'sent_at' => 'datetime', 'voided_at' => 'datetime',
         ];
     }
@@ -38,8 +40,17 @@ class BillingInvoice extends Model
         return $this->hasMany(BillingPayment::class);
     }
 
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(BillingAdjustment::class);
+    }
+
     public function remaining(): int
     {
-        return max(0, $this->total_ugx - $this->paid_ugx);
+        if ($this->status === 'void') {
+            return 0;
+        }
+
+        return max(0, $this->total_ugx - $this->credit_ugx - $this->paid_ugx + $this->refunded_ugx);
     }
 }

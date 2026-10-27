@@ -8,12 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BusinessInvitation extends Model
 {
     protected $fillable = [
+        'revoked_at', 'purpose', 'replaces_membership_id',
         'business_id', 'email', 'role', 'token_hash', 'invited_by', 'expires_at', 'accepted_at',
     ];
 
     protected function casts(): array
     {
-        return ['expires_at' => 'datetime', 'accepted_at' => 'datetime'];
+        return ['expires_at' => 'datetime', 'accepted_at' => 'datetime', 'revoked_at' => 'datetime'];
     }
 
     public function business(): BelongsTo

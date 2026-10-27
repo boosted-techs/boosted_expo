@@ -287,3 +287,10 @@ Printer and PWA field tests must be recorded against actual supported devices. C
 - E10/E11: [LabelTemplateController](../backend/app/Http/Controllers/LabelTemplateController.php), [ZebraLabelRenderer](../backend/app/Services/ZebraLabelRenderer.php), [LabelPrintAgentController](../backend/app/Http/Controllers/LabelPrintAgentController.php), [LabelPrintQueue](../backend/app/Services/LabelPrintQueue.php), [print workstation view](../backend/resources/views/labels/printers.blade.php), [local agent and field-test instructions](zebra_agent/README.md).
 - E12: [login view](../backend/resources/views/auth/login.blade.php), [public layout](../backend/resources/views/layouts/public.blade.php), [manifest](../backend/public/manifest.webmanifest).
 - E13/E14: [PlatformBusinessController](../backend/app/Http/Controllers/PlatformBusinessController.php), [BoostedOneBillingController](../backend/app/Http/Controllers/BoostedOneBillingController.php), [EnforceBillingEntitlement](../backend/app/Http/Middleware/EnforceBillingEntitlement.php), [BusinessPermissions](../backend/app/Support/BusinessPermissions.php), [routes](../backend/routes/web.php).
+
+
+## Phase 1 implementation follow-up — 27 October 2026
+
+The platform-owner questions S01–S18 now have a local control-centre implementation and an explicit release boundary in the [roadmap](EXPORT_BUSINESS_ROADMAP_2026-10-27.md#phase-1-implementation--27-october-2026). Business/owner lifecycle, subscriptions and corrections, source usage/allowances, scoped support and audit are implemented and regression-tested. Infrastructure observations and cost estimates remain partly manual; production delivery/scheduling, concurrent PostgreSQL behavior, complete service-cost instrumentation and monitoring-to-incident escalation still require acceptance. These limits must remain visible when assessing S09–S12 and S15–S18.
+
+This update does not close the exporter-owner gaps O01–O48, the Phase 0A physical printer/PWA device gate, or the operational/people/finance/asset requirements assigned to phases 2–5.

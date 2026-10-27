@@ -38,7 +38,7 @@ class SessionController extends Controller
         RateLimiter::clear($key);
         $request->session()->regenerate();
 
-        return redirect()->intended(route('workspace'));
+        return redirect()->intended(route($request->user()->is_platform_admin ? 'platform.overview' : 'workspace'));
     }
 
     public function destroy(Request $request): RedirectResponse

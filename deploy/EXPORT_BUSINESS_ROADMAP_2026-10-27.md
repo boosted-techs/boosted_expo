@@ -1,7 +1,7 @@
 # Export business completion roadmap
 
 **Date:** 27 October 2026, Africa/Kampala  
-**Basis:** [Current-system audit](EXPORT_BUSINESS_AUDIT_2026-10-27.md). Phase 0 is implemented locally. Phase 0A software is also implemented locally, with physical printer and real-device installation acceptance still open. Later ERP stages remain planned and must meet their exit criteria before being called complete.
+**Basis:** [Current-system audit](EXPORT_BUSINESS_AUDIT_2026-10-27.md). Phase 0 is implemented locally. Phase 0A software is also implemented locally, with physical printer and real-device installation acceptance still open. Phase 1 control-centre software is now implemented locally, with production mail/scheduler, operational evidence and PostgreSQL acceptance still open. Stages 2–5 remain planned and must meet their exit criteria before being called complete.
 
 **Owner-control acceptance contract:** [Owner and superadmin control review](EXPORT_OWNER_CONTROL_REVIEW_2026-10-27.md). It defines 48 owner questions, 18 superadmin questions, 15 additional pending requirements (R01–R15), and the detailed priority printing/login-installation requirements. Use those questions to judge completeness alongside this implementation plan.
 
@@ -29,7 +29,7 @@ The target is a complete ERP for this export business line. The following are re
 
 | Workstream | Current position | Completion requirement |
 | --- | --- | --- |
-| Superadmin dashboard and business control | Business creation/listing and some onboarding/billing actions exist; no complete control dashboard | Platform-wide business lifecycle, subscription management, defined usage metrics, health, support and platform audit. |
+| Superadmin dashboard and business control | Dedicated dashboard, business tabs, owner recovery, versioned agreements, renewals/corrections, usage limits, support grants and audit implemented locally | Production delivery/scheduler and concurrency acceptance; verified infrastructure evidence and fuller cost instrumentation. |
 | Exporter orders, buying and preparation | Working modules, with missing demand/sourcing/task relationships | One order links customers, supplier splits, staff market buying, receiving, preparation and delivery. |
 | Expenses and petty cash | Paid shipment costs exist; general operating expenses are incomplete | Expense claims/bills, approval, payment, petty cash, recurring obligations and cost allocation. |
 | Cost of goods sold (COGS) | Produce cost valuation and reviewed shipment/waste relief exist | Complete, reconcilable costing through purchase, loss, preparation and sale, with policy-controlled cost classification. |
@@ -422,7 +422,7 @@ This is a scope summary, not a production-acceptance certificate. The [audit](EX
 | Tenant access, roles and supplier links | Existing tenant/role controls; suspended supplier links now refuse access and writes | Platform lifecycle/support controls in 1; concurrency acceptance in 5 |
 | Currency entry and finance candidate selection | Baseline defects repaired and regression tested | Connected commercial FX and money flows in 3 |
 | Stickers and installation | Phase 0A software delivered locally; physical printer and device acceptance pending | 0A field gate |
-| Superadmin | Business administration and billing actions exist; full dashboard, lifecycle and usage control incomplete | 1 |
+| Superadmin | Phase 1 control-centre software delivered locally; production operational acceptance remains open | 1 release gate; infrastructure/device acceptance in 5 |
 | Orders, procurement, receiving and packing | Working modules; quantity-only operational commitments, sourcing splits and assignments incomplete | 2 |
 | People and transport | Shifts/clock events and shipment fields exist; staff register, rota-to-work/payroll and transport handovers incomplete | 2–3 |
 | Finance and business position | Ledger/manual FX, approvals, payments and reconciliation exist; daily cash, expenses, due dates, deposits, full COGS and owner position incomplete | 3 |
@@ -448,6 +448,31 @@ This is a scope summary, not a production-acceptance certificate. The [audit](EX
 **Open Phase 0A exit evidence:** actual GK888t calibration/readable codes/correct carton identity; Windows USB RAW and Mac queue/PDF tests; Android queue/PDF tests; real desktop/mobile installation and MFA launch; partial-copy/lost-acknowledgement recovery on equipment. These cannot be certified by HTTP tests, PDF geometry or an in-app browser. Packing-material stock/consumption accounting and controlled offline work remain later phases. PostgreSQL concurrency and production-scale performance remain field/release checks.
 
 **Next ERP implementation stage: 1 — superadmin control centre.** Keep the Phase 0A physical/device gate open until its evidence is recorded; the packhouse pilot must not treat untested printer support as accepted.
+
+### Phase 1 implementation — 27 October 2026
+
+The control centre is implemented in the existing Laravel application. Platform staff land at `/platform`; exporter workspaces remain separate. This is local software delivery, not production rollout or proof that infrastructure is healthy.
+
+| Control | Delivered behavior |
+| --- | --- |
+| Six-area workspace | Overview, Businesses, Billing, Usage & Health, Support & Audit, Settings. Directory search and lifecycle/security/cover filters run before pagination; each business has Overview, Subscription, Usage, Access, Health and History tabs. Desktop and narrow-screen layouts reviewed with test-only data. |
+| Dashboard | Kampala reporting/comparison periods, gross verified platform receipts, current outstanding invoices, approximate paid recurring contract value, activity and current account states. Collections link to invoice evidence; tenant export turnover is excluded. Current balances/states are explicitly distinguished from historical period activity. |
+| Business lifecycle | Profile correction; onboarding milestones; dated trial/exemption; security suspension/reinstatement; recoverable closure/reopening. Closure and suspension preserve source records. Billing exceptions do not lift security suspension. No subscription means restricted access unless a recorded trial, dated exemption or 30-day legacy review applies. |
+| Owner access | Verified-purpose first-owner invitation, resend/revocation and explicit transfer. Superseded links stop working; the previous owner remains until the replacement accepts. Seat capacity is checked during invitation, acceptance and reactivation. Delivery payloads are encrypted and excluded from views. |
+| Plans and agreements | Versioned module/seat/product-media terms; frozen agreement/invoice snapshots; dated absolute allowance overrides; contact/grace changes; pause/resume/cancel; next-unissued-period plan/price changes. Existing invoices retain their original terms. Explicit agreed prices support negotiated discounts; no automatic mid-cycle proration. |
+| Billing | Frozen payment instructions, repeat-safe period issuance, partial/full verified receipts, reference deduplication, credit/refund/void history and source reconciliation. Refund entries record external evidence and reopen cover/balance unless credited. They do not transfer money. Void history remains retained; replacing a voided period requires a new reviewed agreement. |
+| Access and entitlements | Existing business records remain readable after billing expiry; new module work is checked on the server. Staff get an owner-contact route; owners can still remove staff access while renewal is restricted. Public supplier quotation writes also check cover/module entitlement inside the transaction. Webhook evidence intake and acknowledgements for existing print jobs remain available subject to their security checks; they do not authorize new operational work. |
+| Usage | Source counts for confirmed orders, receipts, cartons, shipments and provider events; distinct internal users per Kampala date; current active/reserved seats; measured product-object bytes and saved-artifact bytes. Repeated period reconciliation updates the same snapshot. Product-media quotas refuse unmeasured legacy capacity rather than treating it as zero. Generated artifacts, logs, backups and other files are excluded from that quota and disclosed separately. |
+| Renewals and delivery | `platform:review` reconciles agreements, prepares agreed renewals, deduplicated weekly reminders/warnings, assigned renewal cases and source snapshots. `--dry-run` writes/sends nothing; ordinary review prepares notices; `--notify` attempts configured mail. Failed/uncertain delivery retains attempts and authorized retry; a log entry/provider acceptance does not prove inbox delivery. |
+| Support and oversight | Business/billing/support platform roles; audited superadmin role management; assigned, due, acknowledged/resolved cases with resolution evidence. Owner-approved, operator-bound, read-only support grants last at most four hours, expire/revoke on every access, and expose workflow metadata without financial amounts or credentials. Owners can review support access history. |
+| Health, cost and data | Failed jobs/deliveries, printer-job issues and stale agents from source records. Backup/restore/worker/storage/error/release/cost observations carry source, timestamp and bounded validity; absent/stale evidence is unknown. Costs are operator-entered allocation estimates, not complete metering. Owners can download a tenant-scoped structured export with exclusions in its manifest, or request additional files/retention/offboarding follow-up. No automatic deletion. |
+| Database and verification | One additive migration applied to the backed-up local SQLite database; previous source-table row counts preserved and foreign-key check clean. **260 tests / 3,691 assertions pass**, including **34 new control-centre regression tests**. Blade views compile. No production deployment, real email or external money movement performed. |
+
+**Release acceptance still open:** verify configured production mail and its delivery/recovery process; enable the single-cluster scheduler only after review (`EXPO_BILLING_SCHEDULE_ENABLED=true`, disabled by default); rehearse migration/rollback and concurrent invitation/payment/renewal changes on PostgreSQL; measure lock contention and large-directory performance; record independent backup/restore/release evidence. Infrastructure observations and cost allocation currently need an operator; automatic monitoring-to-case/escalation integration and complete infrastructure cost attribution remain open. Support cases expose due/overdue ownership and manual priority escalation; they do not claim a staffed paging service.
+
+Existing businesses receive an explicit 30-day legacy review at migration. Recorded cover without supporting invoice history is preserved as a declared legacy baseline; invoice-backed coverage remains subject to later credit/refund reconciliation. Review those imported terms before widening onboarding. Activity tracking and byte measurement start with this release; historical activity must not be inferred as zero.
+
+The Phase 0A physical gate remains open: GK888t 100 × 50 mm output/scan acceptance and actual Windows, Mac and Android installation/printing checks. Phase 2 is the next implementation workstream: connect quantity-only demand, split sourcing, staff market buying, responsibilities, transport and the people workflow. It does not imply those capabilities were completed by this platform phase.
 
 ## 15. Required platform and business acceptance scenarios
 

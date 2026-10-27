@@ -20,7 +20,7 @@ class ResolveActiveBusiness
 
         if ($memberships->isEmpty()) {
             return $request->user()->is_platform_admin
-                ? redirect()->route('platform.businesses.index')
+                ? redirect()->route('platform.overview')
                 : redirect()->route('businesses.choose');
         }
 
@@ -31,6 +31,7 @@ class ResolveActiveBusiness
 
         if (! $membership) {
             $request->session()->forget('active_business_id');
+
             return redirect()->route('businesses.choose');
         }
 
