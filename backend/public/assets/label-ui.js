@@ -1,4 +1,6 @@
-document.querySelectorAll('[data-label-profile]').forEach(select => {
+window.WorkspaceModules ||= {};
+window.WorkspaceModules.labels=root=>{
+root.querySelectorAll('[data-label-profile]').forEach(select => {if(select.dataset.profileReady)return;select.dataset.profileReady='true';
   const apply = () => {
     const option = select.selectedOptions[0];
     if (!option?.value) return;
@@ -7,12 +9,12 @@ document.querySelectorAll('[data-label-profile]').forEach(select => {
   };
   select.addEventListener('change', apply); apply();
 });
-document.querySelectorAll('[data-select-cartons]').forEach(button => button.addEventListener('click', () => {
+root.querySelectorAll('[data-select-cartons]').forEach(button => {if(button.dataset.cartonReady)return;button.dataset.cartonReady='true';button.addEventListener('click', () => {
   const inputs = [...button.closest('form').querySelectorAll('input[name="carton_ids[]"]')];
   const check = !inputs.every(input => input.checked); inputs.forEach(input => { input.checked = check; });
-}));
+});});
 
-document.querySelectorAll('[data-logo-upload]').forEach(input=>{
+root.querySelectorAll('[data-logo-upload]').forEach(input=>{if(input.dataset.cropReady)return;input.dataset.cropReady='true';
  const editor=input.closest('form').querySelector('[data-logo-editor]'),canvas=editor.querySelector('canvas'),ctx=canvas.getContext('2d');let bitmap,objectUrl;
  const zoom=editor.querySelector('[data-crop-zoom]'),horizontal=editor.querySelector('[data-crop-x]'),vertical=editor.querySelector('[data-crop-y]'),status=editor.querySelector('[data-crop-status]');
  const draw=()=>{if(!bitmap)return;const scale=Math.min(canvas.width/bitmap.width,canvas.height/bitmap.height)*Number(zoom.value);const width=bitmap.width*scale,height=bitmap.height*scale;const x=(canvas.width-width)/2+Number(horizontal.value)/100*(width-canvas.width)/2,y=(canvas.height-height)/2+Number(vertical.value)/100*(height-canvas.height)/2;ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,x,y,width,height);};
@@ -21,3 +23,6 @@ document.querySelectorAll('[data-logo-upload]').forEach(input=>{
  editor.querySelector('[data-crop-apply]').addEventListener('click',()=>{if(!bitmap)return;canvas.toBlob(blob=>{if(!blob||blob.size>512*1024){status.textContent='The crop is too large. Try a simpler logo.';return;}const transfer=new DataTransfer();transfer.items.add(new File([blob],'cropped-logo.png',{type:'image/png'}));input.files=transfer.files;input.setCustomValidity('');status.textContent='Cropped logo ready · '+Math.ceil(blob.size/1024)+' KB. Save the template to apply it.';},'image/png');});
  editor.querySelector('[data-crop-cancel]').addEventListener('click',()=>{input.value='';input.setCustomValidity('');editor.hidden=true;if(objectUrl)URL.revokeObjectURL(objectUrl);});
 });
+
+};
+window.WorkspaceModules.labels(document);

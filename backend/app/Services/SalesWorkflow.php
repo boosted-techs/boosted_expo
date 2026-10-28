@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Business;
+use App\Models\BusinessDestination;
 use App\Models\Customer;
 use App\Models\PartnerFinanceTerm;
 use App\Models\Product;
@@ -39,12 +40,20 @@ class SalesWorkflow
             if ($products->count() !== count($data['items'])) {
                 throw ValidationException::withMessages(['items' => 'Select valid, distinct products from this business.']);
             }
+            $reference = filled($data['reference'] ?? null) ? Str::upper(trim($data['reference'])) : 'CRQ-'.Str::upper((string) Str::ulid());
+            if (SalesRequest::query()->where('business_id', $businessId)->where('reference', $reference)->exists()) {
+                throw ValidationException::withMessages(['reference' => 'This request reference is already in use. Leave it blank to create a new one.']);
+            }
+            $destination = null;
+            if (! empty($data['destination_id'])) {
+                $destination = BusinessDestination::query()->where('business_id', $businessId)->where('active', true)->findOrFail($data['destination_id']);
+            }
             $request = SalesRequest::create([
                 'business_id' => $businessId,
-                'reference' => 'CRQ-'.Str::upper((string) Str::ulid()),
+                'reference' => $reference, 'destination_id' => $destination?->id,
                 'customer_id' => $data['customer_id'], 'required_on' => $data['required_on'] ?? null,
                 'notes' => $data['notes'] ?? null, 'status' => 'open', 'created_by' => $userId,
-                'source' => $data['source'] ?? 'staff', 'buyer_reference' => $data['buyer_reference'] ?? null, 'destination' => $data['destination'] ?? null, 'submission_key' => $data['submission_key'] ?? null, 'submission_hash' => $submissionHash,
+                'source' => $data['source'] ?? 'staff', 'buyer_reference' => $data['buyer_reference'] ?? null, 'destination' => $destination?->name ?? ($data['destination'] ?? null), 'submission_key' => $data['submission_key'] ?? null, 'submission_hash' => $submissionHash,
             ]);
             foreach ($data['items'] as $line) {
                 SalesRequestItem::create([

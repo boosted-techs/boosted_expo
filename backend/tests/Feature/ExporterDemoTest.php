@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\BusinessMembership;
 use App\Models\CashClose;
 use App\Models\CommercialInvoice;
 use App\Models\ExternalProviderConnection;
@@ -16,8 +17,10 @@ use App\Models\User;
 use App\Services\FinanceBankAuthenticity;
 use App\Services\FinanceDocuments;
 use App\Services\FinanceInventoryReconciliation;
+use App\Services\FinanceOwnerPosition;
 use App\Services\FinanceTreasury;
 use App\Services\ReleaseIntegrityInspector;
+use App\Support\BusinessPermissions;
 use App\Support\ExporterDemoContext;
 use Brick\Math\BigDecimal;
 use Carbon\Carbon;
@@ -50,7 +53,7 @@ class ExporterDemoTest extends TestCase
         $this->assertSame(0, $demo->user('superadmin')->memberships()->count());
         $reportPath = 'demo/coverage-'.$b->id.'.json';
         $report = json_decode(Storage::disk('local')->get($reportPath), true);
-        $this->assertCount(163, $report['model_counts']);
+        $this->assertCount(165, $report['model_counts']);
         $this->assertSame([], array_keys(array_filter($report['model_counts'], fn ($n) => $n === 0)));
         $this->assertCount(2, $report['private_demo_links']);
         $integrity = app(ReleaseIntegrityInspector::class)->inspect($b);
@@ -88,8 +91,26 @@ class ExporterDemoTest extends TestCase
         $this->get(route('platform.businesses.show', $b))->assertOk();
         $this->get(route('platform.health'))->assertOk();
         $this->actingAs($demo->user('owner'))->withSession(['active_business_id' => $b->id]);
-        foreach (['workspace', 'finance.index', 'finance.reports.index', 'people.index', 'products.index'] as $name) {
+        foreach (['workspace', 'sales-requests.index', 'sales-requests.create', 'sales-orders.index', 'shipments.index', 'shipments.create', 'commercial-invoices.index', 'export-documents.index', 'stock.index', 'stock.exceptions.index', 'stock.cases.index', 'suppliers.index', 'suppliers.create', 'supply-requests.index', 'supply-requests.create', 'destinations.index', 'people.index', 'staff.index', 'team.index', 'customers.index', 'products.index', 'finance.index', 'finance.money.index', 'finance.documents', 'finance.treasury.index', 'finance.trade.index', 'finance.reports.index', 'finance.controls', 'finance.inventory.index', 'finance.payroll.index', 'finance.position', 'finance.funding.index', 'finance.production-costs.index', 'finance.assets.index', 'finance.loans.index', 'labels.index', 'labels.print'] as $name) {
             $this->get(route($name))->assertOk();
+        }
+        $overviewTotals = $this->get(route('finance.index'))->viewData('overviewTotals');
+        $position = app(FinanceOwnerPosition::class)->report($b, now($b->timezone)->toDateString(), '100');
+        $this->assertTrue($overviewTotals['money']->isEqualTo($position['money']), 'Overview '.$overviewTotals['money'].' differs from business position '.$position['money']);
+        $access = app(BusinessPermissions::class);
+        $membership = BusinessMembership::where('business_id', $b->id)->where('user_id', $demo->user('owner')->id)->firstOrFail();
+        $checked = [];
+        foreach (config('workspace-activities') as $activities) {
+            foreach ($activities as $activity) {
+                if (! $access->allows($membership, $activity[2])) {
+                    continue;
+                }$url = route($activity[1], $activity[3]);
+                if (isset($checked[$url])) {
+                    continue;
+                }$checked[$url] = true;
+                $response = $this->get($url);
+                $this->assertSame(200, $response->status(), $url);
+            }
         }
         $photo = ProductImage::firstOrFail();
         $this->get(route('products.images.show', [$photo->product_id, $photo->id, 'thumb']))->assertOk()->assertHeader('Content-Type', 'image/webp');

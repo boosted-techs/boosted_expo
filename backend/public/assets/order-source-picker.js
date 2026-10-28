@@ -1,5 +1,7 @@
-(() => {
-  document.querySelectorAll('[data-source-picker]').forEach(picker => {
+window.WorkspaceModules ||= {};
+window.WorkspaceModules.sources=root=>{
+
+  root.querySelectorAll('[data-source-picker]').forEach(picker => {if(picker.dataset.sourceReady)return;picker.dataset.sourceReady='true';
     const select = picker.querySelector('[data-source-options]');
     const search = picker.querySelector('[data-source-search]');
     const more = picker.querySelector('[data-source-more]');
@@ -31,4 +33,6 @@
     more.addEventListener('click', () => find(true));
     search.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); find(); } });
   });
-})();
+
+};
+window.WorkspaceModules.sources(document);

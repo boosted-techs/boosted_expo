@@ -44,6 +44,14 @@ class SupplierController extends Controller
         return view('suppliers.index', compact('suppliers', 'canManage'));
     }
 
+    public function create(Request $request): View
+    {
+        abort_unless(app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'suppliers.manage'), 403);
+        $canManage = true;
+
+        return view('suppliers.create', compact('canManage'));
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $this->check($request, 'suppliers.manage');

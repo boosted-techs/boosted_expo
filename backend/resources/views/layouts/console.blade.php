@@ -42,7 +42,7 @@ $sections = config('expo.sections');
     $groups=[
       'Orders'=>[['Customer requests & quotations','sales-requests.index','sales.view'],['Order workspace','sales-orders.index','sales.orders.view'],['Shipments & transport','shipments.index','shipments.view'],['Commercial invoices','commercial-invoices.index','invoices.view'],['Export documents','export-documents.index','documents.view']],
       'Stock & Buying'=>[['Counts, moves & repacking','stock.exceptions.index','stock.view'],['Suppliers','suppliers.index','suppliers.view'],['Supplier requests','supply-requests.index','procurement.view'],['Purchases','purchases.index','purchases.view'],['Receiving','receiving.index','receipts.view'],['Supply history','partners.receiving','receipts.view'],['Stock batches','stock.index','stock.view'],['Packing jobs','packing.index','packing.view'],['Cartons','cartons.index','cartons.view'],['Stickers & printing','labels.print','labels.view']],
-      'Money'=>[['Buying & advances','finance.trade.index','finance.view'],['Cash & transfers','finance.treasury.index','finance.view'],['Daily money','finance.money.index','finance.documents.view'],['Equipment & assets','finance.assets.index','finance.view'],['Loans & borrowing','finance.loans.index','finance.view'],['Business position','finance.position','finance.reports.view'],['Finance & ledger','finance.index','finance.view'],['Financial Reports','finance.reports.index','finance.reports.view'],['Bank reconciliation','finance.bank.index','finance.bank.view'],['Stock valuation','finance.inventory.index','finance.inventory.view'],['Credits & returns','finance.credits.index','finance.credits.view'],['Accounting controls','finance.controls','finance.controls.view'],['Payroll','finance.payroll.index','finance.payroll.view'],['Invoice handoff','invoice-accounting-handoff.index','finance.handoff.view'],['Payment corrections','finance.transaction-reversals.index','finance.payment.reversal.prepare'],['Receivables & payables','finance.monetary-revaluations.index','finance.monetary.revaluation.view'],['FX revaluation','finance.fx-revaluations.index','finance.fx.revaluation.view']],
+      'Money'=>[['Money overview','finance.index','finance.view'],['Buying & advances','finance.trade.index','finance.view'],['Cash & transfers','finance.treasury.index','finance.view'],['Daily money','finance.money.index','finance.documents.view'],['Equipment & assets','finance.assets.index','finance.view'],['Loans & borrowing','finance.loans.index','finance.view'],['Business position','finance.position','finance.reports.view'],['Financial Reports','finance.reports.index','finance.reports.view'],['Bank reconciliation','finance.bank.index','finance.bank.view'],['Stock valuation','finance.inventory.index','finance.inventory.view'],['Credits & returns','finance.credits.index','finance.credits.view'],['Accounting controls','finance.controls','finance.controls.view'],['Payroll','finance.payroll.index','finance.payroll.view'],['Invoice handoff','invoice-accounting-handoff.index','finance.handoff.view'],['Payment corrections','finance.transaction-reversals.index','finance.payment.reversal.prepare'],['Receivables & payables','finance.monetary-revaluations.index','finance.monetary.revaluation.view'],['FX revaluation','finance.fx-revaluations.index','finance.fx.revaluation.view']],
       'People'=>[['People & work','people.index','staff.clock'],['My clock-in / clock-out','staff.index','staff.clock'],['System access','team.index','team.view']],
       'Business'=>[['Customers','customers.index','customers.view'],['Products','products.index','catalogue.view'],['Business settings','business.settings','business.settings'],['Sticker templates','labels.index','labels.view'],['Document templates','document-templates.index','documents.view'],['Connected services','integrations.index','integrations.view'],['Readiness checks','release.acceptance.index','release.acceptance.view'],['Account & support','business.subscription-status','section.overview']]
     ];
@@ -51,7 +51,7 @@ $sections = config('expo.sections');
       'finance','invoice-accounting-handoff'=>'Money',
       'people','staff','team'=>'People',
       'stock','purchases','receiving','suppliers','supply-requests','packing','cartons','partners'=>'Stock & Buying',
-      'sales-requests','sales-orders','shipments','commercial-invoices','export-documents'=>'Orders',
+      'destinations','sales-requests','sales-orders','shipments','commercial-invoices','export-documents'=>'Orders',
       'labels'=>request()->routeIs('labels.index','labels.edit')?'Business':'Stock & Buying',
       'products','customers','business','document-templates','integrations','release'=>'Business',
       default=>null,
@@ -82,13 +82,20 @@ $sections = config('expo.sections');
   @if($errors->any())<div class="flash error" role="alert"><strong>Some details need attention.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
   <x-activity-navigation />
   @yield('content')
-  <x-pwa-install />
 </main>
+<x-pwa-install />
 <footer class="workspace-footer"><strong>Boosted One</strong><span>© {{ date('Y') }} Boosted Technologies · Business workspace</span></footer>
 </div></div>
 <div class="scrim" id="scrim" hidden></div>
 <script src="/assets/console-ui.js?v={{ filemtime(public_path('assets/console-ui.js')) }}" defer></script>
 @stack('scripts')
 <script src="/assets/workspace-tools.js?v={{ filemtime(public_path('assets/workspace-tools.js')) }}" defer></script>
+<script src="/assets/workspace-flows.js?v={{ filemtime(public_path('assets/workspace-flows.js')) }}" defer></script>
+<script src="/assets/packing-ui.js?v={{ filemtime(public_path('assets/packing-ui.js')) }}" defer></script>
+<script src="/assets/document-template-ui.js?v={{ filemtime(public_path('assets/document-template-ui.js')) }}" defer></script>
+<script src="/assets/order-source-picker.js?v={{ filemtime(public_path('assets/order-source-picker.js')) }}" defer></script>
+<script src="/assets/stock-case-ui.js?v={{ filemtime(public_path('assets/stock-case-ui.js')) }}" defer></script>
+<script src="/assets/label-ui.js?v={{ filemtime(public_path('assets/label-ui.js')) }}" defer></script>
+<script src="/assets/production-cost-ui.js?v={{ filemtime(public_path('assets/production-cost-ui.js')) }}" defer></script>
 <script src="/assets/catalogue-ui.js?v={{ filemtime(public_path('assets/catalogue-ui.js')) }}" defer></script>
 </body></html>

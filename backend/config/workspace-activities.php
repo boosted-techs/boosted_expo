@@ -1,9 +1,19 @@
 <?php
 
 return [
+    'sales-requests.index' => [['Customer requests', 'sales-requests.index', 'sales.view', []], ['New customer request', 'sales-requests.create', 'sales.manage', []], ['Destinations', 'destinations.index', 'sales.manage', []], ['Confirmed orders', 'sales-orders.index', 'sales.orders.view', []]],
+    'supply-requests.index' => [['Supply requests', 'supply-requests.index', 'procurement.view', []], ['New supply request', 'supply-requests.create', 'procurement.create', []], ['Purchases', 'purchases.index', 'purchases.view', []]],
+    'sales-orders.index' => [['Confirmed orders', 'sales-orders.index', 'sales.orders.view', []], ['New customer request', 'sales-requests.create', 'sales.manage', []], ['Shipments', 'shipments.index', 'shipments.view', []]],
+    'shipments.index' => [['Shipments', 'shipments.index', 'shipments.view', []], ['Plan shipment', 'shipments.create', 'shipments.manage', []], ['Commercial invoices', 'commercial-invoices.index', 'invoices.view', []], ['Export documents', 'export-documents.index', 'documents.view', []]],
+    'commercial-invoices.index' => [['Invoice register', 'commercial-invoices.index', 'invoices.view', []], ['Shipments', 'shipments.index', 'shipments.view', []]],
+    'export-documents.index' => [['Issued documents', 'export-documents.index', 'documents.view', []], ['Document templates', 'document-templates.index', 'documents.view', []], ['Shipments', 'shipments.index', 'shipments.view', []]],
+    'finance.money.index' => [['Daily money', 'finance.money.index', 'finance.documents.view', []], ['Record expense', 'finance.money.create', 'finance.documents.create', ['kind' => 'paid_expense']], ['Receive deposit', 'finance.money.create', 'finance.documents.create', ['kind' => 'customer_deposit']], ['Staff advance', 'finance.money.create', 'finance.documents.create', ['kind' => 'staff_advance']], ['Transfer money', 'finance.money.create', 'finance.documents.create', ['kind' => 'transfer']]],
+    'finance.treasury.index' => [['Cash & transfers', 'finance.treasury.index', 'finance.view', []], ['Record a money event', 'finance.treasury.index', 'finance.documents.create', ['workspace_panel' => 'record-a-money-event']], ['Cash floats & counts', 'finance.treasury.index', 'finance.view', ['workspace_panel' => 'cash-floats-and-daily-counts']], ['Cash count history', 'finance.treasury.index', 'finance.view', ['workspace_panel' => 'cash-count-history']], ['Recurring bills', 'finance.treasury.index', 'finance.view', ['workspace_panel' => 'recurring-bills-to-check']]],
+    'finance.documents' => [['Bills & payments', 'finance.documents', 'finance.documents.view', []], ['Supplier bill', 'finance.documents', 'finance.documents.create', ['workspace_panel' => 'supplier-bill-from-received-produce']], ['Receive invoice payment', 'finance.documents', 'finance.documents.create', ['workspace_panel' => 'customer-receipt-manual-evidence']], ['Pay supplier', 'finance.documents', 'finance.documents.create', ['workspace_panel' => 'supplier-payment-manual-evidence']]],
+
     'products.index' => [['Product catalogue', 'products.index', 'catalogue.view', []], ['Add product', 'products.create', 'catalogue.manage', []], ['Import products', 'products.import', 'catalogue.manage', []]],
     'customers.index' => [['Customer directory', 'customers.index', 'customers.view', []], ['Add customer', 'customers.create', 'customers.manage', []]],
-    'suppliers.index' => [['Supplier directory', 'suppliers.index', 'suppliers.view', []], ['Supply requests', 'supply-requests.index', 'procurement.view', []]],
+    'suppliers.index' => [['Supplier directory', 'suppliers.index', 'suppliers.view', []], ['Add supplier', 'suppliers.create', 'suppliers.manage', []], ['Supply requests', 'supply-requests.index', 'procurement.view', []]],
     'stock.index' => [
         ['All stock', 'stock.index', 'receipts.view', []],
         ['Low-stock warnings', 'stock.low-stock', 'receipts.view', []],

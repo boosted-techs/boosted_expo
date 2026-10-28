@@ -19,12 +19,10 @@ function showMenu(open){
 menu?.addEventListener('click',()=>showMenu(!side.classList.contains('open')));
 side?.addEventListener('click',event=>{if(!desktopNavigation.matches && event.target.closest('a[href]'))showMenu(false)});
 screen?.addEventListener('click',()=>{showMenu(false);menu?.focus()});
-document.querySelector('[data-navigation-close]')?.addEventListener('click',()=>{showMenu(false);menu?.focus()});
-const groups=[...document.querySelectorAll('.nav-workgroup')];
-groups.forEach(group=>group.addEventListener('toggle',()=>{
- if(group.open && desktopNavigation.matches)groups.forEach(other=>{if(other!==group)other.open=false});
-}));
-function closeDropdowns(){groups.forEach(group=>{group.open=false})}
+side?.addEventListener('click',event=>{if(event.target.closest('[data-navigation-close]')){showMenu(false);menu?.focus()}});
+const navigationGroups=()=>[...document.querySelectorAll('.nav-workgroup')];
+side?.addEventListener('toggle',event=>{const group=event.target;if(group.matches?.('.nav-workgroup')&&group.open&&desktopNavigation.matches)navigationGroups().forEach(other=>{if(other!==group)other.open=false});},true);
+function closeDropdowns(){navigationGroups().forEach(group=>{group.open=false})}
 document.addEventListener('click',event=>{
  if(desktopNavigation.matches && !event.target.closest('.nav-workgroup'))closeDropdowns();
 });
@@ -33,7 +31,7 @@ document.addEventListener('focusin',event=>{
 });
 document.addEventListener('keydown',event=>{
  if(event.key==='Escape'){
-  const openGroup=groups.find(group=>group.open && group.contains(document.activeElement));
+  const openGroup=navigationGroups().find(group=>group.open && group.contains(document.activeElement));
   closeDropdowns();
   if(openGroup)openGroup.querySelector('summary')?.focus();
   if(side?.classList.contains('open')){showMenu(false);menu?.focus()}
@@ -47,10 +45,11 @@ document.addEventListener('keydown',event=>{
 });
 function syncNavigation(){
  showMenu(false);
- groups.forEach(group=>{group.open=!desktopNavigation.matches && group.classList.contains('is-current')});
+ navigationGroups().forEach(group=>{group.open=!desktopNavigation.matches && group.classList.contains('is-current')});
 }
 desktopNavigation.addEventListener('change',syncNavigation);
 syncNavigation();
+window.WorkspaceSyncNavigation=syncNavigation;
 
 // Delegated confirmation replaces inline onclick/onsubmit JavaScript.
 document.addEventListener('submit',event=>{

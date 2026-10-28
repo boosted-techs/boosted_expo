@@ -72,6 +72,16 @@ class FinanceController extends Controller
             $balances[$line->account_id] = ($balances[$line->account_id] ?? BigDecimal::zero())
                 ->plus((string) $line->base_debit)->minus((string) $line->base_credit);
         }
+        $moneyAccountIds = FinanceBankProfile::where('business_id', $business->id)->pluck('account_id')->merge(CashCustody::where('business_id', $business->id)->pluck('account_id'))->merge($accounts->whereIn('system_key', ['cash', 'bank'])->pluck('id'))->unique()->all();
+        $overviewTotals = ['money' => BigDecimal::zero(), 'receivable' => BigDecimal::zero(), 'payable' => BigDecimal::zero()];
+        foreach ($accounts as $account) {
+            $balance = $balances[$account->id] ?? BigDecimal::zero();
+            if (in_array($account->id, $moneyAccountIds, true)) {
+                $overviewTotals['money'] = $overviewTotals['money']->plus($balance);
+            }if (in_array($account->system_key, ['receivable', 'payable'], true)) {
+                $overviewTotals[$account->system_key] = $overviewTotals[$account->system_key]->plus($balance);
+            }
+        }
         $totalDebit = BigDecimal::zero();
         $totalCredit = BigDecimal::zero();
         foreach ($balances as $balance) {
@@ -98,7 +108,7 @@ class FinanceController extends Controller
 
         return view('finance.dashboard', compact(
             'business', 'accounts', 'balances', 'totalDebit', 'totalCredit',
-            'unposted', 'pending', 'canSetup', 'missingAccounts'
+            'unposted', 'pending', 'canSetup', 'missingAccounts', 'overviewTotals'
         ));
     }
 

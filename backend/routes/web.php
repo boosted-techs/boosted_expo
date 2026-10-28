@@ -3,6 +3,7 @@
 use App\Http\Controllers\AssetRegisterController;
 use App\Http\Controllers\BoostedOneBillingController;
 use App\Http\Controllers\BoostedOnePublicController;
+use App\Http\Controllers\BusinessDestinationController;
 use App\Http\Controllers\BusinessPlatformController;
 use App\Http\Controllers\BusinessSelectionController;
 use App\Http\Controllers\BusinessSettingsController;
@@ -533,6 +534,9 @@ Route::middleware('auth')->group(function () {
             ->whereNumber('shipment')->name('finance.contribution');
         Route::get('/finance/journals/{journal}', [FinanceController::class, 'journal'])
             ->whereNumber('journal')->name('finance.journal');
+        Route::get('/destinations', [BusinessDestinationController::class, 'index'])->name('destinations.index');
+        Route::get('/destinations/new', [BusinessDestinationController::class, 'create'])->name('destinations.create');
+        Route::post('/destinations', [BusinessDestinationController::class, 'store'])->name('destinations.store');
         Route::get('/sales-requests', [SalesRequestController::class, 'index'])->name('sales-requests.index');
         Route::get('/sales-requests/new', [SalesRequestController::class, 'create'])->name('sales-requests.create');
         Route::post('/sales-requests', [SalesRequestController::class, 'store'])->name('sales-requests.store');
@@ -588,11 +592,13 @@ Route::middleware('auth')->group(function () {
         Route::put('/customers/{customer}', [CustomerController::class, 'update'])->whereNumber('customer')->name('customers.update');
 
         Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::get('/suppliers/new', [SupplierController::class, 'create'])->name('suppliers.create');
         Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
         Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->whereNumber('supplier')->name('suppliers.edit');
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->whereNumber('supplier')->name('suppliers.update');
 
         Route::get('/supply-requests', [SupplyRequestController::class, 'index'])->name('supply-requests.index');
+        Route::get('/supply-requests/new', [SupplyRequestController::class, 'create'])->name('supply-requests.create');
         Route::post('/supply-requests', [SupplyRequestController::class, 'store'])->name('supply-requests.store');
         Route::get('/supply-requests/{rfq}', [SupplyRequestController::class, 'show'])->whereNumber('rfq')->name('supply-requests.show');
         Route::post('/supply-requests/{rfq}/issue', [SupplyRequestController::class, 'issue'])->whereNumber('rfq')->name('supply-requests.issue');

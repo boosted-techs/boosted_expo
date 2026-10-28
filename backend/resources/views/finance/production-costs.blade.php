@@ -19,8 +19,3 @@
 <section class="section-card"><h2>Cost and material history</h2>@forelse($workflows as $flow)<p><a href="{{ route('finance.treasury.show',$flow->id) }}">{{ $flow->reference }}</a> · {{ str_replace('_',' ',$flow->kind) }} · {{ $flow->currency }} {{ $flow->amount }} · {{ $flow->posting_status }}</p>@empty<p>No cost classifications yet.</p>@endforelse{{ $workflows->links() }}</section>
 <details class="section-card"><summary>Find older source choices</summary>{{ $expenses->links() }}{{ $payrolls->links() }}{{ $batches->links() }}{{ $issues->links() }}{{ $releasable->links() }}</details>
 @endsection
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded',()=>{const task=document.querySelector('[data-cost-kind]');if(!task)return;const refresh=()=>{document.querySelectorAll('[data-cost-section]').forEach(section=>{const active=section.dataset.costSection.split(' ').includes(task.value);section.hidden=!active;section.querySelectorAll('input,select,textarea').forEach(input=>input.disabled=!active);});};task.addEventListener('change',refresh);refresh();document.querySelector('[data-cost-source]').addEventListener('change',event=>{const [type,id,account]=event.target.value.split(':');const form=event.target.form;form.elements.source_type.value=type??'';form.elements.source_id.value=id??'';form.elements.source_account.value=account??'';});});
-</script>
-@endpush

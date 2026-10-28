@@ -1,7 +1,7 @@
 @extends('layouts.console')
 @section('title','Customer Requests')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">CUSTOMER SALES</span><h1>Customer requests</h1><p>Record enquiries and prepare versioned price quotations for buyers.</p></div></div>
+<div class="page-intro"><div><span class="eyebrow">CUSTOMER SALES</span><h1>Customer requests</h1><p>Requests and quotations from your customers.</p></div></div>
 <div class="form-actions" style="margin-bottom:18px">
 @if($canManage)<a href="{{ route('sales-requests.create') }}" class="primary-button">New customer request</a>@endif
 <a href="{{ route('sales-orders.index') }}" class="secondary-button">Confirmed orders</a>
@@ -16,5 +16,5 @@
 <td><a class="action-link" href="{{ route('sales-requests.show',$record->id) }}">Open</a></td></tr>
 @empty<tr><td colspan="6" class="empty-msg">No customer requests yet.</td></tr>@endforelse
 </tbody></table></div>{{ $requests->links() }}</section>
-<p class="form-hint">Record buyer acceptance with a purchase order or written confirmation.</p>
+
 @endsection

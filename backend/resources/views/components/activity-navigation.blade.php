@@ -2,6 +2,14 @@
 $navigation=config('workspace-activities');
 $currentName=request()->route()?->getName()??'';
 $family=match(true){
+ isset($navigation[$currentName])=>$currentName,
+ str_starts_with($currentName,'sales-requests.')||str_starts_with($currentName,'sales-quotes.')||str_starts_with($currentName,'destinations.')=>'sales-requests.index',
+ str_starts_with($currentName,'sales-orders.')=>'sales-orders.index',
+ str_starts_with($currentName,'supply-requests.')=>'supply-requests.index',
+ str_starts_with($currentName,'suppliers.')=>'suppliers.index',
+ str_starts_with($currentName,'shipments.')=>'shipments.index',
+ str_starts_with($currentName,'commercial-invoices.')=>'commercial-invoices.index',
+ str_starts_with($currentName,'export-documents.')=>'export-documents.index',
  str_starts_with($currentName,'stock.exceptions.')=>'stock.exceptions.index',
  str_starts_with($currentName,'stock.')=>'stock.index',
  str_starts_with($currentName,'purchases.')=>'purchases.index',

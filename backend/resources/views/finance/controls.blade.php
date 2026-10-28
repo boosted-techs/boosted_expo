@@ -71,12 +71,12 @@ placeholder="State the original bank statement, valuation date, exact currency b
 @endif
 <h3>Foreign opening register</h3>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Account</th><th>Foreign balance</th><th>Base valuation</th><th>Effective</th><th>Review status</th></tr></thead><tbody>
-@forelse($foreignOpenings as $opening)
-<tr><td>{{ $opening->reference }}</td><td>{{ $banks->firstWhere('id',$opening->bank_profile_id)?->label }}</td>
-<td>{{ $opening->currency }} {{ $opening->foreign_amount }}</td>
-<td>{{ $business->base_currency }} {{ $opening->base_amount }} at {{ $opening->rate_to_base }}</td>
-<td>{{ $opening->effective_on->format('d M Y') }}</td>
-<td>{{ $opening->posting_status==='posted'?'Posted':'Awaiting independent review' }}</td></tr>
+@forelse($foreignOpenings as $foreignOpening)
+<tr><td>{{ $foreignOpening->reference }}</td><td>{{ $banks->firstWhere('id',$foreignOpening->bank_profile_id)?->label }}</td>
+<td>{{ $foreignOpening->currency }} {{ $foreignOpening->foreign_amount }}</td>
+<td>{{ $business->base_currency }} {{ $foreignOpening->base_amount }} at {{ $foreignOpening->rate_to_base }}</td>
+<td>{{ $foreignOpening->effective_on->format('d M Y') }}</td>
+<td>{{ $foreignOpening->posting_status==='posted'?'Posted':'Awaiting independent review' }}</td></tr>
 @empty<tr><td colspan="6" class="empty-msg">No historical foreign bank opening entries have been prepared.</td></tr>@endforelse
 </tbody></table></div>
 </section>

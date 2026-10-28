@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SalesRequest extends Model
 {
-    protected $fillable = ['source', 'buyer_reference', 'destination', 'submission_key', 'submission_hash', 'business_id', 'customer_id', 'reference', 'status', 'required_on', 'notes', 'created_by'];
+    protected $fillable = ['destination_id', 'source', 'buyer_reference', 'destination', 'submission_key', 'submission_hash', 'business_id', 'customer_id', 'reference', 'status', 'required_on', 'notes', 'created_by'];
 
     protected function casts(): array
     {

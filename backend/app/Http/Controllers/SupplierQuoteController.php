@@ -15,23 +15,29 @@ class SupplierQuoteController extends Controller
     public function store(Request $request, int $rfq, SupplierQuoting $quotes): RedirectResponse
     {
         abort_unless(app(BusinessPermissions::class)->allows(
-            $request->attributes->get('membership'),'procurement.create'), 403);
+            $request->attributes->get('membership'), 'procurement.create'), 403);
         $data = $request->validate([
-            'supplier_id'=>['required','integer'],
-            'quantity'=>['required','numeric','gt:0','decimal:0,3','max:999999999'],
-            'unit_price'=>['required','numeric','gt:0','decimal:0,4','max:99999999999'],
-            'delivery_on'=>['nullable','date'],
-            'notes'=>['nullable','string','max:2000'],
+            'supplier_id' => ['required', 'integer'],
+            'supply_request_item_id' => ['nullable', 'integer'],
+            'items' => ['nullable', 'array', 'min:1', 'max:50'], 'items.*.supply_request_item_id' => ['required', 'integer', 'distinct'], 'items.*.quantity' => ['required', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999'], 'items.*.unit_price' => ['required', 'numeric', 'gt:0', 'decimal:0,4', 'max:99999999999'],
+            'quantity' => ['required_without:items', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999'],
+            'unit_price' => ['required_without:items', 'numeric', 'gt:0', 'decimal:0,4', 'max:99999999999'],
+            'delivery_on' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string', 'max:2000'],
         ]);
         $businessId = $request->attributes->get('activeBusiness')->id;
-        $supply = SupplyRequest::query()->where('business_id',$businessId)->findOrFail($rfq);
-        $supplier = Supplier::query()->where('business_id',$businessId)->where('active',true)
+        $supply = SupplyRequest::query()->where('business_id', $businessId)->findOrFail($rfq);
+        $supplier = Supplier::query()->where('business_id', $businessId)->where('active', true)
             ->findOrFail($data['supplier_id']);
-        abort_unless(SupplierRequestLink::query()->where('business_id',$businessId)
-            ->where('supply_request_id',$rfq)->where('supplier_id',$supplier->id)->exists(), 422,
+        abort_unless(SupplierRequestLink::query()->where('business_id', $businessId)
+            ->where('supply_request_id', $rfq)->where('supplier_id', $supplier->id)->exists(), 422,
             'Select a supplier who received this request.');
-        $quotes->record($supply,$supplier,$data,'staff_entry');
+        if (! empty($data['items'])) {
+            $quotes->recordMany($supply, $supplier, $data, 'staff_entry');
+        } else {
+            $quotes->record($supply, $supplier, $data, 'staff_entry');
+        }
 
-        return back()->with('status','Supplier quotation recorded.');
+        return back()->with('status', 'Supplier quotation recorded.');
     }
 }

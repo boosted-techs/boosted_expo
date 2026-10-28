@@ -160,6 +160,7 @@ class PurchaseController extends Controller
         DB::transaction(function () use ($request, $purchase, $business, $data): void {
             Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
             $record = PurchaseOrder::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($purchase);
+            abort_if($record->supplier_quote_id, 422, 'Selected supplier purchases must be changed through agreement review.');
             abort_unless($record->status === 'ordered' && ! $record->receipts()->exists(), 422, 'Received or completed purchases cannot be archived.');
             foreach (['order_supplies', 'finance_supplier_bills', 'purchase_amendments'] as $table) {
                 abort_if(DB::table($table)->where('business_id', $business->id)->where('purchase_order_id', $record->id)->exists(), 422, 'Resolve linked orders, bills and amendments before archiving.');
@@ -196,6 +197,6 @@ class PurchaseController extends Controller
         $canReview = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'purchases.amend.review');
         $suppliers = Supplier::query()->where('business_id', $purchase->business_id)->where('active', true)->orderBy('name')->get();
 
-        return view('purchases.show', compact('business','purchase', 'remaining', 'canReceive', 'amendments', 'canAmend', 'canReview', 'suppliers'));
+        return view('purchases.show', compact('business', 'purchase', 'remaining', 'canReceive', 'amendments', 'canAmend', 'canReview', 'suppliers'));
     }
 }

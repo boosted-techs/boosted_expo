@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BusinessDestination;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\SalesRequest;
@@ -9,6 +10,7 @@ use App\Services\SalesWorkflow;
 use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SalesRequestController extends Controller
@@ -38,7 +40,9 @@ class SalesRequestController extends Controller
         $customers = Customer::query()->where('business_id', $b)->where('active', true)->orderBy('name')->get();
         $products = Product::query()->where('business_id', $b)->where('active', true)->orderBy('name')->get();
 
-        return view('sales.requests.create', compact('customers', 'products'));
+        $destinations = BusinessDestination::where('business_id', $b)->where('active', true)->orderBy('name')->get();
+
+        return view('sales.requests.create', compact('customers', 'products', 'destinations'));
     }
 
     public function store(Request $request, SalesWorkflow $sales): RedirectResponse
@@ -47,7 +51,9 @@ class SalesRequestController extends Controller
         $data = $request->validate([
             'customer_id' => ['required', 'integer'],
             'required_on' => ['nullable', 'date'],
-            'buyer_reference' => ['nullable', 'string', 'max:120'], 'destination' => ['nullable', 'string', 'max:200'], 'submission_key' => ['nullable', 'uuid'],
+            'reference' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/'],
+            'destination_id' => ['nullable', 'integer'],
+            'buyer_reference' => ['nullable', 'string', 'max:120'], 'submission_key' => ['nullable', 'uuid'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1', 'max:20'],
             'items.*.product_id' => ['required', 'integer', 'distinct'],
@@ -69,7 +75,12 @@ class SalesRequestController extends Controller
         $canManage = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'sales.manage');
 
-        return view('sales.requests.show', compact('record', 'canManage'));
+        $activity = $request->validate(['activity' => ['nullable', Rule::in(['approval', 'quotes'])]])['activity'] ?? null;
+        if ($activity === 'approval') {
+            abort_unless($canManage && ! $record->order, 403);
+        }
+
+        return view($activity ? 'sales.requests.'.$activity : 'sales.requests.show', compact('record', 'canManage'));
     }
 
     public function draft(Request $request, int $record, SalesWorkflow $sales): RedirectResponse

@@ -10,7 +10,7 @@
 <a class="secondary-button" href="{{ route('finance.transaction-reversals.index') }}">Payment corrections</a>
 <a class="secondary-button" href="{{ route('finance.fx-revaluations.index') }}">Foreign bank revaluation</a>
 <a class="secondary-button" href="{{ route('finance.monetary-revaluations.index') }}">Receivables & payables FX</a></div>
-<div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>Use separate people to prepare, approve and post. Verify dispatch and agreed terms for invoices. Use a dated, approved exchange rate. Changed foreign balances need fresh review; posted entries cannot be edited.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Review with a second person</strong><p>Ask another authorised team member to review prepared records before posting.</p></div></div>
 @if($canSubmit)
 <section class="section-card"><h2>Source documents awaiting finance posting</h2>
 <p class="muted">Submitting a document here does not affect the ledger. Enter a meaningful audit explanation and, where applicable, the exact approved exchange rate.</p>

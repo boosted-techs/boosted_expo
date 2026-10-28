@@ -10,6 +10,7 @@ use App\Models\Supplier;
 use App\Models\SupplierQuote;
 use App\Models\SupplierRequestLink;
 use App\Models\SupplyRequest;
+use App\Services\PlatformAccess;
 use App\Services\ProcurementMath;
 use App\Support\BusinessCurrencies;
 use App\Support\BusinessPermissions;
@@ -39,11 +40,18 @@ class SupplyRequestController extends Controller
         $this->check($request, 'procurement.view');
         $businessId = $request->attributes->get('activeBusiness')->id;
         $requests = SupplyRequest::query()->where('business_id', $businessId)
-            ->with('product')->withCount('quotes')->latest()->workspacePaginate(20);
-        $products = Product::query()->where('business_id', $businessId)->where('active', true)->orderBy('name')->get();
+            ->with('items.product')->withCount('quotes')->latest()->workspacePaginate(20);
         $canCreate = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'procurement.create');
 
-        return view('procurement.index', compact('requests', 'products', 'canCreate'));
+        return view('procurement.index', compact('requests', 'canCreate'));
+    }
+
+    public function create(Request $request): View
+    {
+        $this->check($request, 'procurement.create');
+        $products = Product::query()->where('business_id', $request->attributes->get('activeBusiness')->id)->where('active', true)->orderBy('name')->get();
+
+        return view('procurement.create', compact('products'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -51,22 +59,31 @@ class SupplyRequestController extends Controller
         $this->check($request, 'procurement.create');
         $request->merge(['currency' => strtoupper(trim((string) $request->input('currency')))]);
         $data = $request->validate([
-            'product_id' => ['required', 'integer'],
-            'quantity' => ['required', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999'],
+            'product_id' => ['required_without:items', 'integer'],
+            'quantity' => ['required_without:items', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999'],
+            'items' => ['nullable', 'array', 'min:1', 'max:50'], 'items.*.product_id' => ['required', 'integer', 'distinct'], 'items.*.quantity' => ['required', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999'],
             'currency' => ['required', 'string', app(BusinessCurrencies::class)->rule($request->attributes->get('activeBusiness'))],
             'needed_on' => ['nullable', 'date'],
             'response_deadline' => ['required', 'date', 'after:now'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
         $business = $request->attributes->get('activeBusiness');
-        Product::query()->where('business_id', $business->id)->where('active', true)
-            ->findOrFail($data['product_id']);
-        $rfq = SupplyRequest::create([
-            ...$data, 'business_id' => $business->id,
-            'reference' => 'RFQ-'.Str::upper((string) Str::ulid()),
-            'currency' => strtoupper($data['currency']),
-            'status' => 'draft', 'created_by' => $request->user()->id,
-        ]);
+        $items = $data['items'] ?? [['product_id' => $data['product_id'], 'quantity' => $data['quantity']]];
+        $rfq = DB::transaction(function () use ($business, $items, $data, $request) {
+            Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            $products = Product::query()->where('business_id', $business->id)->where('active', true)->whereIn('id', array_column($items, 'product_id'))->get();
+            if ($products->count() !== count($items)) {
+                throw ValidationException::withMessages(['items' => 'Choose different active products from this business.']);
+            }
+            $first = $items[0];
+            $record = SupplyRequest::create([...collect($data)->except(['items', 'product_id', 'quantity'])->all(), ...$first, 'business_id' => $business->id, 'reference' => 'RFQ-'.Str::upper((string) Str::ulid()), 'status' => 'draft', 'created_by' => $request->user()->id]);
+            foreach (array_slice($items, 1) as $line) {
+                $record->items()->create([...$line, 'business_id' => $business->id]);
+            }
+            app(PlatformAccess::class)->audit($business->id, $request->user()->id, 'supply_request.created', 'Supply request added.', [], ['id' => $record->id, 'items' => $items]);
+
+            return $record;
+        });
 
         return redirect()->route('supply-requests.show', $rfq->id)
             ->with('status', 'Supply request saved. Choose suppliers to issue it.');
@@ -76,16 +93,18 @@ class SupplyRequestController extends Controller
     {
         $this->check($request, 'procurement.view');
         $rfq = $this->own($request, $rfq)->load([
-            'product', 'links.supplier', 'quotes.supplier', 'quotes.revisions',
+            'items.product', 'product', 'links.supplier', 'quotes.supplier', 'quotes.item.product', 'quotes.revisions',
         ]);
         $suppliers = Supplier::query()->where('business_id', $rfq->business_id)
             ->where('active', true)->orderBy('name')->get();
-        $purchase = PurchaseOrder::query()->where('business_id', $rfq->business_id)
-            ->whereIn('supplier_quote_id', $rfq->quotes->pluck('id'))->first();
+        $purchases = PurchaseOrder::query()->where('business_id', $rfq->business_id)
+            ->whereIn('supplier_quote_id', $rfq->quotes->pluck('id'))->with('product', 'supplier')->get();
+        $math = app(ProcurementMath::class);
+        $remaining = $rfq->items->mapWithKeys(fn ($item) => [$item->id => $math->decimal($item->quantity)->minus($math->sum($purchases->whereIn('supplier_quote_id', $rfq->quotes->where('supply_request_item_id', $item->id)->pluck('id'))->pluck('quantity')->all()))]);
         $canCreate = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'procurement.create');
         $canAward = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'procurement.award');
 
-        return view('procurement.show', compact('rfq', 'suppliers', 'purchase', 'canCreate', 'canAward'));
+        return view('procurement.show', compact('rfq', 'suppliers', 'purchases', 'remaining', 'canCreate', 'canAward'));
     }
 
     public function issue(Request $request, int $rfq): RedirectResponse
@@ -126,7 +145,7 @@ class SupplyRequestController extends Controller
         foreach ($links as $item) {
             try {
                 Mail::to($item['supplier']->email)->send(
-                    new SupplierRequestMail($rfq->load('product'), $item['supplier'], $item['token'])
+                    new SupplierRequestMail($rfq->load('items.product'), $item['supplier'], $item['token'])
                 );
                 $item['link']->update(['sent_at' => now()]);
             } catch (\Throwable $error) {
@@ -135,9 +154,9 @@ class SupplyRequestController extends Controller
             }
         }
         $message = $failures
-            ? 'Supply request issued, but '.$failures.' email invitation(s) could not be sent. Check mail settings.'
+            ? 'Request issued. '.$failures.' supplier invitation(s) could not be delivered. Check email settings.'
             : (config('mail.default') === 'log'
-                ? 'Supply request issued. Supplier links were written to the local mail log, not delivered.'
+                ? 'Request issued. Email delivery is not configured; ask your administrator to enable it.'
                 : 'Supply request issued to selected suppliers.');
 
         return redirect()->route('supply-requests.show', $rfq->id)->with('status', $message);
@@ -149,24 +168,25 @@ class SupplyRequestController extends Controller
         $data = $request->validate(['quantity' => ['nullable', 'numeric', 'gt:0', 'decimal:0,3', 'max:999999999']]);
         $businessId = $request->attributes->get('activeBusiness')->id;
         $order = DB::transaction(function () use ($businessId, $rfq, $quote, $math, $request, $data) {
-            Business::query()->whereKey($businessId)->lockForUpdate()->firstOrFail();
+            $business = Business::query()->whereKey($businessId)->lockForUpdate()->firstOrFail();
             $supply = SupplyRequest::query()->where('business_id', $businessId)->lockForUpdate()->findOrFail($rfq);
             abort_unless(in_array($supply->status, ['sent', 'part_awarded'], true), 422, 'This request cannot be awarded.');
             $offer = SupplierQuote::query()->where('business_id', $businessId)
                 ->where('supply_request_id', $supply->id)
                 ->findOrFail($quote);
             abort_unless($offer->status === 'submitted', 422, 'This offer is already awarded.');
+            $item = $supply->items()->where('business_id', $businessId)->lockForUpdate()->findOrFail($offer->supply_request_item_id);
             $quantity = $data['quantity'] ?? $offer->quantity;
-            $awarded = $math->sum(PurchaseOrder::query()->where('business_id', $businessId)->whereIn('supplier_quote_id', $supply->quotes()->select('id'))->pluck('quantity')->all());
-            if ($math->decimal($quantity)->isGreaterThan($math->decimal($offer->quantity)) || $awarded->plus($quantity)->isGreaterThan($math->decimal($supply->quantity))) {
+            $awarded = $math->sum(PurchaseOrder::query()->where('business_id', $businessId)->whereIn('supplier_quote_id', $supply->quotes()->where('supply_request_item_id', $item->id)->select('id'))->pluck('quantity')->all());
+            if ($math->decimal($quantity)->isGreaterThan($math->decimal($offer->quantity)) || $awarded->plus($quantity)->isGreaterThan($math->decimal($item->quantity))) {
                 throw ValidationException::withMessages(['quantity' => 'Award exceeds the offer or remaining RFQ quantity.']);
             }
             $order = PurchaseOrder::create([
                 'business_id' => $businessId,
                 'reference' => 'PO-'.Str::upper((string) Str::ulid()),
-                'kind' => 'supplier', 'product_id' => $supply->product_id,
+                'kind' => 'supplier', 'product_id' => $item->product_id,
                 'supplier_id' => $offer->supplier_id, 'supplier_quote_id' => $offer->id,
-                'purchased_on' => now()->timezone($supply->created_at->timezone)->toDateString(),
+                'purchased_on' => now($business->timezone)->toDateString(),
                 'quantity' => $quantity, 'unit_price' => $offer->unit_price,
                 'estimated_total' => $math->amount($offer->unit_price, $quantity),
                 'expected_on' => $offer->delivery_on, 'currency' => $offer->currency, 'status' => 'ordered',
@@ -174,7 +194,13 @@ class SupplyRequestController extends Controller
                 'idempotency_key' => (string) Str::uuid(), 'created_by' => $request->user()->id,
             ]);
             $offer->update(['status' => 'selected']);
-            $supply->update(['status' => $awarded->plus($quantity)->isEqualTo($math->decimal($supply->quantity)) ? 'awarded' : 'part_awarded']);
+            $complete = $supply->items()->get()->every(function ($line) use ($businessId, $supply, $math) {
+                $total = $math->sum(PurchaseOrder::query()->where('business_id', $businessId)->whereIn('supplier_quote_id', $supply->quotes()->where('supply_request_item_id', $line->id)->select('id'))->pluck('quantity')->all());
+
+                return $total->isEqualTo($math->decimal($line->quantity));
+            });
+            $supply->update(['status' => $complete ? 'awarded' : 'part_awarded']);
+            app(PlatformAccess::class)->audit($businessId, $request->user()->id, 'supplier_quote.awarded', 'Supplier offer selected.', [], ['supply_request_id' => $supply->id, 'item_id' => $item->id, 'quote_id' => $offer->id, 'purchase_order_id' => $order->id, 'quantity' => $quantity]);
 
             return $order;
         });

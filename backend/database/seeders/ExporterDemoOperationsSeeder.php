@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Mail\CustomerOrderingMail;
+use App\Models\BusinessDestination;
 use App\Models\BusinessOperatingPolicy;
 use App\Models\ExportDocumentTemplate;
 use App\Models\LabelGeneration;
@@ -52,7 +53,8 @@ class ExporterDemoOperationsSeeder extends Seeder
         app(CustomerOrdering::class)->invite($b, $d->get('customer'), [$d->get('AVO')->id, $d->get('CHILLI')->id], $sales);
         $token = Mail::sent(CustomerOrderingMail::class)->last()->token;
         $d->links['customer_ordering'] = route('customer-ordering.show', $token);
-        $request = app(CustomerOrdering::class)->submit($token, ['items' => [['product_id' => $d->get('AVO')->id, 'quantity' => '100']], 'required_on' => $d->date(-2), 'notes' => $d->note('Buyer requests quantities first. Prices are agreed separately.'), 'buyer_reference' => 'DEMO-DUBAI-WEEKLY', 'destination' => 'Dubai', 'submission_key' => $d->key()]);
+        $destination = BusinessDestination::create(['business_id' => $b->id, 'name' => 'Dubai', 'name_key' => 'dubai', 'country_code' => 'AE']);
+        $request = app(CustomerOrdering::class)->submit($token, ['items' => [['product_id' => $d->get('AVO')->id, 'quantity' => '100']], 'required_on' => $d->date(-2), 'notes' => $d->note('Buyer requests quantities first. Prices are agreed separately.'), 'buyer_reference' => 'DEMO-DUBAI-WEEKLY', 'destination' => 'Dubai', 'destination_id' => $destination->id, 'submission_key' => $d->key()]);
         $workflow = app(SalesWorkflow::class);
         $quote = $workflow->draft($b->id, $request->id, $sales);
         $quote = $workflow->updateDraft($quote, ['currency' => 'USD', 'pricing_exchange_rate_id' => $d->get('usd_rate')->id, 'items' => [['product_id' => $d->get('AVO')->id, 'quantity' => '100', 'unit_price' => '3']], 'payment_terms_days' => 14, 'incoterm' => 'FCA', 'valid_until' => $d->date(-14), 'notes' => $d->note('USD customer price, UGX internal conversion is maintained separately.')]);

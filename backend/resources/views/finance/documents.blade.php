@@ -1,12 +1,12 @@
 @extends('layouts.console')
-@section('title','Finance Documents')
+@section('title','Bills & Payments')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">FINANCIAL SOURCE DOCUMENTS</span><h1>Supplier bills, payments & shipment costs</h1><p>Create financial documents from actual purchase receipts, commercial invoices and recorded export expenses.</p></div></div>
+<div class="page-intro"><div><span class="eyebrow">MONEY</span><h1>Bills & payments</h1><p>Record receipts, supplier bills and shipment costs.</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.index') }}">Finance dashboard</a><a class="secondary-button" href="{{ route('finance.reviews') }}">Posting approvals</a><a class="secondary-button" href="{{ route('finance.rates') }}">Historical FX rates</a></div>
-<div class="notice"><span>●</span><div><strong>Source records are not yet ledger postings</strong><p>Supplier bills represent accepted produce only, not automatically every quantity ordered. Payment entries require an external reference but are not verified against a bank or mobile-money provider. Each item must be independently approved and posted.</p></div></div>
+<p class="form-hint">Prepared records affect balances after review and posting.</p>
 @if($canCreate)
 <div class="split-panels">
-<section class="section-card"><h2>Supplier bill from received produce</h2>
+<section class="section-card" data-workspace-key="supplier-bill-from-received-produce"><h2>Prepare supplier bill</h2>
 <p class="muted">The calculated supplier bill uses the accepted quantities and agreed purchase-order unit price. You can bill part of the accepted produce. Pending bills reserve their quantities.</p>
 @include('finance._record-search', ['field' => 'purchase_search', 'page' => 'purchase_page', 'label' => 'Find unbilled purchase by reference or supplier'])
 @if($purchases->isEmpty())<p class="empty-msg">No accepted, unbilled produce available.</p>@endif
@@ -24,7 +24,7 @@
 @endforeach
 {{ $purchases->links() }}
 </section>
-<section class="section-card"><h2>Customer receipt (manual evidence)</h2>
+<section class="section-card" data-workspace-key="customer-receipt-manual-evidence"><h2>Receive invoice payment</h2>
 <p class="muted">Allocate a receipt to one already-posted commercial invoice. Each amount must use that invoice's currency.</p>
 @include('finance._record-search', ['field' => 'invoice_search', 'page' => 'invoice_page', 'label' => 'Find outstanding invoice by reference or customer'])
 {{ $invoices->links() }}
@@ -47,7 +47,7 @@
 <label class="field"><span>Notes (optional)</span><textarea name="notes" rows="2" maxlength="2000"></textarea></label>
 <button class="primary-button">Record receipt for review</button></form>
 </section>
-<section class="section-card"><h2>Supplier payment (manual evidence)</h2>
+<section class="section-card" data-workspace-key="supplier-payment-manual-evidence"><h2>Pay supplier bill</h2>
 <p class="muted">Allocate a payment to an approved and posted supplier bill.</p>
 @include('finance._record-search', ['field' => 'bill_search', 'page' => 'payable_page', 'label' => 'Find outstanding bill by reference or supplier'])
 {{ $payableBills->links() }}

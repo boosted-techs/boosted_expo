@@ -15,7 +15,7 @@
 <div class="auth-shell auth-centered {{ request()->routeIs('businesses.choose') ? 'workspace-chooser' : '' }}">
 
   <main class="auth-main">
-    <div class="auth-card">
+    <div class="auth-card {{ request()->routeIs('customer-ordering.*','supplier-offer.*') ? 'public-workflow-card' : '' }}">
       <a class="brand auth-mobile-brand" href="{{ route('home') }}" aria-label="Boosted One home"><x-brand-mark /><span><strong>Boosted One</strong><small>EXPORT ERP</small></span></a>
       @if(session('status'))<div class="flash success" role="status">{{ session('status') }}</div>@endif
       @if($errors->any())<div class="flash error" role="alert"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
@@ -27,4 +27,5 @@
 </div>
 <script src="/assets/console-ui.js?v={{ filemtime(public_path('assets/console-ui.js')) }}" defer></script>
 <script src="/assets/workspace-tools.js?v={{ filemtime(public_path('assets/workspace-tools.js')) }}" defer></script>
+<script src="/assets/workspace-flows.js?v={{ filemtime(public_path('assets/workspace-flows.js')) }}" defer></script>
 </body></html>

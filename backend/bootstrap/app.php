@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Middleware\EnforceBillingEntitlement;
 use App\Http\Middleware\EnsurePlatformAdmin;
-use App\Http\Middleware\ResolveActiveBusiness;
 use App\Http\Middleware\ProductionSecurity;
-use App\Http\Middleware\TrustConfiguredProxies;
 use App\Http\Middleware\RequirePrivilegedMfa;
+use App\Http\Middleware\ResolveActiveBusiness;
+use App\Http\Middleware\TrustConfiguredProxies;
+use App\Http\Middleware\WorkspacePanels;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,18 +22,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'business' => ResolveActiveBusiness::class,
             'platform' => EnsurePlatformAdmin::class,
-            'billing' => \App\Http\Middleware\EnforceBillingEntitlement::class,
+            'billing' => EnforceBillingEntitlement::class,
         ]);
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/workspace');
         $middleware->web(
             prepend: [TrustConfiguredProxies::class],
-            append: [ProductionSecurity::class, RequirePrivilegedMfa::class],
+            append: [ProductionSecurity::class, RequirePrivilegedMfa::class, WorkspacePanels::class],
         );
         // These endpoints authenticate requests with per-tenant provisioned
         // HMAC signing or a bearer device credential, not browser cookies.
-        $middleware->validateCsrfTokens(except:[
-            'integrations/webhook/*','print-agent/*',
+        $middleware->validateCsrfTokens(except: [
+            'integrations/webhook/*', 'print-agent/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
