@@ -27,14 +27,14 @@ class FinanceProductionCostController extends Controller
         $b = $r->attributes->get('activeBusiness');
         $r->validate(['search' => ['nullable', 'string', 'max:120']]);
         $search = trim((string) $r->input('search'));
-        $lots = MaterialLot::query()->where('business_id', $b->id)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderByDesc('id')->paginate(30, ['*'], 'lot_page')->withQueryString();
+        $lots = MaterialLot::query()->where('business_id', $b->id)->whereHas('workflow', fn ($q) => $q->where('posting_status', 'posted'))->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderByDesc('id')->workspacePaginate(30, ['*'], 'lot_page')->withQueryString();
         $states = $lots->mapWithKeys(fn ($lot) => [$lot->id => $costs->materialState($lot)]);
-        $batches = StockBatch::query()->where('business_id', $b->id)->with('product')->when($search !== '', fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%'))->latest('id')->paginate(40, ['*'], 'batch_page')->withQueryString();
-        $expenses = FinanceOperation::query()->where('business_id', $b->id)->where('posting_status', 'posted')->whereIn('kind', ['expense', 'staff_expense', 'paid_expense'])->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')))->latest('id')->paginate(35, ['*'], 'expense_page')->withQueryString();
-        $payrolls = FinancePayrollRun::query()->where('business_id', $b->id)->where('posting_status', 'posted')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(35, ['*'], 'payroll_page')->withQueryString();
-        $workflows = FinanceWorkflow::query()->where('business_id', $b->id)->whereIn('kind', FinanceProductionCosts::KINDS)->latest('id')->paginate(25, ['*'], 'cost_page')->withQueryString();
-        $issues = FinanceWorkflow::query()->where('business_id', $b->id)->where('kind', 'material_issue')->where('posting_status', 'posted')->latest('id')->paginate(35, ['*'], 'issue_page')->withQueryString();
-        $releasable = FinanceWorkflow::query()->where('business_id', $b->id)->whereIn('kind', ['material_receipt', 'batch_cost'])->where('posting_status', 'posted')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(35, ['*'], 'release_page')->withQueryString();
+        $batches = StockBatch::query()->where('business_id', $b->id)->with('product')->when($search !== '', fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(40, ['*'], 'batch_page')->withQueryString();
+        $expenses = FinanceOperation::query()->where('business_id', $b->id)->where('posting_status', 'posted')->whereIn('kind', ['expense', 'staff_expense', 'paid_expense'])->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')))->latest('id')->workspacePaginate(35, ['*'], 'expense_page')->withQueryString();
+        $payrolls = FinancePayrollRun::query()->where('business_id', $b->id)->where('posting_status', 'posted')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(35, ['*'], 'payroll_page')->withQueryString();
+        $workflows = FinanceWorkflow::query()->where('business_id', $b->id)->whereIn('kind', FinanceProductionCosts::KINDS)->latest('id')->workspacePaginate(25, ['*'], 'cost_page')->withQueryString();
+        $issues = FinanceWorkflow::query()->where('business_id', $b->id)->where('kind', 'material_issue')->where('posting_status', 'posted')->latest('id')->workspacePaginate(35, ['*'], 'issue_page')->withQueryString();
+        $releasable = FinanceWorkflow::query()->where('business_id', $b->id)->whereIn('kind', ['material_receipt', 'batch_cost'])->where('posting_status', 'posted')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(35, ['*'], 'release_page')->withQueryString();
         $canCreate = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
         $business = $b;
 

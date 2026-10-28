@@ -1,9 +1,8 @@
 @extends('layouts.public')
 @section('title', 'Sign in')
 @section('content')
-<span class="eyebrow">WELCOME BACK</span>
 <h1>Sign in</h1>
-<p class="subhead">Access your company's Boosted One workspace.</p>
+
 
 <form method="POST" action="{{ route('login.store') }}" class="form-stack">
   @csrf
@@ -24,7 +23,7 @@
   <button class="primary-button" type="submit">Sign in</button>
 </form>
 
-<p class="form-hint">Company accounts are created by Boosted One, and team members join by invitation. Public registration is not available.</p>
+
 
 <script defer src="{{ asset('assets/password-visibility.js') }}"></script>
 @endsection

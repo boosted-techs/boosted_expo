@@ -118,7 +118,7 @@ class LabelWorkflowController extends Controller
             ->when($filters['shipment'] ?? null, fn ($q, $id) => $q->whereHas('shipmentAllocation', fn ($a) => $a->where('shipment_id', $id)))
             ->when($filters['order'] ?? null, fn ($q, $id) => $q->whereHas('shipmentAllocation.shipment', fn ($s) => $s->where('sales_order_id', $id)))
             ->when($filters['search'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('carton_code', 'like', '%'.$term.'%')->orWhereHas('packingJob.product', fn ($p) => $p->where('name', 'like', '%'.$term.'%'))))
-            ->with(['packingJob.product', 'shipmentAllocation.shipment'])->orderBy('id')->paginate(50)->withQueryString();
+            ->with(['packingJob.product', 'shipmentAllocation.shipment'])->orderBy('id')->workspacePaginate(50)->withQueryString();
         $templates = LabelTemplate::query()->where('business_id', $business->id)->where('active', true)->orderByDesc('is_default')->orderBy('name')->get();
         $first = $cartons->first();
         $recommended = $templates->filter(fn ($t) => (! $t->product_id || $t->product_id === $first?->packingJob?->product_id) && (! $t->customer_id || $t->customer_id === $first?->shipmentAllocation?->shipment?->customer_id))->sortByDesc(fn ($t) => ($t->customer_id ? 4 : 0) + ($t->product_id ? 2 : 0) + ($t->is_default ? 1 : 0))->first()?->id;
@@ -241,7 +241,7 @@ class LabelWorkflowController extends Controller
         $business = $this->business($request);
         $label = LabelGeneration::query()->where('business_id', $business->id)->where('scan_token', $token)->with('carton', 'template')->firstOrFail();
         $stale = $workflow->stale($label);
-        $events = LabelEvent::query()->where('business_id', $business->id)->where('generation_id', $label->id)->latest('id')->paginate(20);
+        $events = LabelEvent::query()->where('business_id', $business->id)->where('generation_id', $label->id)->latest('id')->workspacePaginate(20);
 
         return view('labels.scan', compact('label', 'stale', 'events'));
     }

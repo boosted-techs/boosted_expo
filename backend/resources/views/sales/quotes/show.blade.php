@@ -11,7 +11,7 @@
 </div>
 @if($quote->status==='draft' && $canManage)
 <section class="section-card"><h2>Quotation pricing & terms</h2>
-<p class="muted">Set a quantity and price for each product. The system calculates line totals, discount and tax. Confirm the applicable rate with your accountant before sharing.</p>
+<p class="muted">Enter quantities, prices, discount and tax. Check the tax rate before sharing.</p>
 <form method="POST" action="{{ route('sales-quotes.update',$quote->id) }}" class="form-stack">@csrf @method('PUT')
 <div class="form-columns"><label class="field"><span>Quotation currency</span><x-currency-select :value="old('currency', $quote->currency)" /></label>
 <label class="field"><span>Valid until</span><input type="date" name="valid_until" value="{{ old('valid_until',$quote->valid_until?->format('Y-m-d')) }}"></label></div>
@@ -57,7 +57,7 @@
 @endif
 @if($canConfirm && $quote->status==='issued' && !$quote->salesRequest->order)
 <section class="section-card form-narrow"><h2>Confirm customer order</h2>
-<p class="muted">Only confirm after the buyer accepts this exact quotation. Record the buyer's purchase-order reference, email reference or other written confirmation. This is a staff-recorded confirmation, not a digital signature.</p>
+<p class="muted">Confirm after buyer acceptance. Enter their purchase order or written confirmation reference.</p>
 <form method="POST" action="{{ route('sales-quotes.confirm',$quote->id) }}" class="form-stack">@csrf
 <label class="field"><span>Buyer confirmation reference</span><input name="buyer_confirmation" minlength="5" maxlength="160" required placeholder="e.g. Buyer PO-934 or email dated 20 Oct"></label>
 <button class="primary-button">Confirm sales order</button></form>

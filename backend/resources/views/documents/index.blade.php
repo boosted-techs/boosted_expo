@@ -6,7 +6,7 @@
 <a class="secondary-button" href="{{ route('shipments.index') }}">Shipments</a>
 <a class="secondary-button" href="{{ route('document-templates.index') }}">Document templates</a>
 </div>
-<div class="notice"><span>●</span><div><strong>Issued copies are preserved</strong><p>Every document keeps its original carton details, buyer, weights, template configuration and issued status. Its saved PDF can be regenerated from the same immutable HTML snapshot. These are export paperwork drafts prepared by the company, not government-issued certificates.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Issued copies are preserved</strong><p>Download issued documents with their original details. Obtain official certificates from the issuing authority.</p></div></div>
 <section class="section-card"><h2>Document register</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Document reference</th><th>Shipment</th><th>Document</th><th>Issued</th><th>Version</th><th></th></tr></thead>
 <tbody>@forelse($documents as $d)

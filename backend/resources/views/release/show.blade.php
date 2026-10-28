@@ -1,7 +1,7 @@
 @extends('layouts.console')
 @section('title','Release Acceptance Review')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">STAGING RELEASE CHECKLIST</span><h1>{{ $run->release_label }}</h1>
+<div class="page-intro"><div><span class="eyebrow">READINESS CHECKLIST</span><h1>{{ $run->release_label }}</h1>
 <p>Every test is independently reviewed and tied to one exact artifact. Status: {{ $run->status==='sealed'?'Evidence sealed':'Acceptance in progress' }}.</p></div></div>
 <div class="form-actions"><a href="{{ route('release.acceptance.index') }}" class="secondary-button">All acceptance campaigns</a></div>
 <section class="section-card">
@@ -9,7 +9,7 @@
 <div class="record"><strong>Compiled frontend SHA-256</strong><code style="overflow-wrap:anywhere">{{ $run->assets_sha256??'Legacy campaign: not bound to a build' }}</code></div>
 <div class="record"><strong>Test scope and environment</strong><span>{{ $run->scope_note }}</span></div>
 <div class="record"><strong>Signed acceptance items</strong><span>{{ $run->checks->where('status','approved')->count() }} / {{ count($labels) }}</span></div>
-<p class="form-hint">The ERP records human assertions and audit events; it cannot independently authenticate reports, provider accounts, warehouse equipment or regulatory approvals from the text submitted here.</p>
+<p class="form-hint">Attach verified evidence for each check.</p>
 </section>
 @foreach($run->checks as $check)
 @php
@@ -50,14 +50,14 @@ $canReviewCheck=$run->status==='open' && $reviewer
 @endforeach
 @if($run->status==='open' && $owner)
 <section class="section-card form-narrow"><h2>Seal acceptance evidence</h2>
-@if(!$allApproved)<p class="muted">The campaign cannot be sealed until every item has been independently accepted. Rejected items must be resubmitted with new evidence.</p>@else
-<div class="notice"><span>●</span><div><strong>Human sign-off, not production release</strong><p>This preserves the completed staging records. The technical release gate separately checks the production environment, release hash, migrations and database consistency.</p></div></div>@endif
+@if(!$allApproved)<p class="muted">Resolve rejected items and obtain independent approval for every check before sealing.</p>@else
+<div class="notice"><span>●</span><div><strong>Review complete</strong><p>Acceptance is complete. An operator must complete deployment checks before publishing.</p></div></div>@endif
 <form method="POST" action="{{ route('release.acceptance.seal',$run->id) }}" class="form-stack">@csrf
 <label class="field"><span>Owner's final acceptance statement</span><textarea name="seal_note" required minlength="30" maxlength="3000" rows="3" placeholder="Reference the final accepted scope and explicitly state outstanding constraints."></textarea></label>
 <button class="primary-button" @disabled(!$allApproved)>Seal release acceptance record</button></form>
 </section>
 @endif
-<section class="section-card"><h2>Immutable acceptance activity</h2>
+<section class="section-card"><h2>Review history</h2>
 @forelse($run->events as $event)
 @php
 $eventCheck=$event->check_id ? $run->checks->firstWhere('id',$event->check_id) : null;

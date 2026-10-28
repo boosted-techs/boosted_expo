@@ -1,9 +1,10 @@
 @extends('layouts.console')
 @section('title', 'Company Preferences')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">BUSINESS SETTINGS</span><h1>Company Preferences</h1><p>Control defaults used throughout {{ $business->name }}.</p></div></div>
+<div class="page-intro"><div><span class="eyebrow">BUSINESS SETTINGS</span><h1>Company Preferences</h1><p>Manage your company defaults.</p></div></div>
+<div class="settings-grid">
 <div class="section-card form-narrow">
-<h2>QR code identity</h2><p class="muted">Sticker templates choose their own product, batch or carton identity.</p>
+<h2>QR code identity</h2><p class="muted">Choose what new QR codes identify.</p>
 <form method="POST" action="{{ route('business.settings.update') }}" class="form-stack">@csrf @method('PUT')
 <label class="field"><span>Default QR level</span><select name="default_qr_level" required>
 @foreach(['product'=>'Product','batch'=>'Batch','carton'=>'Carton'] as $value=>$label)
@@ -16,11 +17,11 @@
 <div class="section-card form-narrow"><h2>Company details</h2>
 <div class="record"><div><strong>{{ $business->name }}</strong><small>Company code: {{ $business->code }}</small></div></div>
 <div class="record"><div><strong>Reporting currency</strong><small>{{ $business->base_currency }} · {{ $business->timezone }}</small></div></div>
-<p class="form-hint">Sensitive financial postings always require independent review. These operating preferences cannot bypass statutory or finance approvals.</p>
+<p class="form-hint">Financial postings require independent approval.</p>
 </div>
 <section class="section-card form-narrow">
 <h2>Trading currencies</h2>
-<p class="muted">Choose the currencies used for new customers, purchases, quotations, costs, banks and manual exchange rates. The reporting currency remains {{ $business->base_currency }}. Previous documents, balances and approved rates keep their original currency.</p>
+<p class="muted">Select trading currencies. Reports use {{ $business->base_currency }}.</p>
 @if($canChangePolicy)
 <form method="POST" action="{{ route('business.currencies.update') }}" class="form-stack">@csrf @method('PUT')
 <input type="hidden" name="enabled_currencies[]" value="{{ $business->base_currency }}">
@@ -33,11 +34,11 @@
 @else
 <p>{{ implode(', ', $enabledCurrencies) }}. Only the business owner can change these currencies.</p>
 @endif
-<p class="form-hint">Enabling a foreign currency does not create an exchange rate. Finance still requires an independently approved dated manual rate. Existing invoices, bills and bank statements can still be settled or reconciled in their original currency.</p>
+<p class="form-hint">Approve a dated exchange rate before using a foreign currency. Existing records keep their original currency.</p>
 </section>
 <section class="section-card form-narrow">
 <h2>Operating approvals & buyer access</h2>
-<p class="muted">Only the company owner can change these safeguards. An independent reviewer may be required before a shipment leaves.</p>
+<p class="muted">Set dispatch approvals and buyer link expiry. Only the owner can make changes.</p>
 @if($canChangePolicy)
 <form method="POST" action="{{ route('business.policies.update') }}" class="form-stack">@csrf
 <input type="hidden" name="dispatch_approval_required" value="0">
@@ -53,4 +54,5 @@ value="{{ old('buyer_link_days',$policy?->buyer_link_days ?? 7) }}" required></l
 <div class="record"><strong>Buyer link lifetime</strong><span>{{ $policy?->buyer_link_days??7 }} days</span></div>
 @endif
 </section>
+</div>
 @endsection

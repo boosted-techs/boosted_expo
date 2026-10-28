@@ -50,7 +50,7 @@ class FinanceBankController extends Controller
         $this->check($request, 'finance.bank.view');
         $business = $request->attributes->get('activeBusiness');
         $statements = FinanceBankStatement::query()->where('business_id', $business->id)
-            ->withCount('lines')->latest()->paginate(20);
+            ->withCount('lines')->latest()->workspacePaginate(20);
         $bankProfiles = FinanceBankProfile::query()->where('business_id', $business->id)
             ->where('active', true)->orderBy('label')->get();
         $canImport = app(BusinessPermissions::class)->allows(
@@ -85,47 +85,47 @@ class FinanceBankController extends Controller
         $statement = $this->own($request, $statement)->load('account');
         $request->validate(['candidate_search' => ['nullable', 'string', 'max:120']]);
         $candidateSearch = trim((string) $request->input('candidate_search'));
-        $lines = $statement->lines()->with('match')->orderBy('line_number')->paginate(100)->withQueryString();
+        $lines = $statement->lines()->with('match')->orderBy('line_number')->workspacePaginate(100)->withQueryString();
         $candidateAmounts = $lines->getCollection()->pluck('amount')->unique()->all();
         $canMatch = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'finance.bank.match');
         $canReview = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'finance.bank.review');
-        $workflowLegs = FinanceWorkflowLeg::query()->where('business_id', $statement->business_id)->where('posting_status', 'posted')->where('cash_account_id', $statement->account_id)->where('currency', $statement->currency)->whereIn('amount', $candidateAmounts)->with('workflow')->when($candidateSearch !== '', fn ($q) => $q->whereHas('workflow', fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_workflow_page')->withQueryString();
-        $registerEntries = FinanceRegisterEntry::query()->where('business_id', $statement->business_id)->where('cash_account_id', $statement->account_id)->whereIn('posting_status', ['posted', 'reversed'])->where('currency', $statement->currency)->whereIn('cash_amount', $candidateAmounts)->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_register_page')->withQueryString();
-        $operations = FinanceOperation::query()->where('business_id', $statement->business_id)->where('posting_status', 'posted')->where('currency', $statement->currency)->whereIn('amount', $candidateAmounts)->where(fn ($q) => $q->where('cash_account_id', $statement->account_id)->orWhere('destination_account_id', $statement->account_id))->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->paginate(50, ['*'], 'candidate_money_page')->withQueryString();
+        $workflowLegs = FinanceWorkflowLeg::query()->where('business_id', $statement->business_id)->where('posting_status', 'posted')->where('cash_account_id', $statement->account_id)->where('currency', $statement->currency)->whereIn('amount', $candidateAmounts)->with('workflow')->when($candidateSearch !== '', fn ($q) => $q->whereHas('workflow', fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->workspacePaginate(50, ['*'], 'candidate_workflow_page')->withQueryString();
+        $registerEntries = FinanceRegisterEntry::query()->where('business_id', $statement->business_id)->where('cash_account_id', $statement->account_id)->whereIn('posting_status', ['posted', 'reversed'])->where('currency', $statement->currency)->whereIn('cash_amount', $candidateAmounts)->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->workspacePaginate(50, ['*'], 'candidate_register_page')->withQueryString();
+        $operations = FinanceOperation::query()->where('business_id', $statement->business_id)->where('posting_status', 'posted')->where('currency', $statement->currency)->whereIn('amount', $candidateAmounts)->where(fn ($q) => $q->where('cash_account_id', $statement->account_id)->orWhere('destination_account_id', $statement->account_id))->when($candidateSearch !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))->latest('id')->workspacePaginate(50, ['*'], 'candidate_money_page')->withQueryString();
         $payments = FinancePayment::query()->where('business_id', $statement->business_id)
             ->where('cash_account_id', $statement->account_id)
             ->whereIn('status', ['posted', 'reversed'])->where('currency', $statement->currency)
             ->whereIn('amount', $candidateAmounts)
             ->when($candidateSearch !== '', fn ($query) => $query->where(fn ($query) => $query->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))
-            ->orderByDesc('id')->paginate(50, ['*'], 'candidate_payments_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(50, ['*'], 'candidate_payments_page')->withQueryString();
         $costs = FinanceShipmentCost::query()->where('business_id', $statement->business_id)
             ->where('cash_account_id', $statement->account_id)
             ->whereIn('status', ['posted', 'reversed'])->where('currency', $statement->currency)
             ->whereIn('amount', $candidateAmounts)
             ->when($candidateSearch !== '', fn ($query) => $query->where(fn ($query) => $query->where('reference', 'like', '%'.$candidateSearch.'%')->orWhere('external_reference', 'like', '%'.$candidateSearch.'%')))
-            ->orderByDesc('id')->paginate(50, ['*'], 'candidate_costs_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(50, ['*'], 'candidate_costs_page')->withQueryString();
         $payrollSettlements = FinancePayrollSettlement::query()->where('business_id', $statement->business_id)
             ->where('cash_account_id', $statement->account_id)
             ->whereIn('status', ['posted', 'reversed'])->where('currency', $statement->currency)
             ->whereIn('amount', $candidateAmounts)
             ->when($candidateSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$candidateSearch.'%'))
-            ->orderByDesc('id')->paginate(50, ['*'], 'candidate_payrollSettlements_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(50, ['*'], 'candidate_payrollSettlements_page')->withQueryString();
         $reversals = FinanceTransactionReversal::query()
             ->where('business_id', $statement->business_id)
             ->where('cash_account_id', $statement->account_id)
             ->where('posting_status', 'posted')->where('currency', $statement->currency)
             ->whereIn('amount', $candidateAmounts)
             ->when($candidateSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$candidateSearch.'%'))
-            ->orderByDesc('id')->paginate(50, ['*'], 'candidate_reversals_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(50, ['*'], 'candidate_reversals_page')->withQueryString();
         $partials = FinancePartialBankReturn::query()
             ->where('business_id', $statement->business_id)
             ->where('cash_account_id', $statement->account_id)
             ->where('posting_status', 'posted')->where('currency', $statement->currency)
             ->whereIn('amount', $candidateAmounts)
             ->when($candidateSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$candidateSearch.'%'))
-            ->orderByDesc('id')->paginate(50, ['*'], 'candidate_partials_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(50, ['*'], 'candidate_partials_page')->withQueryString();
         $bankAttestation = FinanceBankStatementAttestation::query()
             ->where('business_id', $statement->business_id)
             ->where('statement_id', $statement->id)->first();

@@ -1,38 +1,20 @@
 @extends('layouts.console')
 @section('title', 'Stock Batches')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">WAREHOUSE</span><h1>Stock batches</h1><p>Accepted produce recorded at receiving, with traceability back to origin.</p></div></div>
-<div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('receiving.index') }}">Goods receiving</a><a class="secondary-button" href="{{ route('purchases.index') }}">Purchases</a></div>
-@if(count($lowStock))
-<section class="section-card"><h2>Low-stock warnings</h2>
-<p class="muted">Warnings compare only quality-cleared unpacked stock across batches with your product reorder threshold. Produce under quality hold is excluded. Warnings do not place purchases.</p>
-@foreach($lowStock as $entry)
-<div class="record"><strong>{{ $entry['product']->name }}</strong>
-<span>{{ $entry['available'] }} / {{ $entry['product']->reorder_point }} {{ $entry['product']->base_unit }} (available / warning level)</span></div>
-@endforeach</section>
-@endif
-<section class="section-card"><h2>Unpacked stock and quality holds</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Product</th><th>Unpacked balance</th><th>Available to pack</th><th>Origin reference</th><th>Received</th><th>Quality status</th><th>QR information</th></tr></thead><tbody>
+<div class="page-intro"><div><span class="eyebrow">WAREHOUSE</span><h1>Stock batches</h1><p>Review available stock and quality status.</p></div><div class="form-actions"><a class="secondary-button" href="{{ route('stock.exceptions.index') }}">Counts & moves</a><a class="primary-button" href="{{ route('receiving.index') }}">Goods receiving</a></div></div>
+<div class="summary-strip"><div><span>Matching batches</span><strong>{{ $batches->total() }}</strong></div><a href="{{ route('stock.low-stock') }}"><span>Low-stock warnings <x-ui-icon name="arrow" /></span><strong>{{ count($lowStock) }}</strong></a><a href="{{ route('stock.index',['quality'=>'held']) }}"><span>Quality holds</span><strong>{{ $heldCount }}</strong></a></div>
+<section class="section-card" id="stock-list"><div class="section-heading"><h2>Unpacked stock and quality holds</h2></div>
+<form method="GET" class="page-toolbar no-print"><label class="field grow"><span>Find a batch or product</span><input name="search" value="{{ request('search') }}" placeholder="Batch, product or origin reference" maxlength="120"></label><label class="field"><span>Quality</span><select name="quality"><option value="">All quality statuses</option><option value="cleared" @selected(request('quality')==='cleared')>Quality cleared</option><option value="held" @selected(request('quality')==='held')>On quality hold</option></select></label><button class="secondary-button" aria-label="Search">Search</button><a class="text-button" href="{{ route('stock.index') }}">Reset</a></form>
+<div class="table-wrap"><table class="data-table"><thead><tr><th data-sort="batch_code">Batch</th><th>Product</th><th data-sort="unpacked_balance">Unpacked</th><th data-sort="available_balance">Available</th><th data-sort="received_on">Received</th><th data-sort="is_quarantined">Quality</th><th>Actions</th></tr></thead><tbody>
 @forelse($batches as $batch)
-<tr><td><strong>{{ $batch->batch_code }}</strong></td><td>{{ $batch->product->name }}</td><td>{{ $balanceByBatch[$batch->id] ?? '0' }} {{ $batch->product->base_unit }}</td>
-<td><strong>{{ $batch->is_quarantined ? '0' : ($balanceByBatch[$batch->id] ?? '0') }}</strong> {{ $batch->product->base_unit }}</td>
-<td>{{ $batch->source_reference ?: '—' }}</td><td>{{ $batch->received_on ?: '—' }}</td>
-<td>
-<strong>{{ $batch->is_quarantined?'QUALITY HOLD':'Quality cleared' }}</strong>
-@if($batch->is_quarantined && $batch->quality_hold_reason)<small>{{ $batch->quality_hold_reason }}</small>@endif
-@if(($canHold && !$batch->is_quarantined) || ($canRelease && $batch->is_quarantined))
-<form method="POST" action="{{ route('stock.quality.change',[
-'batch'=>$batch->id,'action'=>$batch->is_quarantined?'release':'hold']) }}" class="form-stack">@csrf
-<input name="reason" required minlength="10" maxlength="500" placeholder="Quality inspection reason">
-<button class="secondary-button">{{ $batch->is_quarantined?'Release quality hold':'Place on quality hold' }}</button>
-</form>
-@endif</td>
-<td>@if($canPublish)
-<form method="POST" action="{{ route('stock.qr.visibility',$batch->id) }}">@csrf @method('PUT')
-<input type="hidden" name="public_enabled" value="{{ $publicByBatch->has($batch->id) ? 0 : 1 }}">
-<button class="text-button">{{ $publicByBatch->has($batch->id) ? 'Hide public QR' : 'Enable public QR' }}</button>
-</form>
-@else{{ $publicByBatch->has($batch->id) ? 'Public' : 'Hidden' }}@endif</td></tr>
-@empty<tr><td colspan="8" class="empty-msg">No stock batches yet.</td></tr>@endforelse
+<tr><td><strong>{{ $batch->batch_code }}</strong></td><td>{{ $batch->product->name }}</td><td class="numeric">{{ $balanceByBatch[$batch->id] ?? '0' }} {{ $batch->product->base_unit }}</td><td class="numeric">{{ $batch->is_quarantined ? '0' : ($balanceByBatch[$batch->id] ?? '0') }} {{ $batch->product->base_unit }}</td><td>{{ $batch->received_on ? \Carbon\Carbon::parse($batch->received_on)->format('d M Y') : '—' }}</td><td><span class="status-badge {{ $batch->is_quarantined?'hold':'' }}">{{ $batch->is_quarantined?'On hold':'Cleared' }}</span></td><td><div class="record-actions"><button type="button" class="secondary-button" data-modal-open="batch-{{ $batch->id }}">Details & actions</button></div></td></tr>
+@empty<tr><td colspan="7" class="empty-msg">No matching stock batches.</td></tr>@endforelse
 </tbody></table></div>{{ $batches->links() }}</section>
-<p class="form-hint">Unpacked balances are physically recorded quantities after packing and grading losses. The available-to-pack column excludes all remaining quantity in quality-held batches. Carton packing consumes the exact source stock once; assigning already packed cartons to shipments does not subtract the same stock again.</p>
+@foreach($batches as $batch)
+<dialog id="batch-{{ $batch->id }}" class="workspace-dialog dialog-wide" aria-labelledby="batch-title-{{ $batch->id }}"><div class="dialog-heading"><h2 id="batch-title-{{ $batch->id }}">{{ $batch->product->name }} · Batch details</h2><button type="button" class="icon-button" data-modal-close aria-label="Close batch details">×</button></div><div class="dialog-body"><div class="record"><strong>Batch</strong><span>{{ $batch->batch_code }}</span></div><div class="record"><strong>Origin reference</strong><span>{{ $batch->source_reference ?: '—' }}</span></div><div class="record"><strong>Available to pack</strong><span>{{ $batch->is_quarantined?'0':($balanceByBatch[$batch->id]??'0') }} {{ $batch->product->base_unit }}</span></div><div class="record"><strong>Quality</strong><span class="status-badge {{ $batch->is_quarantined?'hold':'' }}">{{ $batch->is_quarantined?'On hold':'Cleared' }}</span></div>
+@if($batch->product->description)<h3>Product description</h3><p>{{ $batch->product->description }}</p>@endif
+@if($batch->quality_hold_reason)<h3>Inspection notes</h3><p>{{ $batch->quality_hold_reason }}</p>@endif
+@if(($canHold && !$batch->is_quarantined) || ($canRelease && $batch->is_quarantined))<form method="POST" action="{{ route('stock.quality.change',['batch'=>$batch->id,'action'=>$batch->is_quarantined?'release':'hold']) }}" class="form-stack">@csrf<label class="field"><span>Inspection reason</span><textarea name="reason" required minlength="10" maxlength="500" placeholder="Record the inspection findings and reason for this change"></textarea></label><button class="primary-button">{{ $batch->is_quarantined?'Release quality hold':'Place on quality hold' }}</button></form>@endif
+@if($canPublish)<form method="POST" action="{{ route('stock.qr.visibility',$batch->id) }}" class="form-stack">@csrf @method('PUT')<input type="hidden" name="public_enabled" value="{{ $publicByBatch->has($batch->id) ? 0 : 1 }}"><label class="field"><span>Public QR information</span><small>{{ $publicByBatch->has($batch->id) ? 'This batch is visible through its public QR page.' : 'This batch is private.' }}</small></label><button class="secondary-button">{{ $publicByBatch->has($batch->id)?'Hide public QR':'Enable public QR' }}</button></form>@endif
+</div></dialog>@endforeach
 @endsection

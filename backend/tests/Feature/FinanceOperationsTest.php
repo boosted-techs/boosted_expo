@@ -188,7 +188,7 @@ class FinanceOperationsTest extends TestCase
 
     public function test_foreign_deposit_allocation_clears_invoice_carrying_and_prevents_second_payment(): void
     {
-        $this->freezeTime();
+        $this->travelTo(Carbon::parse('2026-10-27 09:00:00', 'UTC'));
         $ctx = $this->company();
         $b = $ctx['business'];
         $owner = $ctx['preparer'];

@@ -64,6 +64,7 @@ use App\Http\Controllers\PublicOrderAmendmentController;
 use App\Http\Controllers\PublicQrController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\QuotationAccessController;
+use App\Http\Controllers\RecordArchiveController;
 use App\Http\Controllers\ReleaseAcceptanceController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SalesQuotationController;
@@ -233,6 +234,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/transport-legs/{leg}', [TransportPlanRevisionController::class, 'destroy'])->whereNumber('leg')->name('transport.legs.cancel');
         Route::post('/transport-legs/{leg}/handover', [TransportLegController::class, 'handover'])->whereNumber('leg')->name('transport.handover');
         Route::get('/people', [PeopleController::class, 'index'])->name('people.index');
+        Route::get('/people/activity/{activity}', [PeopleController::class, 'index'])->name('people.activity');
         Route::post('/people/register', [PeopleController::class, 'person'])->name('people.register');
         Route::post('/people/rotas', [PeopleController::class, 'rota'])->name('people.rotas.store');
         Route::post('/people/rotas/{rota}/shifts', [PeopleController::class, 'shift'])->whereNumber('rota')->name('people.shifts.store');
@@ -422,6 +424,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/finance/payroll/from-time', [StaffPayRateController::class, 'prepare'])->name('finance.payroll.from-time');
         Route::get('/finance/payroll/{run}/payslip/{line}', [FinancePayrollController::class, 'payslip'])->whereNumber('run')->whereNumber('line')->name('finance.payroll.payslip');
         Route::get('/stock/exceptions', [StockExceptionController::class, 'index'])->name('stock.exceptions.index');
+        Route::get('/stock/exceptions/history/{activity}', [StockExceptionController::class, 'index'])->name('stock.exceptions.history');
         Route::post('/stock/exceptions/counts', [StockExceptionController::class, 'count'])->name('stock.exceptions.count');
         Route::post('/stock/exceptions/counts/{count}/{decision}', [StockExceptionController::class, 'reviewCount'])->whereNumber('count')->whereIn('decision', ['approve', 'reject'])->name('stock.exceptions.count.review');
         Route::post('/stock/exceptions/counts/{count}/withdraw', [StockExceptionController::class, 'cancelCount'])->whereNumber('count')->name('stock.exceptions.count.cancel');
@@ -593,12 +596,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
         Route::post('/purchases/{purchase}/amendments', [PurchaseController::class, 'amend'])->whereNumber('purchase')->name('purchases.amend');
         Route::post('/purchase-amendments/{amendment}/{decision}', [PurchaseController::class, 'reviewAmendment'])->whereNumber('amendment')->whereIn('decision', ['approve', 'reject'])->name('purchases.amendments.review');
+        Route::get('/purchases/archived', [PurchaseController::class, 'index'])->name('purchases.archived');
+        Route::delete('/purchases/{purchase}', [PurchaseController::class, 'archive'])->whereNumber('purchase')->name('purchases.archive');
+        Route::post('/purchases/{purchase}/restore', [PurchaseController::class, 'restore'])->whereNumber('purchase')->name('purchases.restore');
         Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])->whereNumber('purchase')->name('purchases.show');
 
         Route::get('/receiving', [GoodsReceiptController::class, 'index'])->name('receiving.index');
         Route::get('/receiving/purchase/{purchase}', [GoodsReceiptController::class, 'create'])->whereNumber('purchase')->name('receiving.create');
         Route::post('/receiving/purchase/{purchase}', [GoodsReceiptController::class, 'store'])->whereNumber('purchase')->name('receiving.store');
         Route::get('/stock', [GoodsReceiptController::class, 'stock'])->name('stock.index');
+        Route::get('/stock/low-stock', [GoodsReceiptController::class, 'stock'])->name('stock.low-stock');
         Route::post('/stock/{batch}/quality/{action}', [StockQualityController::class, 'change'])
             ->whereNumber('batch')->whereIn('action', ['hold', 'release'])
             ->name('stock.quality.change');
@@ -710,9 +717,12 @@ Route::middleware('auth')->group(function () {
 
             $todayWork = $section === 'overview' ? app(OperationalToday::class)->forMember(request()->attributes->get('membership')) : null;
 
-            return view('workspace', compact('section', 'sections', 'metrics', 'todayWork'));
+            $charts = $section === 'overview' ? app(WorkspaceMetrics::class)->charts(request()->attributes->get('membership')) : [];
+
+            return view('workspace', compact('section', 'sections', 'metrics', 'todayWork', 'charts'));
         })->name('workspace');
 
+        Route::post('/records/{type}/{record}/{action}', [RecordArchiveController::class, 'update'])->whereNumber('record')->whereIn('type', ['product', 'customer', 'supplier', 'person'])->whereIn('action', ['archive', 'restore'])->name('records.archive');
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');
         Route::post('/products', [ProductController::class, 'store'])->name('products.store');
         Route::get('/products/import', [ProductImportController::class, 'index'])->name('products.import');
@@ -731,6 +741,7 @@ Route::middleware('auth')->group(function () {
         Route::put('/products/{product}', [ProductController::class, 'update'])->whereNumber('product')->name('products.update');
 
         Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
+        Route::get('/staff/activity/{activity}', [StaffController::class, 'index'])->name('staff.activity');
         Route::post('/staff/shifts', [StaffController::class, 'schedule'])->name('staff.schedule');
         Route::post('/staff/shifts/{shift}/cancel', [StaffController::class, 'cancel'])
             ->whereNumber('shift')->name('staff.cancel');
@@ -740,6 +751,7 @@ Route::middleware('auth')->group(function () {
             ->whereNumber('attendance')->middleware('throttle:10,1')->name('staff.clock-out');
 
         Route::get('/team', [TeamController::class, 'index'])->name('team.index');
+        Route::get('/team/activity/{activity}', [TeamController::class, 'index'])->name('team.activity');
         Route::put('/team/members/{member}', [TeamAccessController::class, 'update'])
             ->whereNumber('member')->name('team.members.update');
         Route::post('/team/invitations', [TeamController::class, 'invite'])->middleware('throttle:10,1')->name('team.invite');

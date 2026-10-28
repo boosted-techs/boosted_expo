@@ -81,7 +81,7 @@ class ExportShipmentController extends Controller
         $businessId = $request->attributes->get('activeBusiness')->id;
         $shipments = ExportShipment::query()->where('business_id', $businessId)
             ->with('customer')->withCount('allocations')
-            ->latest()->paginate(20);
+            ->latest()->workspacePaginate(20);
         $canManage = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'shipments.manage'
         );

@@ -26,8 +26,8 @@ class FinanceMoneyCorrectionController extends Controller
         $business = $r->attributes->get('activeBusiness');
         $r->validate(['search' => ['nullable', 'string', 'max:120']]);
         $remaining = $corrections->remaining($source);
-        $history = FinanceMoneyCorrection::query()->where('business_id', $business->id)->where('operation_id', $source->id)->with('workflow')->latest('id')->paginate(25, ['*'], 'history_page')->withQueryString();
-        $bankLines = FinanceBankStatementLine::query()->where('business_id', $business->id)->whereHas('statement', fn ($q) => $q->where('status', 'open')->where('currency', $source->currency)->whereIn('account_id', array_filter([$source->cash_account_id, $source->destination_account_id])))->when($r->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('bank_reference', 'like', '%'.$r->input('search').'%')->orWhere('description', 'like', '%'.$r->input('search').'%')))->orderByDesc('transaction_on')->orderByDesc('id')->paginate(30, ['*'], 'bank_page')->withQueryString();
+        $history = FinanceMoneyCorrection::query()->where('business_id', $business->id)->where('operation_id', $source->id)->with('workflow')->latest('id')->workspacePaginate(25, ['*'], 'history_page')->withQueryString();
+        $bankLines = FinanceBankStatementLine::query()->where('business_id', $business->id)->whereHas('statement', fn ($q) => $q->where('status', 'open')->where('currency', $source->currency)->whereIn('account_id', array_filter([$source->cash_account_id, $source->destination_account_id])))->when($r->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('bank_reference', 'like', '%'.$r->input('search').'%')->orWhere('description', 'like', '%'.$r->input('search').'%')))->orderByDesc('transaction_on')->orderByDesc('id')->workspacePaginate(30, ['*'], 'bank_page')->withQueryString();
 
         return view('finance.money.correct', compact('business', 'source', 'remaining', 'history', 'bankLines'));
     }

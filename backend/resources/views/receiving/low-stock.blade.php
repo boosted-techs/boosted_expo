@@ -1,0 +1,6 @@
+@extends('layouts.console')
+@section('title','Low-stock warnings')
+@section('content')
+<div class="page-intro"><div><span class="eyebrow">WAREHOUSE</span><h1>Low-stock warnings</h1><p>Products below their reorder level. Quality holds are excluded from available stock.</p></div><a href="{{ route('stock.index') }}" class="secondary-button">All stock batches</a></div>
+<section class="section-card"><h2>{{ count($lowStock) }} products need attention</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>Product</th><th>Available</th><th>Reorder level</th><th>Shortfall</th><th>Action</th></tr></thead><tbody>@forelse($lowStock as $entry)<tr><td><strong>{{ $entry['product']->name }}</strong><small>{{ $entry['product']->sku }}</small></td><td>{{ $entry['available'] }} {{ $entry['product']->base_unit }}</td><td>{{ $entry['product']->reorder_point }} {{ $entry['product']->base_unit }}</td><td><span class="status-badge hold">{{ \Brick\Math\BigDecimal::of($entry['product']->reorder_point)->minus($entry['available']) }} {{ $entry['product']->base_unit }}</span></td><td><a href="{{ route('purchases.index') }}" class="action-link">Review purchases <x-ui-icon name="arrow" /></a></td></tr>@empty<tr><td colspan="5">No products below their reorder level.</td></tr>@endforelse</tbody></table></div></section>
+@endsection

@@ -29,7 +29,7 @@ class AssetRegisterController extends Controller
         $this->check($r);
         $business = $r->attributes->get('activeBusiness');
         $filters = $r->validate(['search' => ['nullable', 'string', 'max:120'], 'ownership' => ['nullable', Rule::in(['owned', 'hired', 'third_party'])]]);
-        $assets = BusinessAsset::query()->where('business_id', $business->id)->with('person')->when($filters['search'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$v.'%')->orWhere('asset_code', 'like', '%'.$v.'%')->orWhere('serial_number', 'like', '%'.$v.'%')->orWhere('location', 'like', '%'.$v.'%')))->when($filters['ownership'] ?? null, fn ($q, $v) => $q->where('ownership', $v))->orderBy('asset_code')->paginate(25)->withQueryString();
+        $assets = BusinessAsset::query()->where('business_id', $business->id)->with('person')->when($filters['search'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$v.'%')->orWhere('asset_code', 'like', '%'.$v.'%')->orWhere('serial_number', 'like', '%'.$v.'%')->orWhere('location', 'like', '%'.$v.'%')))->when($filters['ownership'] ?? null, fn ($q, $v) => $q->where('ownership', $v))->orderBy('asset_code')->workspacePaginate(25)->withQueryString();
         $canManage = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
         $states = $assets->mapWithKeys(fn ($a) => [$a->id => app(AssetRegister::class)->state($a)]);
 
@@ -53,10 +53,10 @@ class AssetRegisterController extends Controller
         $state = app(AssetRegister::class)->state($asset);
         $r->validate(['lookup' => ['nullable', 'string', 'max:120']]);
         $lookup = trim((string) $r->input('lookup'));
-        $people = StaffPerson::query()->where('business_id', $business->id)->where('active', true)->when($lookup !== '', fn ($q) => $q->where('name', 'like', '%'.$lookup.'%'))->orderBy('name')->paginate(30, ['*'], 'people_page')->withQueryString();
-        $expenses = FinanceOperation::query()->where('business_id', $business->id)->whereIn('kind', ['expense', 'paid_expense', 'staff_expense'])->when($lookup !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$lookup.'%')->orWhere('description', 'like', '%'.$lookup.'%')))->latest('id')->paginate(20, ['*'], 'expense_page')->withQueryString();
-        $activities = AssetActivity::query()->where('business_id', $business->id)->where('asset_id', $asset->id)->with('expense')->latest('id')->paginate(20, ['*'], 'activity_page')->withQueryString();
-        $entries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('asset_id', $asset->id)->latest('id')->paginate(20, ['*'], 'entry_page')->withQueryString();
+        $people = StaffPerson::query()->where('business_id', $business->id)->where('active', true)->when($lookup !== '', fn ($q) => $q->where('name', 'like', '%'.$lookup.'%'))->orderBy('name')->workspacePaginate(30, ['*'], 'people_page')->withQueryString();
+        $expenses = FinanceOperation::query()->where('business_id', $business->id)->whereIn('kind', ['expense', 'paid_expense', 'staff_expense'])->when($lookup !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$lookup.'%')->orWhere('description', 'like', '%'.$lookup.'%')))->latest('id')->workspacePaginate(20, ['*'], 'expense_page')->withQueryString();
+        $activities = AssetActivity::query()->where('business_id', $business->id)->where('asset_id', $asset->id)->with('expense')->latest('id')->workspacePaginate(20, ['*'], 'activity_page')->withQueryString();
+        $entries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('asset_id', $asset->id)->latest('id')->workspacePaginate(20, ['*'], 'entry_page')->withQueryString();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('status', 'approved')->orderByDesc('effective_on')->get();
         $custodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
         $banks = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->orderBy('label')->get();

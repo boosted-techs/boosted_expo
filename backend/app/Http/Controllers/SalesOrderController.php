@@ -29,7 +29,7 @@ class SalesOrderController extends Controller
         $this->check($request, 'sales.orders.view');
         $orders = SalesOrder::query()->where('business_id', $request->attributes
             ->get('activeBusiness')->id)->with('customer')
-            ->withCount('shipments')->latest()->paginate(20);
+            ->withCount('shipments')->latest()->workspacePaginate(20);
 
         return view('sales.orders.index', compact('orders'));
     }

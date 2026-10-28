@@ -39,7 +39,7 @@ class SupplyRequestController extends Controller
         $this->check($request, 'procurement.view');
         $businessId = $request->attributes->get('activeBusiness')->id;
         $requests = SupplyRequest::query()->where('business_id', $businessId)
-            ->with('product')->withCount('quotes')->latest()->paginate(20);
+            ->with('product')->withCount('quotes')->latest()->workspacePaginate(20);
         $products = Product::query()->where('business_id', $businessId)->where('active', true)->orderBy('name')->get();
         $canCreate = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'procurement.create');
 

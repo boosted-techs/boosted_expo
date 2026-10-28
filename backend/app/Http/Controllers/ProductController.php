@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Services\ProductQrCodes;
+use App\Services\ProductUnitRules;
 use App\Support\BusinessPermissions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProductController extends Controller
@@ -41,7 +43,7 @@ class ProductController extends Controller
             'description' => ['nullable', 'string', 'max:3000'],
             'base_unit' => ['required', Rule::in(['kg', 'g', 'tonne', 'pcs', 'box', 'crate', 'bunch', 'sack', 'litre'])],
             'active' => ['sometimes', 'boolean'],
-            'reorder_point' => ['nullable','numeric','min:0','decimal:0,3','max:999999999'],
+            'reorder_point' => ['nullable', 'numeric', 'min:0', 'decimal:0,3', 'max:999999999'],
         ]);
     }
 
@@ -54,7 +56,7 @@ class ProductController extends Controller
             ->when($search, fn ($q) => $q->where(fn ($q) => $q
                 ->where('name', 'like', '%'.$search.'%')
                 ->orWhere('sku', 'like', '%'.$search.'%')))
-            ->orderBy('name')->paginate(20)->withQueryString();
+            ->orderBy('name')->workspacePaginate(20)->withQueryString();
         $canManage = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'catalogue.manage');
 
         return view('products.index', compact('products', 'search', 'canManage'));
@@ -67,7 +69,7 @@ class ProductController extends Controller
         $data['business_id'] = $request->attributes->get('activeBusiness')->id;
         $data['active'] = true;
         $product = Product::create($data);
-        app(\App\Services\ProductQrCodes::class)->ensure($product);
+        app(ProductQrCodes::class)->ensure($product);
 
         return redirect()->route('products.index')->with('status', 'Product added to your catalogue.');
     }
@@ -76,7 +78,7 @@ class ProductController extends Controller
     {
         $this->authorizePermission($request, 'catalogue.manage');
         $product = $this->productForBusiness($request, $product);
-        $qr = app(\App\Services\ProductQrCodes::class)->ensure($product);
+        $qr = app(ProductQrCodes::class)->ensure($product);
 
         return view('products.edit', compact('product', 'qr'));
     }
@@ -87,10 +89,10 @@ class ProductController extends Controller
         $product = $this->productForBusiness($request, $product);
         $data = $this->validated($request, $product);
         $data['active'] = $request->boolean('active');
-        DB::transaction(function () use($product,$data) {
-            $product=Product::query()->where('business_id',$product->business_id)
+        DB::transaction(function () use ($product, $data) {
+            $product = Product::query()->where('business_id', $product->business_id)
                 ->lockForUpdate()->findOrFail($product->id);
-            app(\App\Services\ProductUnitRules::class)->ensureUnchangedWhenReferenced($product,$data['base_unit']);
+            app(ProductUnitRules::class)->ensureUnchangedWhenReferenced($product, $data['base_unit']);
             $product->update($data);
         });
 

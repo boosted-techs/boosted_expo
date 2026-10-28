@@ -44,7 +44,7 @@ class FinanceOperationController extends Controller
         $operations = FinanceOperation::query()->where('business_id', $business->id)
             ->when($filters['search'] ?? null, fn ($q, $term) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$term.'%')->orWhere('description', 'like', '%'.$term.'%')->orWhere('external_reference', 'like', '%'.$term.'%')))
             ->when($filters['kind'] ?? null, fn ($q, $kind) => $q->where('kind', $kind))
-            ->latest('id')->paginate(25)->withQueryString();
+            ->latest('id')->workspacePaginate(25)->withQueryString();
         $canCreate = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'finance.documents.create');
 
         return view('finance.money.index', compact('business', 'operations', 'canCreate'));
@@ -70,10 +70,10 @@ class FinanceOperationController extends Controller
             'staff_apply','staff_return','staff_expense' => 'staff_advance','expense_payment' => 'expense',default => null,
         };
         $parents = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'posted')->whereIn('kind', $kind === 'expense_payment' ? ['expense', 'market_reimbursement'] : [$parentKind])
-            ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')))->latest('id')->paginate(20, ['*'], 'sources')->withQueryString();
+            ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('description', 'like', '%'.$search.'%')))->latest('id')->workspacePaginate(20, ['*'], 'sources')->withQueryString();
         $balances = $parents->mapWithKeys(fn ($p) => [$p->id => (string) app(FinanceOperations::class)->remaining($p)]);
-        $invoices = app(FinanceDocuments::class)->outstandingQuery($business, true)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(20, ['*'], 'invoices')->withQueryString();
-        $bills = app(FinanceDocuments::class)->outstandingQuery($business, false)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(20, ['*'], 'bills')->withQueryString();
+        $invoices = app(FinanceDocuments::class)->outstandingQuery($business, true)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(20, ['*'], 'invoices')->withQueryString();
+        $bills = app(FinanceDocuments::class)->outstandingQuery($business, false)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(20, ['*'], 'bills')->withQueryString();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('status', 'approved')->orderByDesc('effective_on')->get();
         $bankProfiles = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->orderBy('label')->get();
         $submissionKey = (string) Str::uuid();
@@ -122,7 +122,7 @@ class FinanceOperationController extends Controller
         $this->check($request);
         $business = $request->attributes->get('activeBusiness');
         $operation = FinanceOperation::query()->where('business_id', $business->id)->findOrFail($operation);
-        $children = FinanceOperation::query()->where('business_id', $business->id)->where('parent_id', $operation->id)->latest('id')->paginate(25);
+        $children = FinanceOperation::query()->where('business_id', $business->id)->where('parent_id', $operation->id)->latest('id')->workspacePaginate(25);
         $balance = app(FinanceOperations::class)->remaining($operation);
         $journal = FinanceJournal::query()->where('business_id', $business->id)->where('source_type', 'money_operation')->where('source_id', $operation->id)->first();
         $review = FinancePostingRequest::query()->where('business_id', $business->id)->where('source_type', 'money_operation')->where('source_id', $operation->id)->first();

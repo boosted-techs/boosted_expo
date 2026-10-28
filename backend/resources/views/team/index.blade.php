@@ -1,11 +1,8 @@
 @extends('layouts.console')
 @section('title', 'Team & Access')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">ACCESS MANAGEMENT</span><h1>Team & Access</h1><p>Invite staff and view access within {{ $business->name }}.</p></div></div>
-<div class="split-panels">
-<section class="section-card">
-<h2>Invite team member</h2><p class="muted">An invitation is sent by email and expires after three days.</p>
-<form method="POST" action="{{ route('team.invite') }}" class="form-stack">@csrf
+<div class="page-intro"><div><span class="eyebrow">ACCESS MANAGEMENT</span><h1>{{ ['members'=>'Team & Access','invitations'=>'Pending invitations','history'=>'Access history'][$activity] }}</h1><p>Manage staff logins and permissions.</p></div></div>
+@if(count($roles))<details data-modal class="section-card"><summary>Invite team member</summary><p>Invitations expire after three days.</p><form method="POST" action="{{ route('team.invite') }}" class="form-stack">@csrf
 <label class="field"><span>Email address</span><input name="email" type="email" value="{{ old('email') }}" required></label>
 <label class="field"><span>Role</span><select name="role" required>
 @foreach($roles as $role)
@@ -13,16 +10,9 @@
 @endforeach
 </select></label>
 <button class="primary-button" type="submit">Send invitation</button>
-</form>
-</section>
-<section class="section-card"><h2>Current team</h2>
-@forelse($members as $member)
-<div class="record"><div><strong>{{ $member->user->name }}</strong>
-<small>{{ $member->user->email }} · {{ ucfirst($member->role) }}</small>
-<small>{{ $member->active?'Active':'Suspended' }}</small>
-@if($canManage && $member->user_id!==auth()->id() && $member->role!=='owner'
-&& ($actorRole==='owner' || $member->role!=='admin'))
-<form method="POST" action="{{ route('team.members.update',$member->id) }}" class="form-stack">@csrf @method('PUT')
+</form></details>@endif
+@if($activity==='members')
+<section class="section-card"><h2>Current team</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>@forelse($members as $member)<tr><td><strong>{{ $member->user->name }}</strong></td><td>{{ $member->user->email }}</td><td>{{ ucfirst($member->role) }}</td><td><span class="status-badge {{ $member->active?'':'hold' }}">{{ $member->active?'Active':'Suspended' }}</span></td><td>@if($canManage && $member->user_id!==auth()->id() && $member->role!=='owner' && ($actorRole==='owner' || $member->role!=='admin'))<details data-modal><summary>Update access</summary><form method="POST" action="{{ route('team.members.update',$member->id) }}" class="form-stack">@csrf @method('PUT')
 <label class="field"><span>Access role</span><select name="role">
 @foreach(\App\Support\BusinessPermissions::INVITABLE_ROLES as $role)
 @if($actorRole==='owner' || $role!=='admin')
@@ -34,23 +24,10 @@
 <option value="0" @selected(!$member->active)>Suspended</option></select></label>
 <label class="field"><span>Reason for access change</span><input name="reason" required maxlength="500" minlength="10" placeholder="Role change or suspension reason"></label>
 <button class="secondary-button">Update staff access</button>
-</form>
-@endif</div><span class="tiny-pill">{{ $member->active ? 'Active' : 'Inactive' }}</span></div>
-@empty<p class="empty-msg">No team members yet.</p>@endforelse
-</section>
-</div>
-<section class="section-card"><h2>Pending invitations</h2>
-@forelse($pending as $invite)
-<div class="record"><div><strong>{{ $invite->email }}</strong><small>{{ ucfirst($invite->role) }} · expires {{ $invite->expires_at->format('d M Y, H:i') }}</small></div><span class="tiny-pill">Pending</span></div>
-@empty<p class="empty-msg">No outstanding invitations.</p>@endforelse
-</section>
-@if($canManage)
-<section class="section-card"><h2>Recent access changes</h2>
-@forelse($audit as $event)
-<div class="record"><div><strong>{{ ucfirst(str_replace('_',' ',$event->action)) }}</strong>
-<small>{{ ucfirst($event->previous_role) }} → {{ ucfirst($event->new_role) }} · {{ $event->reason }}</small></div>
-<span>{{ $event->created_at->format('d M Y H:i') }}</span></div>
-@empty<p class="empty-msg">No access changes have been recorded.</p>@endforelse
-</section>
+</form></details>@else—@endif</td></tr>@empty<tr><td colspan="5">No team members yet.</td></tr>@endforelse</tbody></table></div></section>
+@elseif($activity==='invitations')
+<section class="section-card"><h2>Pending invitations</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>Email</th><th>Role</th><th>Expires</th><th>Status</th></tr></thead><tbody>@forelse($pending as $invite)<tr><td>{{ $invite->email }}</td><td>{{ ucfirst($invite->role) }}</td><td>{{ $invite->expires_at->format('d M Y, H:i') }}</td><td><span class="status-badge info">Pending</span></td></tr>@empty<tr><td colspan="4">No outstanding invitations.</td></tr>@endforelse</tbody></table></div></section>
+@else
+<section class="section-card"><h2>Recent access changes</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>Action</th><th>Previous role</th><th>New role</th><th>Reason</th><th>Date</th></tr></thead><tbody>@forelse($audit as $event)<tr><td>{{ ucfirst(str_replace('_',' ',$event->action)) }}</td><td>{{ ucfirst($event->previous_role??'—') }}</td><td>{{ ucfirst($event->new_role??'—') }}</td><td>{{ $event->reason }}</td><td>{{ $event->created_at->format('d M Y H:i') }}</td></tr>@empty<tr><td colspan="5">No access changes recorded.</td></tr>@endforelse</tbody></table></div>{{ $audit->links() }}</section>
 @endif
 @endsection

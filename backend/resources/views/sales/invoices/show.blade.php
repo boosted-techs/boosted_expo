@@ -22,10 +22,10 @@
 <p>The original commercial invoice is retained for the audit trail. This does not mean money was returned or cargo was recovered.</p>
 @elseif($invoice->posting_status==='posted')
 <strong>Commercial invoice recognised by reviewed journal posting</strong>
-<p>The financial recognition workflow has posted an approved journal. This is not evidence of customer payment, bank reconciliation, tax compliance or receipt settlement.</p>
+<p>Posted to the accounts. Confirm customer payments and reconciliation separately.</p>
 @else
 <strong>Financial posting pending</strong>
-<p>This commercial invoice is not yet recognised in the ledger. Record shipment dispatch and submit the transaction for independent finance approval.</p>
+<p>Record dispatch, then submit this invoice for finance approval.</p>
 @endif
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.view'))<p><a class="action-link" href="{{ route('finance.index') }}">Finance and trial balance</a></p>@endif
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.credits.view'))

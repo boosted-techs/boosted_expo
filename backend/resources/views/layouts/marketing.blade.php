@@ -21,6 +21,8 @@
     <title>{{ $pageTitle }} · Boosted One ERP Uganda</title>
     <meta name="description" content="{{ $pageDescription }}">
     <meta name="robots" content="{{ $pageRobots }}">
+    <link rel="icon" type="image/svg+xml" href="/assets/boosted-mark.svg">
+    <link rel="apple-touch-icon" href="/assets/icon-192.png">
     <link rel="canonical" href="{{ url()->current() }}">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Boosted One">
@@ -34,8 +36,8 @@
 <header class="site-header">
     <div class="site-header-inner">
         <a class="site-brand" href="{{ route('home') }}" aria-label="Boosted One home">
-            <span class="brand-mark" aria-hidden="true">B<span>1</span></span>
-            <span class="brand-type"><strong>Boosted<span>One</span></strong><small>BUSINESS & EXPORT ERP</small></span>
+            <x-brand-mark />
+            <span class="brand-type"><strong>Boosted One</strong><small>BUSINESS & EXPORT ERP</small></span>
         </a>
         <nav class="primary-nav" aria-label="Main navigation">
             @foreach($nav as $link)
@@ -71,7 +73,7 @@
 <footer class="site-footer">
     <div class="footer-grid">
         <div class="footer-about">
-            <a class="site-brand footer-brand" href="{{ route('home') }}"><span class="brand-mark" aria-hidden="true">B<span>1</span></span><span class="brand-type"><strong>Boosted<span>One</span></strong><small>BUSINESS & EXPORT ERP</small></span></a>
+            <a class="site-brand footer-brand" href="{{ route('home') }}"><x-brand-mark /><span class="brand-type"><strong>Boosted One</strong><small>BUSINESS & EXPORT ERP</small></span></a>
             <p>Connecting the work behind every export—from suppliers and stock to packed cartons, shipments and business finances.</p>
             <p class="footer-company">A product of Boosted Technologies Limited · Uganda</p>
         </div>

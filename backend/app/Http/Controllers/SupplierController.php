@@ -18,18 +18,19 @@ class SupplierController extends Controller
 
     private function fields(Request $request, ?Supplier $supplier = null): array
     {
-        $request->merge(['supplier_code'=>strtoupper(trim((string) $request->input('supplier_code')))]);
+        $request->merge(['supplier_code' => strtoupper(trim((string) $request->input('supplier_code')))]);
+
         return $request->validate([
-            'supplier_code'=>['required','alpha_dash','max:50',
-                Rule::unique('suppliers','supplier_code')
+            'supplier_code' => ['required', 'alpha_dash', 'max:50',
+                Rule::unique('suppliers', 'supplier_code')
                     ->where('business_id', $request->attributes->get('activeBusiness')->id)->ignore($supplier?->id)],
-            'name'=>['required','string','min:2','max:160'],
-            'kind'=>['required',Rule::in(['company','individual'])],
-            'market_location'=>['nullable','string','max:150'],
-            'email'=>['nullable','email','max:255'],
-            'phone'=>['nullable','string','max:50'],
-            'notes'=>['nullable','string','max:2000'],
-            'active'=>['sometimes','boolean'],
+            'name' => ['required', 'string', 'min:2', 'max:160'],
+            'kind' => ['required', Rule::in(['company', 'individual'])],
+            'market_location' => ['nullable', 'string', 'max:150'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'active' => ['sometimes', 'boolean'],
         ]);
     }
 
@@ -37,10 +38,10 @@ class SupplierController extends Controller
     {
         $this->check($request, 'suppliers.view');
         $businessId = $request->attributes->get('activeBusiness')->id;
-        $suppliers = Supplier::query()->where('business_id', $businessId)->orderBy('name')->paginate(20);
+        $suppliers = Supplier::query()->where('business_id', $businessId)->orderBy('name')->workspacePaginate(20);
         $canManage = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'suppliers.manage');
 
-        return view('suppliers.index', compact('suppliers','canManage'));
+        return view('suppliers.index', compact('suppliers', 'canManage'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -51,7 +52,7 @@ class SupplierController extends Controller
         $data['active'] = true;
         Supplier::create($data);
 
-        return back()->with('status','Supplier added.');
+        return back()->with('status', 'Supplier added.');
     }
 
     public function edit(Request $request, int $supplier): View
@@ -70,6 +71,6 @@ class SupplierController extends Controller
         $data['active'] = $request->boolean('active');
         $supplier->update($data);
 
-        return redirect()->route('suppliers.index')->with('status','Supplier updated.');
+        return redirect()->route('suppliers.index')->with('status', 'Supplier updated.');
     }
 }

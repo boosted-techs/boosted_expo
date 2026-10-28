@@ -17,6 +17,6 @@
 <tr><td>{{ $line->account->code }} · {{ $line->account->name }}</td><td>{{ $line->debit }}</td><td>{{ $line->credit }}</td><td>{{ $line->base_debit }}</td><td>{{ $line->base_credit }}</td><td>{{ $line->memo }}</td></tr>
 @endforeach
 </tbody><tfoot><tr><td><strong>Total</strong></td><td>{{ $debit->toScale(2) }}</td><td>{{ $credit->toScale(2) }}</td><td>{{ $baseDebit->toScale(2) }}</td><td>{{ $baseCredit->toScale(2) }}</td><td></td></tr></tfoot></table></div>
-<p class="form-hint">This entry cannot be edited or deleted from the application. Corrections and reversals will require a controlled future workflow.</p>
+<p class="form-hint">Posted entries cannot be edited or deleted. Use the relevant correction workflow.</p>
 </section>
 @endsection

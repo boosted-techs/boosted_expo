@@ -28,22 +28,22 @@ class BoostedOneBillingController extends Controller
         $id = $request->integer('business_id');
 
         return view('platform.billing', [
-            'requests' => OnboardingRequest::latest('id')->paginate(15, ['*'], 'requests_page')->withQueryString(),
+            'requests' => OnboardingRequest::latest('id')->workspacePaginate(15, ['*'], 'requests_page')->withQueryString(),
             'plans' => BillingPlan::orderBy('family_code')->orderByDesc('version')->get(),
             'businesses' => Business::orderBy('name')->get(), 'methods' => BillingPaymentMethod::latest()->get(),
-            'subscriptions' => BillingSubscription::with(['business', 'plan'])->when($id, fn ($q) => $q->where('business_id', $id))->latest('id')->paginate(15, ['*'], 'subscriptions_page')->withQueryString(),
+            'subscriptions' => BillingSubscription::with(['business', 'plan'])->when($id, fn ($q) => $q->where('business_id', $id))->latest('id')->workspacePaginate(15, ['*'], 'subscriptions_page')->withQueryString(),
             'invoices' => BillingInvoice::query()->when($id, fn ($q) => $q->where('business_id', $id))
                 ->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('invoice_number', 'like', '%'.$request->input('search').'%')->orWhere('business_name', 'like', '%'.$request->input('search').'%')))
                 ->when($request->input('invoice_state') === 'overdue', fn ($q) => $q->where('status', '!=', 'void')->whereDate('due_on', '<', today('Africa/Kampala'))->whereRaw('total_ugx-credit_ugx-paid_ugx+refunded_ugx>0'))
                 ->when($request->input('invoice_state') === 'outstanding', fn ($q) => $q->where('status', '!=', 'void')->whereRaw('total_ugx-credit_ugx-paid_ugx+refunded_ugx>0'))
                 ->when($request->input('invoice_state') === 'paid', fn ($q) => $q->where('status', 'paid'))
-                ->latest('id')->paginate(20, ['*'], 'invoices_page')->withQueryString(),
+                ->latest('id')->workspacePaginate(20, ['*'], 'invoices_page')->withQueryString(),
         ]);
     }
 
     public function onboarding(Request $request)
     {
-        return view('platform.onboarding', ['requests' => OnboardingRequest::query()->latest('id')->paginate(25)]);
+        return view('platform.onboarding', ['requests' => OnboardingRequest::query()->latest('id')->workspacePaginate(25)]);
     }
 
     public function sendPackages(OnboardingRequest $application, OnboardingPackageMailer $mailer)
@@ -161,7 +161,7 @@ class BoostedOneBillingController extends Controller
     public function show(BillingInvoice $invoice)
     {
         $invoice->load(['business', 'subscription.plan', 'payments', 'adjustments']);
-        $deliveries = app(PlatformAccess::class)->allows(request()->user(), 'billing') ? PlatformDelivery::query()->where('business_id', $invoice->business_id)->where('source_id', $invoice->id)->whereIn('kind', ['invoice', 'invoice_reminder'])->latest('id')->paginate(15) : collect();
+        $deliveries = app(PlatformAccess::class)->allows(request()->user(), 'billing') ? PlatformDelivery::query()->where('business_id', $invoice->business_id)->where('source_id', $invoice->id)->whereIn('kind', ['invoice', 'invoice_reminder'])->latest('id')->workspacePaginate(15) : collect();
 
         return view('billing.invoice', compact('invoice', 'deliveries'));
     }

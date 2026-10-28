@@ -25,15 +25,20 @@ class StaffController extends Controller
         $business = $request->attributes->get('activeBusiness');
         $member = $request->attributes->get('membership');
         $canManage = app(BusinessPermissions::class)->allows($member, 'staff.manage');
+        $activity = $request->route('activity', 'clock');
+        $activities = ['clock' => ['My attendance', 'Clock in when you begin work and clock out when you finish.'], 'shifts' => ['Staff shifts', 'Review scheduled and completed shifts.'], 'schedule' => ['Schedule a staff shift', 'Assign a team member to a working period.'], 'history' => ['Attendance history', 'Review recorded working hours.']];
+        abort_unless(isset($activities[$activity]), 404);
+        abort_if($activity === 'schedule' && ! $canManage, 403);
+        [$activityTitle,$activityDescription] = $activities[$activity];
         $staff = $canManage ? BusinessMembership::query()
             ->where('business_id', $business->id)->where('active', true)
             ->with('user')->orderBy('id')->get() : collect();
         $shifts = StaffShift::query()->where('business_id', $business->id)
             ->when(! $canManage, fn ($q) => $q->where('user_id', $request->user()->id)->whereNotNull('published_at'))
-            ->whereNotNull('user_id')->with('user')->orderByDesc('starts_at')->limit(60)->get();
+            ->whereNotNull('user_id')->with('user')->withCount('attendances')->orderByDesc('starts_at')->workspacePaginate(25, ['*'], 'shifts_page');
         $attendance = StaffAttendance::query()->where('business_id', $business->id)
             ->when(! $canManage, fn ($q) => $q->where('user_id', $request->user()->id))
-            ->whereNotNull('user_id')->with(['user', 'shift'])->orderByDesc('clocked_in_at')->limit(80)->get();
+            ->whereNotNull('user_id')->with(['user', 'shift'])->orderByDesc('clocked_in_at')->workspacePaginate(25, ['*'], 'attendance_page');
         $current = StaffAttendance::query()->where('business_id', $business->id)
             ->where('user_id', $request->user()->id)->whereNull('clocked_out_at')->whereNull('effective_out_at')->first();
         $myUpcoming = StaffShift::query()->where('business_id', $business->id)
@@ -42,7 +47,7 @@ class StaffController extends Controller
             ->orderBy('starts_at')->limit(20)->get();
 
         return view('staff.index', compact(
-            'business', 'staff', 'shifts', 'attendance', 'current', 'myUpcoming', 'canManage'));
+            'activity', 'activityTitle', 'activityDescription', 'business', 'staff', 'shifts', 'attendance', 'current', 'myUpcoming', 'canManage'));
     }
 
     public function schedule(Request $request, StaffOperations $service): RedirectResponse

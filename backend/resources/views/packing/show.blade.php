@@ -10,7 +10,7 @@
 @forelse($batches as $entry)<tr><td><strong>{{ $entry['batch']->batch_code }}</strong></td><td>{{ $entry['batch']->source_reference ?: 'Not specified' }}</td><td>{{ $entry['available'] }} {{ $job->product->base_unit }} @if($entry['batch']->is_quarantined)<strong>· QUALITY HOLD</strong>@endif</td></tr>
 @empty<tr><td colspan="3" class="empty-msg">No produce has been received for this product yet. <a class="action-link" href="{{ route('receiving.index') }}">View receiving</a>.</td></tr>@endforelse
 </tbody></table></div>
-<p class="form-hint">Available quantities exclude stock reserved for other orders. Order-linked jobs show only their own reservations. Only accepted goods enter available stock. Packing and sorting losses deduct stock from their exact source batches.</p>
+<p class="form-hint">Pack accepted goods from available stock or this order’s reservations. Record sorting losses against the correct batches.</p>
 </section>
 @if($canManage && in_array($job->status,['open','in_progress'],true))
 <div class="split-panels">
@@ -63,6 +63,6 @@
 <section class="section-card"><h2>Finish packing</h2><p class="muted">Completing the job prevents further carton and sorting entries. Check all weights and losses first.</p>
 <form method="POST" action="{{ route('packing.complete',$job->id) }}" data-confirm="Complete and lock this packing job?">@csrf<button class="primary-button">Complete packing job</button></form></section>
 @endif
-@if($job->status==='completed')<div class="notice"><span>●</span><div><strong>Packing completed</strong><p>Recorded cartons remain available for the future export-allocation workflow. No shipment or payment has been created.</p></div></div>@endif
+@if($job->status==='completed')<div class="notice"><span>●</span><div><strong>Packing completed</strong><p>Cartons are ready to allocate to a shipment.</p></div></div>@endif
 <script src="/assets/packing-ui.js" defer></script>
 @endsection

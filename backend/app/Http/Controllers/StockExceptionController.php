@@ -30,17 +30,19 @@ class StockExceptionController extends Controller
     public function index(Request $r): View
     {
         $this->check($r, 'stock.view');
+        $activity = $r->route('activity', 'overview');
+        abort_unless(in_array($activity, ['overview', 'moves', 'repacks'], true), 404);
         $business = $r->attributes->get('activeBusiness');
         $r->validate(['search' => ['nullable', 'string', 'max:120']]);
         $search = trim((string) $r->input('search'));
-        $batches = StockBatch::query()->where('business_id', $business->id)->with('product')->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%')->orWhereHas('product', fn ($p) => $p->where('name', 'like', '%'.$search.'%'))))->latest('id')->paginate(25, ['*'], 'batches_page')->withQueryString();
+        $batches = StockBatch::query()->where('business_id', $business->id)->with('product')->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%')->orWhereHas('product', fn ($p) => $p->where('name', 'like', '%'.$search.'%'))))->latest('id')->workspacePaginate(25, ['*'], 'batches_page')->withQueryString();
         $available = $batches->mapWithKeys(fn ($b) => [$b->id => app(StockAvailability::class)->available($business->id, $b->id)]);
         $reserved = $batches->mapWithKeys(fn ($b) => [$b->id => app(OrderSourcing::class)->reserved($business->id, $b->id)]);
         $locations = StockLocation::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get()->keyBy('id');
-        $counts = StockAdjustment::query()->where('business_id', $business->id)->with('batch.product')->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhereHas('batch', fn ($b) => $b->where('batch_code', 'like', '%'.$search.'%'))))->latest('id')->paginate(20, ['*'], 'counts_page')->withQueryString();
-        $cartons = Carton::query()->where('business_id', $business->id)->where('status', 'packed')->whereDoesntHave('shipmentAllocation')->when($search !== '', fn ($q) => $q->where('carton_code', 'like', '%'.$search.'%'))->latest('id')->paginate(20, ['*'], 'cartons_page')->withQueryString();
-        $repacks = CartonRepack::query()->where('business_id', $business->id)->with('carton')->latest('id')->paginate(20, ['*'], 'repacks_page')->withQueryString();
-        $moves = StockLocationEvent::query()->where('business_id', $business->id)->latest('id')->paginate(20, ['*'], 'moves_page')->withQueryString();
+        $counts = StockAdjustment::query()->where('business_id', $business->id)->with('batch.product')->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhereHas('batch', fn ($b) => $b->where('batch_code', 'like', '%'.$search.'%'))))->latest('id')->workspacePaginate(20, ['*'], 'counts_page')->withQueryString();
+        $cartons = Carton::query()->where('business_id', $business->id)->where('status', 'packed')->whereDoesntHave('shipmentAllocation')->when($search !== '', fn ($q) => $q->where('carton_code', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(20, ['*'], 'cartons_page')->withQueryString();
+        $repacks = CartonRepack::query()->where('business_id', $business->id)->with('carton')->latest('id')->workspacePaginate(20, ['*'], 'repacks_page')->withQueryString();
+        $moves = StockLocationEvent::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(20, ['*'], 'moves_page')->withQueryString();
         $access = app(BusinessPermissions::class);
         $member = $r->attributes->get('membership');
         $canRecord = $access->allows($member, 'stock.adjust.record');
@@ -49,7 +51,7 @@ class StockExceptionController extends Controller
         $canFinance = $access->allows($member, 'finance.view');
         $canSubmit = $access->allows($member, 'finance.reviews.request');
 
-        return view('stock.exceptions', compact('business', 'batches', 'available', 'reserved', 'locations', 'counts', 'cartons', 'repacks', 'moves', 'canRecord', 'canReview', 'canRepack', 'canFinance', 'canSubmit'));
+        return view('stock.exceptions', compact('activity', 'business', 'batches', 'available', 'reserved', 'locations', 'counts', 'cartons', 'repacks', 'moves', 'canRecord', 'canReview', 'canRepack', 'canFinance', 'canSubmit'));
     }
 
     public function count(Request $r, StockExceptions $exceptions): RedirectResponse

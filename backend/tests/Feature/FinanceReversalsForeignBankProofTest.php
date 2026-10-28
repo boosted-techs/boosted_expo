@@ -970,7 +970,8 @@ class FinanceReversalsForeignBankProofTest extends TestCase
 
     public function test_foreign_receivable_revaluation_is_reclassified_as_paid_without_phantom_balance(): void
     {
-        $clock = now();
+        $clock = Carbon::parse('2026-10-27 09:00:00', 'UTC');
+        Carbon::setTestNow($clock);
         try {
             $ctx = $this->context();
             $bank = $this->bank($ctx, 'USD');
@@ -1120,7 +1121,8 @@ class FinanceReversalsForeignBankProofTest extends TestCase
 
     public function test_partial_customer_receipt_return_reopens_only_refunded_receivable_and_allows_repayment(): void
     {
-        $clock = now();
+        $clock = Carbon::parse('2026-10-27 09:00:00', 'UTC');
+        Carbon::setTestNow($clock);
         try {
             Carbon::setTestNow($clock->copy()->subDays(2));
             $ctx = $this->context();

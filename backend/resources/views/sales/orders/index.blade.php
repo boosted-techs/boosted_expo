@@ -8,5 +8,5 @@
 @empty<tr><td colspan="6" class="empty-msg">No confirmed orders yet. Start with a customer request; operational approval can precede pricing.</td></tr>@endforelse
 </tbody></table></div>{{ $orders->links() }}
 </section>
-<p class="form-hint">Order amounts are confirmed commercial terms. Shipments may fulfil an order partially. No payments or accounting entries are generated automatically.</p>
+<p class="form-hint">Manage confirmed orders and track fulfilment across shipments.</p>
 @endsection

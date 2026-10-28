@@ -36,7 +36,7 @@ class PlatformBusinessController extends Controller
             });
             $query->whereIn('id', $ids);
         }
-        $businesses = $query->latest('id')->paginate(25)->withQueryString();
+        $businesses = $query->latest('id')->workspacePaginate(25)->withQueryString();
 
         return view('platform.businesses', compact('businesses'));
     }

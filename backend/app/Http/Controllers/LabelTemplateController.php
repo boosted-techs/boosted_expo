@@ -236,7 +236,7 @@ class LabelTemplateController extends Controller
         $request->validate(['search' => ['nullable', 'string', 'max:100']]);
         $generations = LabelGeneration::query()->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q->when(ctype_digit((string) $request->input('search')), fn ($q) => $q->where('id', (int) $request->input('search')))->orWhereHas('carton', fn ($c) => $c->where('carton_code', 'like', '%'.$request->input('search').'%'))))->where('business_id',
             $request->attributes->get('activeBusiness')->id)
-            ->with(['carton', 'template'])->latest('id')->paginate(25)->withQueryString();
+            ->with(['carton', 'template'])->latest('id')->workspacePaginate(25)->withQueryString();
 
         return view('labels.history', compact('generations'));
     }

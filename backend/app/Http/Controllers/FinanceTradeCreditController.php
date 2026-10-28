@@ -28,16 +28,16 @@ class FinanceTradeCreditController extends Controller
         $business = $r->attributes->get('activeBusiness');
         $r->validate(['search' => ['nullable', 'string', 'max:120']]);
         $search = trim((string) $r->input('search'));
-        $credits = FinanceTradeCredit::query()->where('business_id', $business->id)->with('workflow', 'case')->when($search !== '', fn ($q) => $q->whereHas('workflow', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('external_reference', 'like', '%'.$search.'%'))))->latest('id')->paginate(25, ['*'], 'credit_page')->withQueryString();
+        $credits = FinanceTradeCredit::query()->where('business_id', $business->id)->with('workflow', 'case')->when($search !== '', fn ($q) => $q->whereHas('workflow', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('external_reference', 'like', '%'.$search.'%'))))->latest('id')->workspacePaginate(25, ['*'], 'credit_page')->withQueryString();
         $remaining = [];
         foreach ($credits as $credit) {
             if ($credit->workflow->posting_status === 'posted') {
                 $remaining[$credit->id] = $service->remaining($credit);
             }
         }
-        $cases = StockExceptionCase::query()->where('business_id', $business->id)->whereIn('kind', ['customer_return', 'supplier_return', 'quality_claim', 'recall'])->whereIn('status', ['open', 'investigating', 'awaiting_disposition'])->with('batch', 'shipment')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(40, ['*'], 'case_page')->withQueryString();
-        $invoices = CommercialInvoice::query()->where('business_id', $business->id)->where('posting_status', 'posted')->with('customer')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(40, ['*'], 'invoice_page')->withQueryString();
-        $bills = FinanceSupplierBill::query()->where('business_id', $business->id)->where('posting_status', 'posted')->with('purchase.supplier')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(40, ['*'], 'bill_page')->withQueryString();
+        $cases = StockExceptionCase::query()->where('business_id', $business->id)->whereIn('kind', ['customer_return', 'supplier_return', 'quality_claim', 'recall'])->whereIn('status', ['open', 'investigating', 'awaiting_disposition'])->with('batch', 'shipment')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(40, ['*'], 'case_page')->withQueryString();
+        $invoices = CommercialInvoice::query()->where('business_id', $business->id)->where('posting_status', 'posted')->with('customer')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(40, ['*'], 'invoice_page')->withQueryString();
+        $bills = FinanceSupplierBill::query()->where('business_id', $business->id)->where('posting_status', 'posted')->with('purchase.supplier')->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(40, ['*'], 'bill_page')->withQueryString();
         $banks = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->orderBy('label')->get();
         $custodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('status', 'approved')->latest('effective_on')->get();

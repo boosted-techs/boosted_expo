@@ -1,12 +1,12 @@
 @extends('layouts.console')
-@section('title','Release Acceptance')
+@section('title','Readiness Checks')
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">STAGING ACCEPTANCE</span>
-<h1>Release acceptance</h1><p>Document the exact tested build, operational scenarios and independent management reviews. A sealed campaign alone never authorises deployment.</p></div></div>
-<div class="notice"><span>●</span><div><strong>Use an actual release artifact fingerprint</strong>
-<p>Use the SHA-256 of the approved release archive prepared by operations, not a test placeholder or the name of a Git branch. Tests must be conducted in isolated staging using approved sample data. Do not enter passwords, customer identity documents or private keys in the evidence forms.</p></div></div>
+<h1>Readiness checks</h1><p>Complete the checks and collect independent approval before release.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Approved build reference</strong>
+<p>Use the approved build reference and sample data. Keep passwords and private documents out of review notes.</p></div></div>
 @if($isOwner)
-<section class="section-card form-narrow"><h2>Open a release acceptance campaign</h2>
+<section class="section-card form-narrow"><h2>Start a readiness review</h2>
 <form method="POST" action="{{ route('release.acceptance.begin') }}" class="form-stack">@csrf
 <label class="field"><span>Release label</span><input name="release_label" required minlength="4" maxlength="100" value="{{ old('release_label') }}" placeholder="Export ERP candidate 2026.10"></label>
 <label class="field"><span>Exact artifact SHA-256 (64 hex characters)</span>

@@ -49,7 +49,7 @@ class CustomerController extends Controller
     {
         $this->check($request, 'customers.view');
         $businessId = $request->attributes->get('activeBusiness')->id;
-        $customers = Customer::query()->where('business_id', $businessId)->orderBy('name')->paginate(20);
+        $customers = Customer::query()->where('business_id', $businessId)->orderBy('name')->workspacePaginate(20);
         $canManage = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'customers.manage');
 
         $orderingProducts = Product::query()->where('business_id', $businessId)->where('active', true)->orderBy('name')->get();

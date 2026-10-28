@@ -25,8 +25,8 @@ class OrderAmendmentController extends Controller
         $business = $r->attributes->get('activeBusiness');
         $order = SalesOrder::query()->where('business_id', $business->id)->with('customer', 'lines')->findOrFail($order);
         $r->validate(['product_search' => ['nullable', 'string', 'max:120']]);
-        $products = Product::query()->where('business_id', $business->id)->where('active', true)->when($r->filled('product_search'), fn ($q) => $q->where('name', 'like', '%'.$r->input('product_search').'%'))->orderBy('name')->paginate(40, ['*'], 'product_page')->withQueryString();
-        $amendments = OrderAmendment::query()->where('business_id', $business->id)->where('sales_order_id', $order->id)->latest('id')->paginate(20, ['*'], 'amendment_page')->withQueryString();
+        $products = Product::query()->where('business_id', $business->id)->where('active', true)->when($r->filled('product_search'), fn ($q) => $q->where('name', 'like', '%'.$r->input('product_search').'%'))->orderBy('name')->workspacePaginate(40, ['*'], 'product_page')->withQueryString();
+        $amendments = OrderAmendment::query()->where('business_id', $business->id)->where('sales_order_id', $order->id)->latest('id')->workspacePaginate(20, ['*'], 'amendment_page')->withQueryString();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('currency', $order->currency)->where('status', 'approved')->latest('effective_on')->get();
         $access = app(BusinessPermissions::class);
         $member = $r->attributes->get('membership');

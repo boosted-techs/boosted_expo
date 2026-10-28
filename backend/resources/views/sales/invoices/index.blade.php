@@ -8,5 +8,5 @@
 @forelse($invoices as $invoice)<tr><td><strong>{{ $invoice->reference }}</strong><small>{{ $invoice->issued_at?->format('d M Y') }}</small></td><td>{{ $invoice->customer->name }}</td><td><a href="{{ route('shipments.show',$invoice->shipment_id) }}" class="action-link">{{ $invoice->shipment->reference }}</a></td><td>{{ $invoice->currency }} {{ $invoice->grand_total }}</td><td><span class="tiny-pill">{{ $invoice->posting_status==='credited'?'Fully credited':($invoice->posting_status==='posted'?'Posted':'Not posted') }}</span></td><td><a class="action-link" href="{{ route('commercial-invoices.show',$invoice->id) }}">View</a></td></tr>
 @empty<tr><td colspan="6" class="empty-msg">No commercial invoices yet. Link a shipment to a confirmed order and mark it ready first.</td></tr>@endforelse
 </tbody></table></div>{{ $invoices->links() }}</section>
-<p class="form-hint">Each shipment receives one immutable commercial invoice. Full credit notes for posted, unpaid invoices are supported through independent approval. Partial credits, replacements, refunds and statutory adjustments remain separate future workflows.</p>
+<p class="form-hint">Issue one invoice per shipment. Request an independently approved full credit for a posted, unpaid invoice. Other corrections are handled separately.</p>
 @endsection

@@ -1,7 +1,7 @@
 @extends('layouts.console')
 @section('title','Staff Payroll')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">STAFF & FINANCE</span><h1>Payroll accruals</h1><p>Prepare company payroll from staff records and approved attendance, then seek independent finance approval before recognising payroll costs.</p></div><span class="tiny-pill">{{ $business->base_currency }}</span></div>
+<div class="page-intro"><div><span class="eyebrow">STAFF & FINANCE</span><h1>Payroll accruals</h1><p>Prepare payroll, review earnings and deductions, then request approval.</p></div><span class="tiny-pill">{{ $business->base_currency }}</span></div>
 <div class="form-actions" style="margin-bottom:18px"><a href="{{ route('finance.index') }}" class="secondary-button">Finance dashboard</a>
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.reviews.view'))
 <a href="{{ route('finance.reviews') }}" class="secondary-button">Posting approvals</a>
@@ -23,7 +23,7 @@
 @empty<p>No agreed daily / hourly rates recorded.</p>@endforelse{{ $rates->links() }}</section>
 @if($canPrepare)
 <section class="section-card"><h2>Prepare a payroll run</h2>
-<p class="muted">Enter amounts only for staff included in this run. Deductions are manual and must not exceed gross earnings. No overlapping run periods are allowed.</p>
+<p class="muted">Enter earnings and deductions for this run. Deductions cannot exceed gross pay; payroll periods cannot overlap.</p>
 <form method="POST" action="{{ route('finance.payroll.prepare') }}" class="form-stack">@csrf
 <div class="form-columns">
 <label class="field"><span>From</span><input type="date" name="period_from" required value="{{ now()->startOfMonth()->format('Y-m-d') }}"></label>

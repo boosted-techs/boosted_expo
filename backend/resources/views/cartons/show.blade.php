@@ -21,13 +21,13 @@
 @empty<p class="empty-msg">No batch lines on this carton.</p>@endforelse
 </section>
 <section class="section-card"><h2>QR visibility</h2>
-<p class="muted">A carton QR identifies this specific carton. Information is private by default. Enable the public page only if it should be visible to recipients.</p>
+<p class="muted">Enable the public page to share this carton’s details through its QR code.</p>
 <div class="record"><strong>Online carton page</strong><span class="tiny-pill">{{ $qr->public_enabled ? 'Public' : 'Hidden' }}</span></div>
 @if($qr->public_enabled)<a class="action-link" href="{{ route('qr.public',$qr->public_token) }}" target="_blank" rel="noopener noreferrer">Open public carton information ↗</a>@endif
 @if($canPublish)<form method="POST" action="{{ route('cartons.qr.visibility',$carton->id) }}" class="form-stack" style="margin-top:16px">@csrf @method('PUT')
 <input type="hidden" name="public_enabled" value="{{ $qr->public_enabled ? 0 : 1 }}"><button class="secondary-button">{{ $qr->public_enabled ? 'Hide public carton page' : 'Enable public carton page' }}</button></form>@endif
 <h2 style="margin-top:30px">Download Zebra label</h2>
-<p class="muted">Choose a saved sticker template and download its ZPL file for a compatible Zebra printer. This does not send a job directly to the printer.</p>
+<p class="muted">Choose a template and download the ZPL file, then send it to your Zebra printer.</p>
 @if($canPrint)
 @forelse($templates as $template)
 <div class="record"><div><strong>{{ $template->name }}</strong><small>{{ $template->width_mm }} × {{ $template->height_mm }} mm · {{ $template->dpi }} dpi · {{ ucfirst($template->qr_level) }} QR</small></div>
@@ -35,7 +35,7 @@
 </div>
 @empty<p class="empty-msg">No templates yet. <a class="action-link" href="{{ route('labels.index') }}">Open Sticker Templates</a>.</p>@endforelse
 @endif
-<p class="form-hint">Private QR templates work without publishing business data. Public QR templates require explicit publication. Mixed-batch cartons need a carton or product QR.</p>
+<p class="form-hint">Publish the page before using a public QR template. Use a carton or product QR for mixed batches.</p>
 </section>
 </div>
 @endsection

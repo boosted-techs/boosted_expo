@@ -29,7 +29,7 @@ class LoanRegisterController extends Controller
         $this->check($r);
         $business = $r->attributes->get('activeBusiness');
         $r->validate(['search' => ['nullable', 'string', 'max:120']]);
-        $loans = LoanFacility::query()->where('business_id', $business->id)->when($r->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$r->input('search').'%')->orWhere('lender_name', 'like', '%'.$r->input('search').'%')))->orderBy('matures_on')->paginate(25)->withQueryString();
+        $loans = LoanFacility::query()->where('business_id', $business->id)->when($r->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$r->input('search').'%')->orWhere('lender_name', 'like', '%'.$r->input('search').'%')))->orderBy('matures_on')->workspacePaginate(25)->withQueryString();
         $states = $loans->mapWithKeys(fn ($l) => [$l->id => app(LoanRegister::class)->state($l)]);
         $canManage = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
 
@@ -52,15 +52,15 @@ class LoanRegisterController extends Controller
         $business = $r->attributes->get('activeBusiness');
         $loan = LoanFacility::query()->where('business_id', $business->id)->findOrFail($loan);
         $state = app(LoanRegister::class)->state($loan);
-        $instalments = LoanInstalment::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->orderBy('due_on')->paginate(30, ['*'], 'schedule_page')->withQueryString();
+        $instalments = LoanInstalment::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->orderBy('due_on')->workspacePaginate(30, ['*'], 'schedule_page')->withQueryString();
         $remaining = $instalments->mapWithKeys(fn ($i) => [$i->id => app(LoanRegister::class)->instalmentBalances($i)]);
-        $entries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->latest('id')->paginate(25, ['*'], 'entry_page')->withQueryString();
+        $entries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->latest('id')->workspacePaginate(25, ['*'], 'entry_page')->withQueryString();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('status', 'approved')->where('currency', $loan->currency)->orderByDesc('effective_on')->get();
         $custodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
         $banks = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->where('currency', $loan->currency)->orderBy('label')->get();
         $canManage = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
 
-        $amendments = LoanAgreementAmendment::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->latest('id')->paginate(20, ['*'], 'amendment_page')->withQueryString();
+        $amendments = LoanAgreementAmendment::query()->where('business_id', $business->id)->where('loan_id', $loan->id)->latest('id')->workspacePaginate(20, ['*'], 'amendment_page')->withQueryString();
         $canReview = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.reviews.approve');
 
         return view('finance.loans.show', compact('business', 'loan', 'state', 'instalments', 'remaining', 'entries', 'rates', 'banks', 'custodies', 'canManage', 'amendments', 'canReview'));

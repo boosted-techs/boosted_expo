@@ -32,20 +32,20 @@ class FinanceTradeControlController extends Controller
         $business = $r->attributes->get('activeBusiness');
         $r->validate(['search' => ['nullable', 'string', 'max:120']]);
         $search = trim((string) $r->input('search'));
-        $people = StaffPerson::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->paginate(35, ['*'], 'people_page')->withQueryString();
-        $customers = Customer::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->paginate(35, ['*'], 'customer_page')->withQueryString();
-        $suppliers = Supplier::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->paginate(35, ['*'], 'supplier_page')->withQueryString();
-        $cases = TradeCollectionCase::query()->where('business_id', $business->id)->with('person', 'invoice', 'bill')->orderBy('status')->orderBy('next_action_on')->orderBy('id')->paginate(25, ['*'], 'case_page')->withQueryString();
+        $people = StaffPerson::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->workspacePaginate(35, ['*'], 'people_page')->withQueryString();
+        $customers = Customer::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->workspacePaginate(35, ['*'], 'customer_page')->withQueryString();
+        $suppliers = Supplier::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->workspacePaginate(35, ['*'], 'supplier_page')->withQueryString();
+        $cases = TradeCollectionCase::query()->where('business_id', $business->id)->with('person', 'invoice', 'bill')->orderBy('status')->orderBy('next_action_on')->orderBy('id')->workspacePaginate(25, ['*'], 'case_page')->withQueryString();
         $documents = [];
         foreach ($cases as $case) {
             $documents[$case->id] = $case->invoice ?? $case->bill;
-        }$terms = PartnerFinanceTerm::query()->where('business_id', $business->id)->with('customer', 'supplier')->orderByDesc('effective_on')->orderByDesc('id')->paginate(25, ['*'], 'terms_page')->withQueryString();
-        $requests = AdvanceRequest::query()->where('business_id', $business->id)->with('person', 'supplier', 'trip')->orderByDesc('id')->paginate(25, ['*'], 'advance_page')->withQueryString();
-        $trips = MarketTrip::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->with('person')->latest('id')->paginate(25, ['*'], 'trip_page')->withQueryString();
-        $closures = MarketAccountability::query()->where('business_id', $business->id)->with('trip')->orderByDesc('id')->paginate(20, ['*'], 'closure_page')->withQueryString();
-        $shipments = ExportShipment::query()->where('business_id', $business->id)->whereIn('status', ['draft', 'ready'])->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->paginate(30, ['*'], 'shipment_page')->withQueryString();
-        $invoices = app(FinanceDocuments::class)->outstandingQuery($business, true)->latest('id')->paginate(30, ['*'], 'invoice_page')->withQueryString();
-        $bills = app(FinanceDocuments::class)->outstandingQuery($business, false)->latest('id')->paginate(30, ['*'], 'bill_page')->withQueryString();
+        }$terms = PartnerFinanceTerm::query()->where('business_id', $business->id)->with('customer', 'supplier')->orderByDesc('effective_on')->orderByDesc('id')->workspacePaginate(25, ['*'], 'terms_page')->withQueryString();
+        $requests = AdvanceRequest::query()->where('business_id', $business->id)->with('person', 'supplier', 'trip')->orderByDesc('id')->workspacePaginate(25, ['*'], 'advance_page')->withQueryString();
+        $trips = MarketTrip::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->with('person')->latest('id')->workspacePaginate(25, ['*'], 'trip_page')->withQueryString();
+        $closures = MarketAccountability::query()->where('business_id', $business->id)->with('trip')->orderByDesc('id')->workspacePaginate(20, ['*'], 'closure_page')->withQueryString();
+        $shipments = ExportShipment::query()->where('business_id', $business->id)->whereIn('status', ['draft', 'ready'])->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(30, ['*'], 'shipment_page')->withQueryString();
+        $invoices = app(FinanceDocuments::class)->outstandingQuery($business, true)->latest('id')->workspacePaginate(30, ['*'], 'invoice_page')->withQueryString();
+        $bills = app(FinanceDocuments::class)->outstandingQuery($business, false)->latest('id')->workspacePaginate(30, ['*'], 'bill_page')->withQueryString();
         $canCreate = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
         $canReview = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.reviews.approve');
 

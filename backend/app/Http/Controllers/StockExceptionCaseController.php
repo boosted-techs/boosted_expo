@@ -51,11 +51,11 @@ class StockExceptionCaseController extends Controller
                 fclose($out);
             }, 'stock-exceptions-'.now($business->timezone)->toDateString().'.csv', ['Content-Type' => 'text/csv; charset=UTF-8', 'Cache-Control' => 'private, no-store']);
         }
-        $cases = $query->latest('id')->paginate(25, ['*'], 'case_page')->withQueryString();
-        $batches = StockBatch::query()->where('business_id', $business->id)->with('product')->when($search !== '', fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%'))->latest('id')->paginate(40, ['*'], 'batch_page')->withQueryString();
-        $cartons = Carton::query()->where('business_id', $business->id)->whereIn('status', ['packed', 'allocated', 'shipped'])->with('contents.batch', 'shipmentAllocation.shipment')->when($search !== '', fn ($q) => $q->where('carton_code', 'like', '%'.$search.'%'))->latest('id')->paginate(40, ['*'], 'carton_page')->withQueryString();
+        $cases = $query->latest('id')->workspacePaginate(25, ['*'], 'case_page')->withQueryString();
+        $batches = StockBatch::query()->where('business_id', $business->id)->with('product')->when($search !== '', fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(40, ['*'], 'batch_page')->withQueryString();
+        $cartons = Carton::query()->where('business_id', $business->id)->whereIn('status', ['packed', 'allocated', 'shipped'])->with('contents.batch', 'shipmentAllocation.shipment')->when($search !== '', fn ($q) => $q->where('carton_code', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(40, ['*'], 'carton_page')->withQueryString();
         $locations = StockLocation::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
-        $people = StaffPerson::query()->where('business_id', $business->id)->where('active', true)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->paginate(35, ['*'], 'people_page')->withQueryString();
+        $people = StaffPerson::query()->where('business_id', $business->id)->where('active', true)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->workspacePaginate(35, ['*'], 'people_page')->withQueryString();
         $replacements = SalesOrder::query()->where('business_id', $business->id)->whereIn('replacement_case_id', $cases->modelKeys())->get()->groupBy('replacement_case_id');
         $events = DB::table('stock_exception_events')->where('business_id', $business->id)->whereIn('case_id', $cases->modelKeys())->orderBy('id')->get()->groupBy('case_id');
         $exposure = $cases->mapWithKeys(fn ($case) => [$case->id => $case->batch_id ? app(StockExceptionCases::class)->affected($business, $case->batch_id)['cartons'] : ($case->data_snapshot['source']['cartons'] ?? [])]);

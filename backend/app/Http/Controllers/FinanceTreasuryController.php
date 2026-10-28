@@ -40,15 +40,15 @@ class FinanceTreasuryController extends Controller
         $business = $r->attributes->get('activeBusiness');
         $r->validate(['search' => ['nullable', 'string', 'max:120']]);
         $search = trim((string) $r->input('search'));
-        $workflows = FinanceWorkflow::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('external_reference', 'like', '%'.$search.'%')->orWhere('reason', 'like', '%'.$search.'%')))->latest('id')->paginate(25, ['*'], 'workflow_page')->withQueryString();
+        $workflows = FinanceWorkflow::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('external_reference', 'like', '%'.$search.'%')->orWhere('reason', 'like', '%'.$search.'%')))->latest('id')->workspacePaginate(25, ['*'], 'workflow_page')->withQueryString();
         $custodies = CashCustody::query()->where('business_id', $business->id)->with('person')->orderBy('name')->get();
         $cashStates = $custodies->mapWithKeys(fn ($c) => [$c->id => app(FinanceWorkflows::class)->accountBasis($business->id, $c->account_id, now($business->timezone)->toDateString())]);
-        $counts = CashClose::query()->where('business_id', $business->id)->latest('id')->paginate(20, ['*'], 'count_page')->withQueryString();
-        $obligations = RecurringObligation::query()->where('business_id', $business->id)->orderBy('next_due_on')->paginate(25, ['*'], 'recurring_page')->withQueryString();
+        $counts = CashClose::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(20, ['*'], 'count_page')->withQueryString();
+        $obligations = RecurringObligation::query()->where('business_id', $business->id)->orderBy('next_due_on')->workspacePaginate(25, ['*'], 'recurring_page')->withQueryString();
         $banks = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->orderBy('label')->get();
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)->where('status', 'approved')->orderByDesc('effective_on')->get();
-        $people = StaffPerson::query()->where('business_id', $business->id)->where('active', true)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->paginate(40, ['*'], 'people_page')->withQueryString();
-        $suppliers = Supplier::query()->where('business_id', $business->id)->where('active', true)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->paginate(40, ['*'], 'supplier_page')->withQueryString();
+        $people = StaffPerson::query()->where('business_id', $business->id)->where('active', true)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->workspacePaginate(40, ['*'], 'people_page')->withQueryString();
+        $suppliers = Supplier::query()->where('business_id', $business->id)->where('active', true)->when($search !== '', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))->orderBy('name')->workspacePaginate(40, ['*'], 'supplier_page')->withQueryString();
         $canCreate = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.documents.create');
         $canReview = app(BusinessPermissions::class)->allows($r->attributes->get('membership'), 'finance.reviews.approve');
 

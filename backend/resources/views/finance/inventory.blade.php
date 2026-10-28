@@ -6,14 +6,14 @@
 <div class="notice"><span>●</span><div><strong>Never assume an unknown source cost is zero</strong><p>Only fully documented goods receipts and posted supplier bills qualify for valuation. A carton is valued once it has been dispatched; sorting and grading losses are costed separately. Approving and posting each valuation is a distinct action.</p></div></div>
 @if($canPrepare)
 <section class="section-card"><h2>Dispatched shipments awaiting COGS</h2>
-<p class="muted">Prepare the source-batch cost snapshot for each shipment; this does not post a journal until independently approved.</p>
+<p class="muted">Prepare shipment produce costs, then request independent approval to post.</p>
 @forelse($shipments as $shipment)
 <div class="record"><div><strong>{{ $shipment->reference }}</strong><small>{{ $shipment->customer->name }} · {{ ucfirst($shipment->status) }}</small></div>
 @if(in_array($shipment->id,$usedShipments,true))<span class="tiny-pill">Valuation exists</span>
 @else<form method="POST" action="{{ route('finance.inventory.prepare',['kind'=>'cogs','id'=>$shipment->id]) }}">@csrf<button class="secondary-button">Prepare COGS</button></form>@endif</div>
 @empty<p class="empty-msg">No dispatched shipments available.</p>@endforelse
 </section>
-<section class="section-card"><h2>Sorting and packing waste awaiting valuation</h2><p class="muted">Waste quantities already reduced physical source stock; this separate entry reduces its financial inventory value.</p>
+<section class="section-card"><h2>Sorting and packing waste awaiting valuation</h2><p class="muted">Record the financial value of waste already removed from stock.</p>
 @forelse($wastes as $waste)
 <div class="record"><div><strong>{{ $waste->batch?->batch_code??'Unidentified batch' }}</strong><small>{{ $waste->quantity }} · {{ ucwords(str_replace('_',' ',$waste->reason)) }} · {{ $waste->created_at->format('d M Y') }}</small></div>
 @if(in_array($waste->id,$usedWaste,true))<span class="tiny-pill">Valuation exists</span>

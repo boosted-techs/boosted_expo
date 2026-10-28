@@ -4,7 +4,7 @@
 <div class="page-intro"><div><span class="eyebrow">COST SNAPSHOT</span><h1>{{ $relief->reference }}</h1><p>{{ $relief->kind==='cogs'?'Dispatched carton cost of goods sold':'Sorting and grading waste cost' }} · {{ $relief->currency }} {{ $relief->base_amount }}</p></div><span class="tiny-pill">{{ $relief->posting_status==='posted'?'POSTED':'UNPOSTED' }}</span></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.inventory.index') }}">All valuations</a>
 <a class="secondary-button" href="{{ route('finance.reviews') }}">Posting approvals</a></div>
-<div class="notice"><span>●</span><div><strong>Locked source-batch valuation</strong><p>This snapshot uses purchased produce unit costs and the source supplier bill's approved exchange rate. It is a supporting accounting record, not a complete shipment profit report or proof of stock certification.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Locked source-batch valuation</strong><p>Costs use billed purchase prices and approved exchange rates. Open shipment reports to review other costs.</p></div></div>
 <section class="section-card"><h2>Cost allocation by source batch</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Batch</th><th>Purchase</th><th>Supplier bill</th><th>Quantity</th><th>Source FX rate</th><th>Base cost ({{ $relief->currency }})</th></tr></thead><tbody>
 @foreach($relief->data_snapshot['lines'] as $line)<tr><td>{{ $line['batch_code'] }}</td><td>{{ $line['purchase_reference'] }}</td><td>{{ $line['supplier_bill_reference'] }}</td>
@@ -15,6 +15,6 @@
 @if($relief->kind==='cogs')<p class="form-hint">Related shipment: <a class="action-link" href="{{ route('shipments.show',$relief->shipment_id) }}">Open shipment</a></p>@endif
 </section>
 @if($relief->posting_status==='not_posted' && app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.reviews.request'))
-<p class="form-hint">Open the posting review queue, select this document under inventory valuation and provide the accounting basis. Posting requires approval from another authorised employee.</p>
+<p class="form-hint">Open finance reviews, select this valuation and request independent approval.</p>
 @endif
 @endsection

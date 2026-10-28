@@ -39,7 +39,7 @@ max="{{ now()->format('Y-m-d') }}" value="{{ now()->format('Y-m-d') }}"></label>
 <label class="field"><span>Rate evidence and reason for revaluation</span>
 <textarea name="valuation_evidence" rows="3" required minlength="30" maxlength="3000"
 placeholder="State approved closing rate source, period, original bank amount, supporting statement and authorisation"></textarea></label>
-<p class="form-hint">The system calculates the original foreign balance, previous translated asset balance, new value and change from existing immutable bank journals. The revaluation awaits a second staff member's journal approval.</p>
+<p class="form-hint">Review the foreign balance, new value and exchange difference, then request independent approval.</p>
 <button class="primary-button">Prepare non-cash foreign bank revaluation</button>
 </form>
 @endif

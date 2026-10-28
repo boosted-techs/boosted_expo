@@ -107,7 +107,7 @@ placeholder="State the original bank statement, valuation date, exact currency b
 @endif
 </section>
 <section class="section-card"><h2>3. Accounting periods & month-end closure</h2>
-<p class="muted">Create non-overlapping periods within a single month. Closing is blocked while eligible financial source documents, journal approvals or imported bank statements remain unresolved through that period end. A different authorised person must approve closure.</p>
+<p class="muted">Create periods within one month. Resolve pending documents, approvals and bank statements before requesting independent closure approval.</p>
 @if($canPeriod)
 <form method="POST" action="{{ route('finance.controls.periods.store') }}" class="form-columns">@csrf
 <label class="field"><span>Period starts</span><input type="date" name="period_from" required value="{{ now()->startOfMonth()->format('Y-m-d') }}"></label>
@@ -131,7 +131,7 @@ placeholder="State the original bank statement, valuation date, exact currency b
 @php $pendingReopen=$reopenRequests->first(fn($r)=>$r->period_id===$period->id && $r->status==='pending'); @endphp
 @if($period->status==='closed' && $canReopen && !$pendingReopen)
 <details class="finance-details"><summary>Request a formally audited reopening</summary>
-<p class="form-hint">This does not reopen the period by itself. A different authorised owner must independently approve. Reopen periods in reverse chronological order, latest first. The previous closing snapshot will remain permanently recorded.</p>
+<p class="form-hint">Request approval from another owner. Reopen the latest period first; closing history is retained.</p>
 <form method="POST" action="{{ route('finance.controls.periods.reopening.request',$period->id) }}" class="form-stack form-narrow">@csrf
 <label class="field"><span>Specific earlier-period error or return requiring correction</span>
 <textarea name="reason" minlength="30" maxlength="3000" rows="2" required></textarea></label>

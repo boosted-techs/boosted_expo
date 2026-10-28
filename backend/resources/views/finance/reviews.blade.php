@@ -1,7 +1,7 @@
 @extends('layouts.console')
 @section('title','Finance Posting Reviews')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">FINANCIAL APPROVALS</span><h1>Review and post transactions</h1><p>Check source documents, exchange-rate evidence and business-event dates before approving their double-entry journals.</p></div></div>
+<div class="page-intro"><div><span class="eyebrow">FINANCIAL APPROVALS</span><h1>Review and post transactions</h1><p>Check documents, exchange rates and transaction dates before approving.</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.index') }}">Trial balance</a><a class="secondary-button" href="{{ route('finance.documents') }}">Source documents</a><a class="secondary-button" href="{{ route('finance.rates') }}">Approved exchange rates</a>
 <a class="secondary-button" href="{{ route('finance.inventory.index') }}">Inventory valuations</a>
 <a class="secondary-button" href="{{ route('finance.credits.index') }}">Credit notes</a>
@@ -10,7 +10,7 @@
 <a class="secondary-button" href="{{ route('finance.transaction-reversals.index') }}">Payment corrections</a>
 <a class="secondary-button" href="{{ route('finance.fx-revaluations.index') }}">Foreign bank revaluation</a>
 <a class="secondary-button" href="{{ route('finance.monetary-revaluations.index') }}">Receivables & payables FX</a></div>
-<div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>The person proposing a posting cannot approve it; the approver cannot post it. Posted journals cannot be edited. An invoice may only be proposed for revenue recognition after shipment dispatch is recorded, and the reviewer must assess the agreed terms and transfer evidence. For foreign currencies, select an approved historical rate effective no later than the posting date. The system uses posted weighted money-account values and releases the settled portion of earlier bank FX revaluations. An approved foreign cash basis is locked; changed balances require a fresh review.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Separation of duties is mandatory</strong><p>Use separate people to prepare, approve and post. Verify dispatch and agreed terms for invoices. Use a dated, approved exchange rate. Changed foreign balances need fresh review; posted entries cannot be edited.</p></div></div>
 @if($canSubmit)
 <section class="section-card"><h2>Source documents awaiting finance posting</h2>
 <p class="muted">Submitting a document here does not affect the ledger. Enter a meaningful audit explanation and, where applicable, the exact approved exchange rate.</p>

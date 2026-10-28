@@ -10,6 +10,7 @@ use App\Models\PurchaseAmendment;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Services\OrderSourcing;
+use App\Services\PlatformAccess;
 use App\Services\ProcurementMath;
 use App\Services\PurchaseAmendments;
 use App\Support\BusinessCurrencies;
@@ -39,12 +40,13 @@ class PurchaseController extends Controller
     {
         $this->check($request, 'purchases.view');
         $business = $request->attributes->get('activeBusiness');
-        $purchases = PurchaseOrder::query()->where('business_id', $business->id)
-            ->with(['product', 'supplier', 'receipts'])->latest()->paginate(20);
+        $archived = $request->routeIs('purchases.archived');
+        $purchases = PurchaseOrder::query()->when($archived, fn ($q) => $q->onlyTrashed())->where('business_id', $business->id)
+            ->with(['product', 'supplier', 'receipts'])->latest()->workspacePaginate(20);
         $canCreate = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'purchases.create');
         $canReceive = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'receipts.post');
 
-        return view('purchases.index', compact('purchases', 'canCreate', 'canReceive'));
+        return view('purchases.index', compact('purchases', 'canCreate', 'canReceive', 'archived'));
     }
 
     public function create(Request $request): View
@@ -98,9 +100,10 @@ class PurchaseController extends Controller
             if (! empty($data['market_trip_id'])) {
                 MarketTrip::query()->where('business_id', $business->id)->where('status', '!=', 'closed')->findOrFail($data['market_trip_id']);
             }
-            $existing = PurchaseOrder::query()->where('business_id', $business->id)
+            $existing = PurchaseOrder::withTrashed()->where('business_id', $business->id)
                 ->where('idempotency_key', $data['idempotency_key'])->first();
             if ($existing) {
+                abort_if($existing->trashed(), 422, 'This purchase was archived. Restore it before reusing this purchase reference.');
                 abort_unless($existing->product_id === (int) $data['product_id'] && $existing->kind === $data['kind'] && $existing->currency === $data['currency'] && $math->decimal($existing->quantity)->isEqualTo($math->decimal($data['quantity'])) && $math->decimal($existing->unit_price)->isEqualTo($math->decimal($data['unit_price'])), 409, 'This purchase key was already used for a different purchase.');
                 if (! empty($data['sales_order_line_id'])) {
                     abort_unless(OrderSupply::query()->where('business_id', $business->id)->where('purchase_order_id', $existing->id)->where('sales_order_line_id', $data['sales_order_line_id'])->exists(), 409, 'This purchase key belongs to a different allocation.');
@@ -149,20 +152,50 @@ class PurchaseController extends Controller
         return back()->with('status', 'Purchase agreement reviewed with original terms preserved.');
     }
 
+    public function archive(Request $request, int $purchase): RedirectResponse
+    {
+        $this->check($request, 'purchases.create');
+        $data = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:500']]);
+        $business = $request->attributes->get('activeBusiness');
+        DB::transaction(function () use ($request, $purchase, $business, $data): void {
+            Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            $record = PurchaseOrder::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($purchase);
+            abort_unless($record->status === 'ordered' && ! $record->receipts()->exists(), 422, 'Received or completed purchases cannot be archived.');
+            foreach (['order_supplies', 'finance_supplier_bills', 'purchase_amendments'] as $table) {
+                abort_if(DB::table($table)->where('business_id', $business->id)->where('purchase_order_id', $record->id)->exists(), 422, 'Resolve linked orders, bills and amendments before archiving.');
+            }
+            $record->delete();
+            app(PlatformAccess::class)->audit($business->id, $request->user()->id, 'purchase.archived', $data['reason'], [], ['purchase_order_id' => $record->id]);
+        });
+
+        return redirect()->route('purchases.archived')->with('status', 'Purchase archived. You can restore it from Archived purchases.');
+    }
+
+    public function restore(Request $request, int $purchase): RedirectResponse
+    {
+        $this->check($request, 'purchases.create');
+        $record = PurchaseOrder::onlyTrashed()->where('business_id', $request->attributes->get('activeBusiness')->id)->findOrFail($purchase);
+        $record->restore();
+        app(PlatformAccess::class)->audit($record->business_id, $request->user()->id, 'purchase.restored', 'Archived purchase restored.', [], ['purchase_order_id' => $record->id]);
+
+        return redirect()->route('purchases.show', $record->id)->with('status', 'Purchase restored.');
+    }
+
     public function show(Request $request, int $purchase): View
     {
         $this->check($request, 'purchases.view');
+        $business = $request->attributes->get('activeBusiness');
         $purchase = $this->own($request, $purchase)->load(['product', 'supplier', 'receipts.batch']);
         $canReceive = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'receipts.post');
         $remaining = app(ProcurementMath::class)->decimal($purchase->quantity)->minus(
             app(ProcurementMath::class)->sum($purchase->receipts->pluck('received_quantity')->all())
         );
 
-        $amendments = PurchaseAmendment::query()->where('business_id', $purchase->business_id)->where('purchase_order_id', $purchase->id)->latest('id')->paginate(15);
+        $amendments = PurchaseAmendment::query()->where('business_id', $purchase->business_id)->where('purchase_order_id', $purchase->id)->latest('id')->workspacePaginate(15);
         $canAmend = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'purchases.create');
         $canReview = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'purchases.amend.review');
         $suppliers = Supplier::query()->where('business_id', $purchase->business_id)->where('active', true)->orderBy('name')->get();
 
-        return view('purchases.show', compact('purchase', 'remaining', 'canReceive', 'amendments', 'canAmend', 'canReview', 'suppliers'));
+        return view('purchases.show', compact('business','purchase', 'remaining', 'canReceive', 'amendments', 'canAmend', 'canReview', 'suppliers'));
     }
 }

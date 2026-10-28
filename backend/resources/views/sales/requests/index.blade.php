@@ -16,5 +16,5 @@
 <td><a class="action-link" href="{{ route('sales-requests.show',$record->id) }}">Open</a></td></tr>
 @empty<tr><td colspan="6" class="empty-msg">No customer requests yet.</td></tr>@endforelse
 </tbody></table></div>{{ $requests->links() }}</section>
-<p class="form-hint">Customer acceptance is recorded by authorised staff and must reference the buyer's communication or purchase order. No customer self-service portal is connected yet.</p>
+<p class="form-hint">Record buyer acceptance with a purchase order or written confirmation.</p>
 @endsection

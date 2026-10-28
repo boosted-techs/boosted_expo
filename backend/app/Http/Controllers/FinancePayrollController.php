@@ -41,20 +41,20 @@ class FinancePayrollController extends Controller
         $members = BusinessMembership::query()->where('business_id', $business->id)
             ->where('active', true)->with('user')->orderBy('id')->get();
         $runs = FinancePayrollRun::query()->where('business_id', $business->id)
-            ->orderByDesc('period_to')->paginate(24);
+            ->orderByDesc('period_to')->workspacePaginate(24);
         $canPrepare = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'finance.payroll.prepare');
         $request->validate(['person_search' => ['nullable', 'string', 'max:120']]);
-        $people = StaffPerson::query()->where('business_id', $business->id)->when($request->filled('person_search'), fn ($q) => $q->where('name', 'like', '%'.$request->input('person_search').'%'))->orderBy('name')->paginate(50, ['*'], 'people_page')->withQueryString();
-        $rates = StaffPayRate::query()->where('business_id', $business->id)->with('person')->latest('id')->paginate(25, ['*'], 'rates_page')->withQueryString();
+        $people = StaffPerson::query()->where('business_id', $business->id)->when($request->filled('person_search'), fn ($q) => $q->where('name', 'like', '%'.$request->input('person_search').'%'))->orderBy('name')->workspacePaginate(50, ['*'], 'people_page')->withQueryString();
+        $rates = StaffPayRate::query()->where('business_id', $business->id)->with('person')->latest('id')->workspacePaginate(25, ['*'], 'rates_page')->withQueryString();
         $canApprove = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'finance.reviews.approve');
 
-        $policies = PayrollStatutoryPolicy::query()->where('business_id', $business->id)->latest('starts_on')->orderByDesc('id')->paginate(20, ['*'], 'policy_page')->withQueryString();
-        $outputs = StaffOutput::query()->where('business_id', $business->id)->with('person')->latest('id')->paginate(25, ['*'], 'output_page')->withQueryString();
-        $adjustments = StaffPayAdjustment::query()->where('business_id', $business->id)->with('person')->latest('id')->paginate(25, ['*'], 'adjustment_page')->withQueryString();
-        $leaves = StaffLeave::query()->where('business_id', $business->id)->where('pay_treatment', 'unverified')->with('person')->latest('starts_at')->paginate(20, ['*'], 'leave_page')->withQueryString();
-        $absences = StaffShift::query()->where('business_id', $business->id)->where('status', 'absent')->where('pay_treatment', 'unverified')->with('person')->latest('starts_at')->paginate(20, ['*'], 'absence_page')->withQueryString();
-        $jobs = PackingJob::query()->where('business_id', $business->id)->where('status', 'completed')->latest('id')->paginate(30, ['*'], 'job_page')->withQueryString();
+        $policies = PayrollStatutoryPolicy::query()->where('business_id', $business->id)->latest('starts_on')->orderByDesc('id')->workspacePaginate(20, ['*'], 'policy_page')->withQueryString();
+        $outputs = StaffOutput::query()->where('business_id', $business->id)->with('person')->latest('id')->workspacePaginate(25, ['*'], 'output_page')->withQueryString();
+        $adjustments = StaffPayAdjustment::query()->where('business_id', $business->id)->with('person')->latest('id')->workspacePaginate(25, ['*'], 'adjustment_page')->withQueryString();
+        $leaves = StaffLeave::query()->where('business_id', $business->id)->where('pay_treatment', 'unverified')->with('person')->latest('starts_at')->workspacePaginate(20, ['*'], 'leave_page')->withQueryString();
+        $absences = StaffShift::query()->where('business_id', $business->id)->where('status', 'absent')->where('pay_treatment', 'unverified')->with('person')->latest('starts_at')->workspacePaginate(20, ['*'], 'absence_page')->withQueryString();
+        $jobs = PackingJob::query()->where('business_id', $business->id)->where('status', 'completed')->latest('id')->workspacePaginate(30, ['*'], 'job_page')->withQueryString();
 
         return view('finance.payroll', compact('business', 'members', 'runs', 'canPrepare', 'people', 'rates', 'canApprove', 'policies', 'outputs', 'adjustments', 'leaves', 'absences', 'jobs'));
     }

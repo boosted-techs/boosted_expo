@@ -37,5 +37,5 @@
 <option value="{{ $term }}" @selected(old('incoterm',$shipment?->incoterm)===$term)>{{ $term }}</option>
 @endforeach</select><small>Record the term agreed with the customer; do not invent one.</small></label>
 <label class="field"><span>Shipment notes (optional)</span><textarea name="notes" rows="3" maxlength="2500">{{ old('notes',$shipment?->notes) }}</textarea></label>
-<p class="form-hint">You may save incomplete flight details as a draft. Marking the shipment ready requires the origin and destination airports, flight, AWB, departure date and at least one completed carton.</p>
+<p class="form-hint">Save a draft now. Add flight details, AWB, departure date and a completed carton before marking ready.</p>
 </div>

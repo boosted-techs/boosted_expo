@@ -1,22 +1,25 @@
 @extends('layouts.console')
 @section('title', $sections[$section][0])
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">EXPORT OPERATIONS</span><h1>{{ $sections[$section][0] }}</h1><p>{{ $sections[$section][1] }}</p></div><div class="page-mark">EXP / 01</div></div>
+<div class="page-intro"><div><span class="eyebrow">EXPORT OPERATIONS</span><h1>{{ $sections[$section][0] }}</h1><p>{{ $sections[$section][1] }}</p></div><div class="page-mark">{{ now('Africa/Kampala')->format('D, d M Y') }}</div></div>
 @if($section === 'overview')
-@include('people._today')
-  <div class="notice"><span>●</span><div><strong>Operations overview</strong><p>These are current figures from your business records. Each figure is shown only when your role permits access to the underlying records.</p></div></div>
+
+  <div class="overview-dashboard">
   <div class="stats">
     @forelse($metrics as $card)
       <a class="stat" href="{{ route($card['route']) }}">
         <span>{{ $card['label'] }}</span>
         <strong>{{ number_format($card['value']) }}</strong>
-        <small>{{ $card['detail'] }} ↗</small>
+        <small>{{ $card['detail'] }}</small>
       </a>
     @empty
       <article class="stat"><span>Welcome</span><strong>✓</strong><small>Your permitted tools are available below.</small></article>
     @endforelse
   </div>
-  <div class="grid-2">
+  @include('workspace-charts')
+  @include('people._today')
+  </div>
+  <div class="dashboard-tools">
     <section class="panel"><div class="panel-head"><div><span class="eyebrow">YOUR WORK</span><h2>Daily operations</h2></div></div><div class="task-grid">
     @foreach([
       ['Products','products.index','catalogue.view'],
@@ -41,11 +44,11 @@
       ['Sticker templates','labels.index','labels.view']
     ] as $task)
       @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'), $task[2]))
-      <a href="{{ route($task[1]) }}" class="task"><span class="task-sign">↗</span><strong>{{ $task[0] }}</strong><small>Open working tools</small></a>
+      <a href="{{ route($task[1]) }}" class="task"><span class="task-sign" aria-hidden="true">↗</span><strong>{{ $task[0] }}</strong></a>
       @endif
     @endforeach
     </div></section>
-    <section class="panel"><div class="panel-head"><div><span class="eyebrow">PROCESS</span><h2>One connected workflow</h2></div></div><ol class="steps">
+    <section class="panel workflow-panel"><div class="panel-head"><div><span class="eyebrow">WORKFLOW</span><h2>From order to export</h2></div></div><ol class="steps">
     <li>Customer request and quotation</li><li>Local sourcing and purchasing</li><li>Receiving and quality checks</li><li>Packing and labelling</li><li>Export dispatch and accounting</li></ol></section>
   </div>
 @else
@@ -111,7 +114,7 @@
     ][$section] ?? [];
   @endphp
   @if(count($workingLinks))
-    <div class="notice"><span>●</span><div><strong>Working tools available</strong><p>The links below open functional records and workflows. Some additional features and reports are still planned.</p></div></div>
+    <div class="notice"><span>●</span><div><strong>Quick actions</strong><p>Choose a tool to continue.</p></div></div>
     <div class="form-actions" style="margin-bottom:20px">
       @foreach($workingLinks as $link)
         @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),$link[2]))
@@ -120,10 +123,10 @@
       @endforeach
     </div>
   @else
-    <div class="notice"><span>●</span><div><strong>Planned tools</strong><p>This module describes future workflows. No transactions can be posted here yet.</p></div></div>
+    <div class="notice"><span>●</span><div><strong>No tools available</strong><p>Contact your administrator for access.</p></div></div>
   @endif
   <div class="feature-grid">@foreach($detail as $index=>$item)
-    <article class="feature"><span class="feature-bullet">↗</span><h2>{{ $item[0] }}</h2><p>{{ $item[1] }}</p><span class="coming">{{ in_array($index,$workingCards,true) ? 'First release' : 'Planned' }}</span></article>
+    @if(in_array($index,$workingCards,true))<article class="feature"><span class="feature-bullet">↗</span><h2>{{ $item[0] }}</h2><p>{{ $item[1] }}</p></article>@endif
   @endforeach</div>
 @endif
 @endsection

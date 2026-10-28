@@ -17,6 +17,8 @@ class TeamController extends Controller
     public function index(Request $request, BusinessPermissions $access): View
     {
         abort_unless($access->allows($request->attributes->get('membership'), 'team.view'), 403);
+        $activity = $request->route('activity', 'members');
+        abort_unless(in_array($activity, ['members', 'invitations', 'history'], true), 404);
         $business = $request->attributes->get('activeBusiness');
         $members = BusinessMembership::query()->where('business_id', $business->id)->with('user')->get();
         $pending = $business->invitations()->whereNull('accepted_at')->whereNull('revoked_at')->where('expires_at', '>', now())->latest()->get();
@@ -28,9 +30,11 @@ class TeamController extends Controller
         $canManage = in_array($request->attributes->get('membership')->role, ['owner', 'admin'], true);
         $actorRole = $request->attributes->get('membership')->role;
         $audit = TeamMembershipEvent::query()->where('business_id', $business->id)
-            ->latest('id')->limit(20)->get();
+            ->latest('id')->workspacePaginate(25, ['*'], 'audit_page');
 
-        return view('team.index', compact('business', 'members', 'pending', 'roles',
+        abort_if($activity === 'history' && ! $canManage, 403);
+
+        return view('team.index', compact('activity', 'business', 'members', 'pending', 'roles',
             'canManage', 'actorRole', 'audit'));
     }
 

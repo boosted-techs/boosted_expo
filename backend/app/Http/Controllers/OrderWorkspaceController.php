@@ -76,7 +76,7 @@ class OrderWorkspaceController extends Controller
         }
         $people = StaffPerson::query()->where('business_id', $order->business_id)->where('active', true)->orderBy('name')->get();
         $tasks = OrderTask::query()->where('business_id', $order->business_id)->where('sales_order_id', $order->id)->with('person')->orderBy('due_at')->get();
-        $events = OrderEvent::query()->where('business_id', $order->business_id)->where('sales_order_id', $order->id)->latest('id')->paginate(25);
+        $events = OrderEvent::query()->where('business_id', $order->business_id)->where('sales_order_id', $order->id)->latest('id')->workspacePaginate(25);
         $trips = MarketTrip::query()->where('business_id', $order->business_id)->whereIn('id', OrderSupply::query()->where('business_id', $order->business_id)->whereIn('sales_order_line_id', $order->lines->modelKeys())->select('market_trip_id'))->with('person')->get();
         $allTrips = $canSource ? MarketTrip::query()->where('business_id', $order->business_id)->where('status', '!=', 'closed')->with('person')->orderBy('due_at')->get() : collect();
         $shipments = $summary['shipments'];
@@ -98,10 +98,10 @@ class OrderWorkspaceController extends Controller
         $data = $request->validate(['kind' => ['required', Rule::in(['batch', 'purchase'])], 'search' => ['nullable', 'string', 'max:120'], 'page' => ['nullable', 'integer', 'min:1']]);
         $search = $data['search'] ?? '';
         if ($data['kind'] === 'batch') {
-            $rows = StockBatch::query()->where('business_id', $o->business_id)->where('product_id', $l->product_id)->where('is_quarantined', false)->when($search !== '', fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%'))->orderBy('id')->paginate(20);
+            $rows = StockBatch::query()->where('business_id', $o->business_id)->where('product_id', $l->product_id)->where('is_quarantined', false)->when($search !== '', fn ($q) => $q->where('batch_code', 'like', '%'.$search.'%'))->orderBy('id')->workspacePaginate(20);
             $items = $rows->map(fn ($b) => ['id' => $b->id, 'label' => $b->batch_code.' · Free '.$source->free($b).' '.$l->unit]);
         } else {
-            $rows = PurchaseOrder::query()->where('business_id', $o->business_id)->where('product_id', $l->product_id)->whereIn('status', ['ordered', 'part_received'])->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('vendor_name', 'like', '%'.$search.'%')->orWhereHas('supplier', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))))->with('supplier')->orderBy('id')->paginate(20);
+            $rows = PurchaseOrder::query()->where('business_id', $o->business_id)->where('product_id', $l->product_id)->whereIn('status', ['ordered', 'part_received'])->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', '%'.$search.'%')->orWhere('vendor_name', 'like', '%'.$search.'%')->orWhereHas('supplier', fn ($q) => $q->where('name', 'like', '%'.$search.'%'))))->with('supplier')->orderBy('id')->workspacePaginate(20);
             $items = $rows->map(fn ($p) => ['id' => $p->id, 'label' => $p->reference.' · '.($p->supplier?->name ?? $p->vendor_name).' · '.$p->quantity.' '.$l->unit]);
         }
 

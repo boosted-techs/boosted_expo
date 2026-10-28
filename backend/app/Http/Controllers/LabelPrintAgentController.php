@@ -29,11 +29,11 @@ class LabelPrintAgentController extends Controller
             ->orderByDesc('id')->get();
         $jobs = LabelPrintJob::query()->where('business_id', $id)
             ->with(['agent', 'generation.carton'])
-            ->latest('id')->paginate(25);
+            ->latest('id')->workspacePaginate(25);
         $request->validate(['search' => ['nullable', 'string', 'max:100']]);
         $generations = LabelGeneration::query()->where('business_id', $id)
             ->when($request->filled('search'), fn ($q) => $q->whereHas('carton', fn ($c) => $c->where('carton_code', 'like', '%'.$request->input('search').'%')))
-            ->latest('id')->with('carton')->paginate(25, ['*'], 'generation_page')->withQueryString();
+            ->latest('id')->with('carton')->workspacePaginate(25, ['*'], 'generation_page')->withQueryString();
         $profiles = LabelMediaProfile::query()->where('business_id', $id)->where('protocol', 'zpl')->orderBy('name')->get();
         $canManage = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'labels.manage');
@@ -104,6 +104,6 @@ class LabelPrintAgentController extends Controller
         return response()->json([
             'accepted' => true, 'status' => $result->status,
             'physical_print_confirmed' => false,
-        ])->header('Cache-Control','no-store');
+        ])->header('Cache-Control', 'no-store');
     }
 }

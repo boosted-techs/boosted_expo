@@ -241,11 +241,11 @@ class BoostedOneMarketingSiteTest extends TestCase
     public function test_website_and_erp_assets_have_readability_rules(): void
     {
         $marketingCss = file_get_contents(public_path('assets/boosted-one.css'));
-        $systemCss = file_get_contents(public_path('assets/modules.css'));
+        $systemCss = file_get_contents(public_path('assets/workspace-ui.css'));
         $this->assertStringContainsString('body { font-size:17px;', $marketingCss);
-        $this->assertStringContainsString('.data-table td { font-size:16px;', $systemCss);
-        $this->assertStringContainsString('.sidebar nav a { font-size:16px;', $systemCss);
-        $this->assertStringContainsString('font-size:16px;', $systemCss);
+        $this->assertStringContainsString('.data-table td{font-size:var(--text-ui);', $systemCss);
+        $this->assertStringContainsString('.sidebar nav a{color:var(--muted);font-size:var(--text-body);', $systemCss);
+        $this->assertStringContainsString('--text-body:1rem;', $systemCss);
     }
 
     public function test_published_policies_are_indexable_and_included_in_the_sitemap(): void

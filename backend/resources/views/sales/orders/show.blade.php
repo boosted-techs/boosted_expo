@@ -13,10 +13,10 @@
 <div class="record"><strong>Subtotal</strong><span>{{ $order->currency }} {{ $order->subtotal }}</span></div>
 <div class="record"><strong>Discount / tax</strong><span>{{ $order->discount_percent }}% / {{ $order->tax_percent }}%</span></div>
 <div class="record"><strong>Confirmed order total</strong><span>{{ $order->currency }} {{ $order->grand_total }}</span></div>
-<p class="form-hint">Terms were copied from the exact customer quotation accepted. An order is not proof of payment.</p>
+<p class="form-hint">Terms follow the accepted quotation. Check Finance for payments.</p>
 </section>
 <section class="section-card"><h2>Quantity fulfilment</h2>
-<p class="muted">An order can be fulfilled through several shipments. Quantities are allocated from packed cartons, so the system does not deduct source stock twice.</p>
+<p class="muted">Allocate packed cartons across one or more shipments.</p>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Product</th><th>Ordered</th><th>Allocated</th><th>Still to allocate</th><th>Dispatched</th><th>Delivered (manual)</th></tr></thead><tbody>
 @foreach($summary['lines'] as $line)
 <tr><td><strong>{{ $line['product_name']??$line['product']->name }}</strong><small>{{ $line['product']->sku }}</small></td>
@@ -48,7 +48,7 @@
 </section>
 @if($canShare)
 <section class="section-card"><h2>Private buyer order tracking</h2>
-<p class="muted">Email a read-only, time-limited tracking link directly to the buyer's registered email address. The link shows only this order, prices and manually recorded shipment milestones. It does not reveal internal costs or finance records.</p>
+<p class="muted">Send the buyer a private tracking link showing order details, prices and shipment updates.</p>
 <div class="record"><strong>Registered buyer email</strong><span>{{ $order->customer->email?:'No buyer email on file' }}</span></div>
 <form method="POST" action="{{ route('sales-orders.buyer-link.share',$order->id) }}" class="form-actions">@csrf
 <button class="primary-button" @disabled(!filter_var($order->customer->email,FILTER_VALIDATE_EMAIL))>Email private tracking link</button></form>

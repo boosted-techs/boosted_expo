@@ -64,19 +64,19 @@ class PlatformControlController extends Controller
             ];
         }
         if ($tab === 'subscription') {
-            $data['subscriptions'] = BillingSubscription::query()->where('business_id', $business->id)->with('plan')->latest('id')->paginate(15);
-            $data['invoices'] = BillingInvoice::query()->where('business_id', $business->id)->latest('id')->paginate(15, ['*'], 'invoice_page');
+            $data['subscriptions'] = BillingSubscription::query()->where('business_id', $business->id)->with('plan')->latest('id')->workspacePaginate(15);
+            $data['invoices'] = BillingInvoice::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(15, ['*'], 'invoice_page');
             $data['plans'] = BillingPlan::query()->where('is_active', true)->orderBy('name')->get();
         }
         if ($tab === 'access') {
-            $data['invitations'] = BusinessInvitation::query()->where('business_id', $business->id)->latest('id')->paginate(20);
+            $data['invitations'] = BusinessInvitation::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(20);
             $data['deliveries'] = PlatformDelivery::query()->where('business_id', $business->id)->where('kind', 'invitation')->whereIn('source_id', $data['invitations']->modelKeys())->latest('id')->get(['id', 'source_id', 'status', 'attempts', 'attempted_at', 'failure_note']);
         }
         if ($tab === 'health') {
             $data += app(PlatformDashboard::class)->health($business->id);
         }
         if ($tab === 'history') {
-            $data['events'] = PlatformAuditEvent::query()->where('business_id', $business->id)->latest('id')->paginate(30);
+            $data['events'] = PlatformAuditEvent::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(30);
         }
         $data['supportRequests'] = PlatformSupportGrant::query()->where('business_id', $business->id)->latest('id')->limit(10)->get();
 

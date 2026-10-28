@@ -12,7 +12,7 @@
 </section>
 <section class="section-card form-narrow">
 <h2>Product import guidance</h2><p class="muted">Each company has its own catalogue. Products with matching SKU codes will be updated after confirmation, and products with new codes will be created.</p>
-<p class="muted">If the file does not contain SKU codes, the system creates them from product names. Check the preview for duplicate products before confirming.</p>
+<p class="muted">Missing SKUs are generated from product names. Check for duplicates before confirming.</p>
 <a class="secondary-button" href="{{ route('products.template') }}">Download Excel template</a>
 </section>
 <a href="{{ route('products.index') }}" class="text-button">← Back to products</a>

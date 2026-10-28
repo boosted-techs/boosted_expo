@@ -2,9 +2,9 @@
 @section('title','Provider Updates')
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">EXTERNAL INTEGRATIONS</span><h1>Provider updates</h1>
-<p>Review independently provisioned payment and cargo carrier notifications. Provider updates are evidence; they do not send money, post invoices or automatically change shipment status.</p></div></div>
+<p>Review payment and carrier updates. Record approved finance and shipment changes separately.</p></div></div>
 <div class="notice"><span>●</span><div><strong>No bank or carrier is automatically connected</strong>
-<p>A platform operator must verify the provider relationship and provision its actual signing secret outside the company dashboard. A validated HMAC authenticates the configured sender, but is not a bank-issued statement signature or proof of settlement. Official source verification and reconciliation remain separate.</p></div></div>
+<p>Ask a platform operator to connect a verified provider. Reconcile payment updates with official statements.</p></div></div>
 <section class="section-card"><h2>Registered provider connections</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Type</th><th>Provider</th><th>Provider account</th><th>State</th><th>Onboarding reference</th></tr></thead><tbody>
 @forelse($connections as $connection)
@@ -15,7 +15,7 @@
 @endforelse
 </tbody></table></div></section>
 <section class="section-card"><h2>Recent external notifications</h2>
-<p class="muted">Accepted evidence remains read-only and separate from independently approved financial journals or manually recorded airline movements. Unmatched references need investigation, not automatic linking.</p>
+<p class="muted">Check unmatched references before linking. Approved updates remain in history.</p>
 <div class="table-wrap"><table class="data-table">
 <thead><tr><th>Received</th><th>Source</th><th>External reference</th><th>Event</th><th>Status</th><th>Review</th></tr></thead><tbody>
 @forelse($events as $event)

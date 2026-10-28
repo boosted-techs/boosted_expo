@@ -6,7 +6,7 @@
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.payroll.index') }}">All payroll runs</a>
 @if(app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.reviews.view'))
 <a class="secondary-button" href="{{ route('finance.reviews') }}">Journal approval queue</a>@endif</div>
-<div class="notice"><span>●</span><div><strong>Accrued wages, not disbursed</strong><p>Posting payroll creates an expense and liabilities for net salary and the recorded deduction/contribution components. The source snapshot states whether a reviewed statutory policy or manual preparation was used. No bank transfer is executed.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Accrued wages, not disbursed</strong><p>Post approved wages, deductions and contributions to the accounts. Make bank payments separately.</p></div></div>
 <section class="section-card"><h2>Employees and amounts</h2>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Team member</th><th>Gross</th><th>Employee deductions</th><th>Net payable</th></tr></thead><tbody>
 @foreach($run->lines as $line)
@@ -14,14 +14,14 @@
 <td>{{ $line->deductions }}</td><td>{{ $line->net }}</td></tr>@endforeach
 </tbody><tfoot><tr><td><strong>Total</strong></td><td><strong>{{ $run->gross_total }}</strong></td>
 <td><strong>{{ $run->deduction_total }}</strong></td><td><strong>{{ $run->net_total }}</strong></td></tr></tfoot></table></div>
-<h3>Preparation basis</h3><p>{{ $run->notes }}</p><p class="form-hint">Gross earnings come from the recorded preparation basis; the frozen source identifies PAYE, NSSF and any manual deductions. Each approved settlement requires external evidence and is a ledger record, not a banking instruction. Payslips preserve the approved amounts. Employer contributions are a separate business cost. This screen records actual settlement evidence.</p>
-@if($run->posting_status==='not_posted' && app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.payroll.prepare'))<details><summary>Withdraw an unposted payroll for correction</summary><form method="POST" action="{{ route('finance.payroll.withdraw',$run->id) }}" class="form-stack">@csrf<label class="field"><span>Reason and corrected evidence</span><textarea name="reason" minlength="20" maxlength="3000" required></textarea></label><p class="form-hint">A pending run can be withdrawn by its preparer/requester. An approved run needs its approver to withdraw it. Original sources and reviews remain in history.</p><button class="text-button">Withdraw unposted payroll</button></form></details>@endif
+<h3>Preparation basis</h3><p>{{ $run->notes }}</p><p class="form-hint">Review earnings, PAYE, NSSF and deductions. Record completed payments with evidence; payslips retain the approved amounts.</p>
+@if($run->posting_status==='not_posted' && app(\App\Support\BusinessPermissions::class)->allows(request()->attributes->get('membership'),'finance.payroll.prepare'))<details><summary>Withdraw an unposted payroll for correction</summary><form method="POST" action="{{ route('finance.payroll.withdraw',$run->id) }}" class="form-stack">@csrf<label class="field"><span>Reason and corrected evidence</span><textarea name="reason" minlength="20" maxlength="3000" required></textarea></label><p class="form-hint">Preparers can withdraw pending runs. Approved runs require the approver to withdraw them.</p><button class="text-button">Withdraw unposted payroll</button></form></details>@endif
 @if(($run->data_snapshot['method']??'')==='approved_inputs_and_statutory_policy')<h3>Statutory and manual components</h3>@foreach($run->lines as $payLine)<details class="finance-details"><summary>{{ $payLine->name_snapshot }} · {{ $payLine->source_snapshot['statutory']['policy_name'] }}</summary><p>PAYE {{ $payLine->source_snapshot['statutory']['paye'] }} · employee NSSF {{ $payLine->source_snapshot['statutory']['nssf_employee'] }} · employer NSSF {{ $payLine->source_snapshot['statutory']['nssf_employer'] }} · other deductions {{ $payLine->source_snapshot['manual_deductions'] }}</p><p>Tax class {{ $payLine->source_snapshot['statutory']['tax_class'] }} · remittance due {{ $payLine->source_snapshot['statutory']['remit_by'] }}</p><p>{{ $payLine->source_snapshot['statutory']['source_note'] }}</p></details>@endforeach @endif
 </section>
 @if($canSettle)
 <section class="section-card">
 <h2>Employee wage settlement register</h2>
-<p class="muted">These are manually evidenced payments. This screen does not send money. Pending suggestions reserve the outstanding amount until approved or rejected by independent finance staff.</p>
+<p class="muted">Record completed payments with supporting evidence, then request independent approval.</p>
 <div class="table-wrap"><table class="data-table"><thead><tr><th>Employee</th><th>Net payroll</th><th>Available for new settlement</th></tr></thead><tbody>
 @foreach($run->lines as $line)
 <tr><td>{{ ($line->name_snapshot??$line->user?->name) }}</td><td>{{ $run->currency }} {{ $line->net }}</td><td>{{ $run->currency }} {{ $remaining[$line->id] }}</td></tr>
@@ -146,7 +146,7 @@ placeholder="Receipt number, payee, remittance period and authorisation"></texta
 placeholder="Describe the payroll error and the records supporting a full reversal"></textarea></label>
 <button class="secondary-button">Prepare complete payroll reversal for review</button></form>
 @elseif($run->posting_status==='reversed')
-<p class="form-hint">This payroll has been reversed. Create a new payroll run for the exact original period to prepare its next revision, subject to fresh approval.</p>
+<p class="form-hint">Create a replacement run for the same period and request fresh approval.</p>
 @else<p class="form-hint">Correction is unavailable while payroll settlements exist or the original accrual has not been posted.</p>
 @endif
 </section>

@@ -1,0 +1,20 @@
+@php
+$navigation=config('workspace-activities');
+$currentName=request()->route()?->getName()??'';
+$family=match(true){
+ str_starts_with($currentName,'stock.exceptions.')=>'stock.exceptions.index',
+ str_starts_with($currentName,'stock.')=>'stock.index',
+ str_starts_with($currentName,'purchases.')=>'purchases.index',
+ str_starts_with($currentName,'people.')=>'people.index',
+ str_starts_with($currentName,'team.')=>'team.index',
+ str_starts_with($currentName,'staff.')=>'staff.index',
+ str_starts_with($currentName,'labels.')=>'labels.print',
+ str_starts_with($currentName,'finance.reports.')=>'finance.reports.index',
+ str_starts_with($currentName,'finance.')=>'finance.index',
+ default=>null,
+};
+$member=request()->attributes->get('membership');
+$permission=app(\App\Support\BusinessPermissions::class);
+$items=collect($navigation[$family]??[])->filter(fn($item)=>$permission->allows($member,$item[2]));
+@endphp
+@if($items->isNotEmpty())<nav class="activity-nav no-print" aria-label="{{ $family==='people.index'?'People':'Related' }} activities">@foreach($items as $item)<a href="{{ route($item[1],$item[3]) }}{{ isset($item[4])?'#'.$item[4]:'' }}" @if(request()->routeIs($item[1]) && collect($item[3])->every(fn($value,$key)=>(string)(request()->route($key)??request()->query($key))===(string)$value) && !isset($item[4]) && !(empty($item[3]) && request()->has('quality'))) aria-current="page" @endif>{{ $item[0] }}</a>@endforeach</nav>@endif

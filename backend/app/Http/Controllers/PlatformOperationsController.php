@@ -41,9 +41,9 @@ class PlatformOperationsController extends Controller
         $data = $request->validate(['status' => ['nullable', Rule::in(['open', 'acknowledged', 'resolved'])], 'business_id' => ['nullable', 'integer']]);
 
         return view('platform.operations', [
-            'cases' => PlatformCase::query()->when($data['status'] ?? null, fn ($q, $v) => $q->where('status', $v))->when($data['business_id'] ?? null, fn ($q, $v) => $q->where('business_id', $v))->orderBy('due_at')->paginate(25),
-            'grants' => PlatformSupportGrant::query()->when($request->user()->platform_role !== 'superadmin', fn ($q) => $q->where('platform_user_id', $request->user()->id))->latest('id')->paginate(15, ['*'], 'grant_page'),
-            'events' => app(PlatformAccess::class)->allows($request->user(), 'audit') ? PlatformAuditEvent::query()->latest('id')->paginate(25, ['*'], 'audit_page') : collect(),
+            'cases' => PlatformCase::query()->when($data['status'] ?? null, fn ($q, $v) => $q->where('status', $v))->when($data['business_id'] ?? null, fn ($q, $v) => $q->where('business_id', $v))->orderBy('due_at')->workspacePaginate(25),
+            'grants' => PlatformSupportGrant::query()->when($request->user()->platform_role !== 'superadmin', fn ($q) => $q->where('platform_user_id', $request->user()->id))->latest('id')->workspacePaginate(15, ['*'], 'grant_page'),
+            'events' => app(PlatformAccess::class)->allows($request->user(), 'audit') ? PlatformAuditEvent::query()->latest('id')->workspacePaginate(25, ['*'], 'audit_page') : collect(),
             'operators' => User::query()->where('is_platform_admin', true)->orderBy('name')->get(['id', 'name', 'platform_role']),
             'businesses' => Business::query()->orderBy('name')->get(['id', 'name']),
         ]);
@@ -91,9 +91,9 @@ class PlatformOperationsController extends Controller
 
         return view('platform.support', [
             'business' => $business, 'grant' => $grant,
-            'orders' => DB::table('sales_orders')->where('business_id', $business->id)->latest('id')->paginate(20, ['reference', 'status', 'confirmed_at']),
-            'shipments' => DB::table('export_shipments')->where('business_id', $business->id)->latest('id')->paginate(20, ['reference', 'status', 'scheduled_departure_at'], 'shipment_page'),
-            'printJobs' => DB::table('label_print_jobs')->where('business_id', $business->id)->latest('id')->paginate(20, ['id', 'status', 'attempts', 'failure_note', 'created_at'], 'print_page'),
+            'orders' => DB::table('sales_orders')->where('business_id', $business->id)->latest('id')->workspacePaginate(20, ['reference', 'status', 'confirmed_at']),
+            'shipments' => DB::table('export_shipments')->where('business_id', $business->id)->latest('id')->workspacePaginate(20, ['reference', 'status', 'scheduled_departure_at'], 'shipment_page'),
+            'printJobs' => DB::table('label_print_jobs')->where('business_id', $business->id)->latest('id')->workspacePaginate(20, ['id', 'status', 'attempts', 'failure_note', 'created_at'], 'print_page'),
         ]);
     }
 
@@ -101,9 +101,9 @@ class PlatformOperationsController extends Controller
     {
         app(PlatformAccess::class)->check($request->user(), 'health');
 
-        return view('platform.health', [...$dashboard->health(null), 'evidence' => PlatformHealthEvidence::query()->latest('id')->paginate(25),
+        return view('platform.health', [...$dashboard->health(null), 'evidence' => PlatformHealthEvidence::query()->latest('id')->workspacePaginate(25),
             'businesses' => Business::query()->orderBy('name')->get(['id', 'name']),
-            'deliveries' => PlatformDelivery::query()->whereIn('status', ['failed', 'uncertain', 'pending', 'processing'])->latest('id')->paginate(20, ['*'], 'delivery_page')]);
+            'deliveries' => PlatformDelivery::query()->whereIn('status', ['failed', 'uncertain', 'pending', 'processing'])->latest('id')->workspacePaginate(20, ['*'], 'delivery_page')]);
     }
 
     public function evidence(Request $request): RedirectResponse
@@ -163,9 +163,9 @@ class PlatformOperationsController extends Controller
             abort_if($target->id === $request->user()->id, 403, 'Use another superadmin to change your platform access.');
             $before = $target->only(['is_platform_admin', 'platform_role']);
             $target->forceFill(['is_platform_admin' => $data['role'] !== 'remove', 'platform_role' => $data['role'] === 'remove' ? 'support' : $data['role']])->save();
-            app(PlatformAccess::class)->audit(null,$request->user()->id,'platform.role',$data['reason'],$before,['user_id' => $target->id, ...$target->only(['is_platform_admin', 'platform_role'])]);
+            app(PlatformAccess::class)->audit(null, $request->user()->id, 'platform.role', $data['reason'], $before, ['user_id' => $target->id, ...$target->only(['is_platform_admin', 'platform_role'])]);
         }, 3);
 
-        return back()->with('status','Platform access changed and audited. Production privileged MFA still applies.');
+        return back()->with('status', 'Platform access changed and audited. Production privileged MFA still applies.');
     }
 }

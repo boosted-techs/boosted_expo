@@ -1,5 +1,12 @@
-<section class="install-card" data-install-banner hidden aria-label="Install Boosted One">
-  <div><strong>Install Boosted One</strong><p data-install-message>Keep your business workspace on your phone or computer. Sign in normally whenever you open it.</p></div>
-  <div class="form-actions"><button type="button" class="primary-button" data-install-button>How to install</button><button type="button" class="secondary-button" data-install-later>Not now</button></div>
-</section>
-<details class="install-help" data-install-help hidden><summary>Install app / help</summary><p data-install-guidance></p><p>Installation is optional. Your sign-in and permissions stay the same. Internet is needed for business work.</p></details>
+<div class="install-entry" data-install-banner hidden>
+  <span>Prefer the app?</span><button type="button" class="text-button" data-install-open>Install Boosted One</button>
+</div>
+<dialog class="install-dialog" data-install-dialog aria-labelledby="install-title">
+  <div class="install-dialog-heading"><x-brand-mark /><h2 id="install-title">Install Boosted One</h2><button type="button" class="icon-button" data-install-close aria-label="Close installation help">×</button></div>
+  <dl class="install-questions">
+    <dt>How do I install it?</dt><dd data-install-guidance></dd>
+    <dt>Do I need a new account?</dt><dd>No. Sign in with your usual email and password.</dd>
+    <dt>Can I work offline?</dt><dd>Connect to the internet to view and update your business.</dd>
+  </dl>
+  <div class="form-actions"><button type="button" class="primary-button" data-install-button hidden>Install app</button><button type="button" class="secondary-button" data-install-later>Not now</button></div>
+</dialog>

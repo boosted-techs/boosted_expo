@@ -3,7 +3,7 @@
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">BANK STATEMENT REVIEW</span><h1>{{ $statement->reference }}</h1><p>{{ $statement->currency }} · {{ $statement->period_from->format('d M Y') }} to {{ $statement->period_to->format('d M Y') }} · {{ ucfirst($statement->status) }}</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a class="secondary-button" href="{{ route('finance.bank.index') }}">All statements</a><a class="secondary-button" href="{{ route('finance.documents') }}">Posted payment records</a></div>
-<div class="notice"><span>●</span><div><strong>Every line needs an independently confirmed match</strong><p>Choose a posted payment, shipment cost or payroll settlement for each bank line. The system requires the same currency, account, direction and exact amount. Transactions are not verified automatically.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Every line needs an independently confirmed match</strong><p>Match each statement line to a posted transaction with the same account, currency, direction and amount.</p></div></div>
 <section class="section-card"><h2>Find matching transactions</h2>
 @include('finance._record-search', ['field' => 'candidate_search', 'page' => 'page', 'label' => 'Find transaction by record or payment reference'])
 <p class="form-hint">Candidates match the account, currency and amounts of the bank lines on this page. Browse older candidates below when needed.</p>
@@ -86,16 +86,16 @@ $ledgerCheck->prepared_by!==auth()->id())
 @endif
 @if(!$ledgerPreview['opening_matches'] || !$ledgerPreview['closing_matches'] ||
  !$ledgerPreview['movement_matches'])
-<p class="form-hint">Book-balance proof cannot be requested until the opening and closing amounts and every posted bank movement agree with the statement. No automatic balancing adjustment will be created.</p>
+<p class="form-hint">Match every transaction and verify opening and closing balances before requesting review.</p>
 @endif
 @else
-<p class="form-hint">A full balance proof requires a named, single-currency bank ledger with traceable posted source transactions. Shared historical accounts with mixed currencies require controlled reconstruction before proof can be requested.</p>
+<p class="form-hint">Choose a named, single-currency bank account with traceable transactions. Reconcile mixed-currency history before requesting balance review.</p>
 @endif
 @if($ledgerCheck?->superseded_by_check_id)<p>Historical balance evidence superseded: {{ $ledgerCheck->supersession_note }}</p>
 @elseif($ledgerCheck && $ledgerCheck->status==='verified' && $statement->lines()->count()===0 && $canProofReview && $replacementChecks->isNotEmpty())
 <details><summary>Replace incorrect empty balance evidence</summary><form method="POST" action="{{ route('finance.bank.proof.supersede',$ledgerCheck->id) }}" class="form-stack">@csrf<label class="field"><span>Independently verified replacement covering this period</span><select name="replacement_id" required>@foreach($replacementChecks as $replacement)<option value="{{ $replacement->id }}">{{ $replacement->statement->reference }} · {{ $replacement->statement->period_to->format('d M Y') }} · {{ $replacement->statement->currency }} {{ $replacement->statement->closing_balance }}</option>@endforeach</select></label><label class="field"><span>Why the earlier declared balance was incorrect</span><textarea name="notes" minlength="20" maxlength="2000" required></textarea></label><button class="secondary-button">Approve replacement evidence</button></form></details>
 @endif
-<p class="form-hint">This is an independent internal accounting check only. It does not authenticate the uploaded CSV against a bank or replace bank-issued confirmation.</p>
+<p class="form-hint">Verify the uploaded statement with your bank separately.</p>
 </section>
 @endif
 <section class="section-card"><h2>Transaction lines</h2>

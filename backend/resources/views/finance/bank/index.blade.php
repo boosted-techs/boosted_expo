@@ -3,7 +3,7 @@
 @section('content')
 <div class="page-intro"><div><span class="eyebrow">BANK REVIEW</span><h1>Bank reconciliation</h1><p>Import statement lines and match them independently against previously posted payments and expenses.</p></div></div>
 <div class="form-actions" style="margin-bottom:18px"><a href="{{ route('finance.index') }}" class="secondary-button">Finance dashboard</a><a href="{{ route('finance.documents') }}" class="secondary-button">Payment records</a></div>
-<div class="notice"><span>●</span><div><strong>Uploaded CSV evidence is unauthenticated unless accompanied by a verified, trusted bank signature</strong><p>The system does not connect to your bank. You supply the statement, an independent reviewer checks matches, and no additional money or journals are created by reconciliation.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Uploaded CSV evidence is unauthenticated unless accompanied by a verified, trusted bank signature</strong><p>Upload your bank statement, match transactions, then request independent review.</p></div></div>
 @if($canImport)
 <section class="section-card form-narrow"><h2>Import a bank statement CSV</h2>
 <p class="muted">Up to 2,000 rows, 1 MB maximum. The exact columns are <code>date,direction,amount,reference,description</code>. Enter dates in YYYY-MM-DD format, direction <code>credit</code> or <code>debit</code>, and positive amounts.</p>

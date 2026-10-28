@@ -6,6 +6,7 @@ use App\Models\BusinessMembership;
 use App\Models\ExportShipment;
 use App\Models\FinancePostingRequest;
 use App\Models\SalesOrder;
+use App\Models\StockBatch;
 use App\Models\StockMovement;
 use App\Support\BusinessPermissions;
 use Brick\Math\BigDecimal;
@@ -40,13 +41,12 @@ class WorkspaceMetrics
                             ->plus((string) $movement->quantity);
                     }
                 });
-            $heldBatchIds = \App\Models\StockBatch::query()
+            $heldBatchIds = StockBatch::query()
                 ->where('business_id', $businessId)->where('is_quarantined', true)
                 ->pluck('id')->map(fn ($id) => (int) $id)->flip();
             $readyBatches = count(array_filter(
                 $totals,
-                fn (BigDecimal $quantity, int $batchId) =>
-                    $quantity->isGreaterThan(0) && !$heldBatchIds->has($batchId),
+                fn (BigDecimal $quantity, int $batchId) => $quantity->isGreaterThan(0) && ! $heldBatchIds->has($batchId),
                 ARRAY_FILTER_USE_BOTH,
             ));
             $cards[] = [
@@ -74,6 +74,51 @@ class WorkspaceMetrics
                 'route' => 'finance.reviews',
             ];
         }
+
         return $cards;
+    }
+
+    public function charts(BusinessMembership $member): array
+    {
+        $access = app(BusinessPermissions::class);
+        $orders = null;
+        $shipments = null;
+
+        if ($access->allows($member, 'sales.orders.view')) {
+            $start = today('Africa/Kampala')->subDays(13);
+            $end = $start->copy()->addDays(14);
+            $query = SalesOrder::query()->where('business_id', $member->business_id)
+                ->whereNotIn('status', ['cancelled', 'draft'])
+                ->where('confirmed_at', '>=', $start->copy()->utc())
+                ->where('confirmed_at', '<', $end->copy()->utc());
+            $labels = [];
+
+            for ($day = 0; $day < 14; $day++) {
+                $from = $start->copy()->addDays($day);
+                $labels[] = $from->format('d M');
+                $query->selectRaw(
+                    "COALESCE(SUM(CASE WHEN confirmed_at >= ? AND confirmed_at < ? THEN 1 ELSE 0 END), 0) AS day_{$day}",
+                    [$from->copy()->utc(), $from->copy()->addDay()->utc()],
+                );
+            }
+
+            $counts = $query->first();
+            $values = [];
+            for ($day = 0; $day < 14; $day++) {
+                $values[] = (int) $counts->getAttribute("day_{$day}");
+            }
+            $orders = ['labels' => $labels, 'values' => $values, 'total' => array_sum($values)];
+        }
+
+        if ($access->allows($member, 'shipments.view')) {
+            $counts = ExportShipment::query()->where('business_id', $member->business_id)
+                ->selectRaw('status, COUNT(*) AS total')->groupBy('status')->pluck('total', 'status');
+            $shipments = [];
+            foreach (['draft' => 'Draft', 'ready' => 'Ready', 'dispatched' => 'In transit', 'delivered' => 'Delivered', 'cancelled' => 'Cancelled'] as $status => $label) {
+                $shipments[] = ['label' => $label, 'value' => (int) ($counts[$status] ?? 0)];
+            }
+        }
+
+        return compact('orders', 'shipments');
     }
 }

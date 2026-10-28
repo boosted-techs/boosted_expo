@@ -117,7 +117,7 @@ class FinanceController extends Controller
         $this->check($request, 'finance.rates.view');
         $business = $this->business($request);
         $rates = FinanceExchangeRate::query()->where('business_id', $business->id)
-            ->orderByDesc('effective_on')->paginate(40);
+            ->orderByDesc('effective_on')->workspacePaginate(40);
         $canPropose = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'finance.rates.propose');
         $canApprove = app(BusinessPermissions::class)->allows(
@@ -164,35 +164,35 @@ class FinanceController extends Controller
         ]);
         $finance = app(FinanceDocuments::class);
         $bills = FinanceSupplierBill::query()->where('business_id', $business->id)
-            ->with('purchase.supplier', 'purchase.product')->latest('id')->paginate(15, ['*'], 'bills')->withQueryString();
+            ->with('purchase.supplier', 'purchase.product')->latest('id')->workspacePaginate(15, ['*'], 'bills')->withQueryString();
         $purchases = PurchaseOrder::query()->where('business_id', $business->id)
             ->whereIn('status', ['part_received', 'received'])->with(['supplier', 'product'])
             ->whereRaw('(SELECT COALESCE(SUM(accepted_quantity),0) FROM goods_receipts WHERE goods_receipts.business_id=purchase_orders.business_id AND goods_receipts.purchase_order_id=purchase_orders.id) > (SELECT COALESCE(SUM(accepted_quantity),0) FROM finance_supplier_bills WHERE finance_supplier_bills.business_id=purchase_orders.business_id AND finance_supplier_bills.purchase_order_id=purchase_orders.id)')
             ->when($filters['purchase_search'] ?? null, fn ($query, $term) => $query->where(fn ($query) => $query
                 ->where('reference', 'like', '%'.$term.'%')->orWhere('vendor_name', 'like', '%'.$term.'%')
                 ->orWhereHas('supplier', fn ($supplier) => $supplier->where('name', 'like', '%'.$term.'%'))))
-            ->orderByDesc('id')->paginate(15, ['*'], 'purchase_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'purchase_page')->withQueryString();
         $payments = FinancePayment::query()->where('business_id', $business->id)
-            ->with(['invoice.customer', 'bill.purchase', 'cashAccount'])->latest()->paginate(15, ['*'], 'payments');
+            ->with(['invoice.customer', 'bill.purchase', 'cashAccount'])->latest()->workspacePaginate(15, ['*'], 'payments');
         $costs = FinanceShipmentCost::query()->where('business_id', $business->id)
-            ->with(['shipment', 'cashAccount'])->latest()->paginate(15, ['*'], 'costs');
+            ->with(['shipment', 'cashAccount'])->latest()->workspacePaginate(15, ['*'], 'costs');
         $invoices = $finance->outstandingQuery($business, true)->with('customer')
             ->when($filters['invoice_search'] ?? null, fn ($query, $term) => $query->where(fn ($query) => $query
                 ->where('reference', 'like', '%'.$term.'%')
                 ->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', '%'.$term.'%'))))
-            ->orderByDesc('id')->paginate(15, ['*'], 'invoice_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'invoice_page')->withQueryString();
         $payableBills = $finance->outstandingQuery($business, false)->with('purchase.supplier')
             ->when($filters['bill_search'] ?? null, fn ($query, $term) => $query->where(fn ($query) => $query
                 ->where('reference', 'like', '%'.$term.'%')->orWhere('vendor_invoice_reference', 'like', '%'.$term.'%')
                 ->orWhereHas('purchase', fn ($purchase) => $purchase->where('reference', 'like', '%'.$term.'%')
                     ->orWhere('vendor_name', 'like', '%'.$term.'%')
                     ->orWhereHas('supplier', fn ($supplier) => $supplier->where('name', 'like', '%'.$term.'%')))))
-            ->orderByDesc('id')->paginate(15, ['*'], 'payable_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'payable_page')->withQueryString();
         $shipments = ExportShipment::query()->where('business_id', $business->id)
             ->where('status', '!=', 'cancelled')
             ->when($filters['shipment_search'] ?? null, fn ($query, $term) => $query->where(fn ($query) => $query
                 ->where('reference', 'like', '%'.$term.'%')->orWhere('air_waybill', 'like', '%'.$term.'%')))
-            ->orderByDesc('id')->paginate(15, ['*'], 'shipment_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'shipment_page')->withQueryString();
         $invoiceBalances = $invoices->mapWithKeys(fn ($i) => [$i->id => (string) $finance->outstanding($i)]);
         $billBalances = $payableBills->mapWithKeys(fn ($i) => [$i->id => (string) $finance->outstanding($i)]);
         $cashCustodies = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
@@ -281,7 +281,7 @@ class FinanceController extends Controller
         $request->validate(['source_search' => ['nullable', 'string', 'max:120']]);
         $sourceSearch = trim((string) $request->input('source_search'));
         $requests = FinancePostingRequest::query()->where('business_id', $business->id)
-            ->with('exchangeRate')->orderByDesc('id')->paginate(35)->withQueryString();
+            ->with('exchangeRate')->orderByDesc('id')->workspacePaginate(35)->withQueryString();
         $canSubmit = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'finance.reviews.request');
         $canApprove = app(BusinessPermissions::class)->allows(
@@ -292,61 +292,61 @@ class FinanceController extends Controller
             ->where('status', 'approved')->orderByDesc('effective_on')->get();
         $invoices = CommercialInvoice::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->with('shipment')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_invoices_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_invoices_page')->withQueryString();
         $bills = FinanceSupplierBill::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_bills_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_bills_page')->withQueryString();
         $payments = FinancePayment::query()->where('business_id', $business->id)
             ->where('status', 'pending')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_payments_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_payments_page')->withQueryString();
         $costs = FinanceShipmentCost::query()->where('business_id', $business->id)
             ->where('status', 'pending')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_costs_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_costs_page')->withQueryString();
         $reliefs = FinanceInventoryRelief::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_reliefs_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_reliefs_page')->withQueryString();
         $creditNotes = FinanceCreditNote::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_creditNotes_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_creditNotes_page')->withQueryString();
         $openingBalances = FinanceOpeningBalance::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_openingBalances_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_openingBalances_page')->withQueryString();
         $balanceAdjustments = FinanceBalanceAdjustment::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_balanceAdjustments_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_balanceAdjustments_page')->withQueryString();
         $payrollRuns = FinancePayrollRun::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_payrollRuns_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_payrollRuns_page')->withQueryString();
         $payrollSettlements = FinancePayrollSettlement::query()->where('business_id', $business->id)
             ->where('status', 'pending')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_payrollSettlements_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_payrollSettlements_page')->withQueryString();
         $payrollReversals = FinancePayrollReversal::query()->where('business_id', $business->id)
             ->where('posting_status', 'not_posted')->with('run')->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_payrollReversals_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_payrollReversals_page')->withQueryString();
         $transactionReversals = FinanceTransactionReversal::query()
             ->where('business_id', $business->id)->where('posting_status', 'not_posted')
             ->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_transactionReversals_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_transactionReversals_page')->withQueryString();
         $partialReturns = FinancePartialBankReturn::query()
             ->where('business_id', $business->id)->where('posting_status', 'not_posted')
             ->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_partialReturns_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_partialReturns_page')->withQueryString();
         $monetaryRevaluations = FinanceMonetaryRevaluation::query()
             ->where('business_id', $business->id)->where('posting_status', 'not_posted')
             ->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_monetaryRevaluations_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_monetaryRevaluations_page')->withQueryString();
         $fxRevaluations = FinanceFxRevaluation::query()
             ->where('business_id', $business->id)->where('posting_status', 'not_posted')
             ->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_fxRevaluations_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_fxRevaluations_page')->withQueryString();
         $foreignBankOpenings = FinanceForeignBankOpening::query()
             ->where('business_id', $business->id)->where('posting_status', 'not_posted')
             ->when($sourceSearch !== '', fn ($query) => $query->where('reference', 'like', '%'.$sourceSearch.'%'))
-            ->orderByDesc('id')->paginate(15, ['*'], 'source_foreignBankOpenings_page')->withQueryString();
-        $operations = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_money_page')->withQueryString();
-        $registerEntries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_register_page')->withQueryString();
-        $workflows = FinanceWorkflow::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_workflow_page')->withQueryString();
-        $stockAdjustments = StockAdjustment::query()->where('business_id', $business->id)->where('status', 'approved')->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->paginate(15, ['*'], 'source_stock_adjustment_page')->withQueryString();
+            ->orderByDesc('id')->workspacePaginate(15, ['*'], 'source_foreignBankOpenings_page')->withQueryString();
+        $operations = FinanceOperation::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->workspacePaginate(15, ['*'], 'source_money_page')->withQueryString();
+        $registerEntries = FinanceRegisterEntry::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->workspacePaginate(15, ['*'], 'source_register_page')->withQueryString();
+        $workflows = FinanceWorkflow::query()->where('business_id', $business->id)->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->workspacePaginate(15, ['*'], 'source_workflow_page')->withQueryString();
+        $stockAdjustments = StockAdjustment::query()->where('business_id', $business->id)->where('status', 'approved')->where('posting_status', 'not_posted')->when($sourceSearch !== '', fn ($q) => $q->where('reference', 'like', '%'.$sourceSearch.'%'))->latest('id')->workspacePaginate(15, ['*'], 'source_stock_adjustment_page')->withQueryString();
         $hasPending = FinancePostingRequest::query()->where('business_id', $business->id)
             ->whereIn('status', ['pending', 'approved'])
             ->get(['source_type', 'source_id'])->map(fn ($r) => $r->source_type.':'.$r->source_id)->all();

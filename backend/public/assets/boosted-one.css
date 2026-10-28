@@ -440,3 +440,5 @@ body { font-size:17px; line-height:1.72; }
 .preview-top .preview-identity { overflow-wrap:anywhere; }
 .preview-steps strong, .preview-steps small { overflow-wrap:break-word; }
 .hero-home h1, .page-hero h1 { overflow-wrap:break-word; }
+
+.brand-logo{display:block;width:42px;height:42px;flex:none}.site-brand .brand-type strong{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}

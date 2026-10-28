@@ -38,7 +38,7 @@ class PackingJobController extends Controller
         $this->check($request, 'packing.view');
         $businessId = $request->attributes->get('activeBusiness')->id;
         $jobs = PackingJob::query()->where('business_id', $businessId)
-            ->with('product')->withCount(['cartons', 'losses'])->latest()->paginate(20);
+            ->with('product')->withCount(['cartons', 'losses'])->latest()->workspacePaginate(20);
         $products = Product::query()->where('business_id', $businessId)
             ->where('active', true)->orderBy('name')->get();
         $canManage = app(BusinessPermissions::class)->allows(

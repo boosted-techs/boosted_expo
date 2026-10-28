@@ -19,14 +19,14 @@
 </section>
 <section class="section-card form-narrow">
 <h2>Product photographs</h2>
-<p class="muted">Upload up to four images. The system creates an optimised photo and a thumbnail on Cloudflare R2.</p>
+<p class="muted">Upload up to four product photos.</p>
 @if(app(\App\Services\ProductImages::class)->configured() && $product->images()->count() < 4)
 <form method="POST" action="{{ route('products.images.store', $product->id) }}" enctype="multipart/form-data" class="form-stack">@csrf
 <label class="field"><span>Upload image</span><input type="file" accept=".jpg,.jpeg,.png,.webp" name="photo" required><small>JPEG, PNG or WebP, up to 4 MB per image.</small></label>
 <button class="secondary-button">Upload photograph</button>
 </form>
 @elseif(!app(\App\Services\ProductImages::class)->configured())
-<p class="notice-message">Image storage is not connected yet. Ask your platform administrator to configure Cloudflare R2.</p>
+<p class="notice-message">Photo uploads are unavailable. Contact your administrator.</p>
 @else
 <p class="form-hint">The maximum number of photographs has been reached.</p>
 @endif

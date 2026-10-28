@@ -20,7 +20,7 @@
 <img class="small-thumb" src="{{ route('products.images.show', ['product'=>$product->id, 'image'=>$product->images->first()->id, 'size'=>'thumb']) }}" alt="" loading="lazy">
 @endif
 <div><strong>{{ $product->name }}</strong><small>{{ \Illuminate\Support\Str::limit($product->description, 95) }}</small></div></div></td><td>{{ $product->sku }}</td><td>{{ $product->base_unit }}</td><td><span class="tiny-pill">{{ $product->active ? 'Active' : 'Archived' }}</span></td>
-@if($canManage)<td><a class="action-link" href="{{ route('products.edit', $product->id) }}">Edit</a></td>@endif
+@if($canManage)<td><a class="action-link" href="{{ route('products.edit', $product->id) }}">Edit</a><x-archive-action type="product" :record="$product" /></td>@endif
 </tr>
 @empty<tr><td colspan="{{ $canManage ? 5 : 4 }}" class="empty-msg">No products found. @if($canManage) Add your first product below. @endif</td></tr>
 @endforelse
@@ -35,7 +35,7 @@
 </select></label>
 <label class="field"><span>Description (optional)</span><textarea name="description" rows="3" maxlength="3000">{{ old('description') }}</textarea></label>
 <button class="primary-button" type="submit">Add product</button></form>
-<p class="form-hint">Product photographs and Cloudflare R2 media uploads are being prepared in a separate integration pass.</p>
+
 </section>
 @endif
 </div>

@@ -70,7 +70,7 @@ class PeopleRotaAttendanceTest extends TestCase
         $this->assertNotNull($shift->fresh()->published_at);
         $this->assertDatabaseCount('business_memberships', 3);
         $this->assertDatabaseCount('users', 3);
-        $this->get(route('people.index'))->assertOk()->assertSee('Casual Grader')->assertSee('22:00');
+        $this->get(route('people.activity', 'weekly'))->assertOk()->assertSee('Casual Grader')->assertSee('22:00');
     }
 
     public function test_staff_cannot_see_unpublished_rota_or_other_workers_personal_attendance(): void
@@ -78,9 +78,9 @@ class PeopleRotaAttendanceTest extends TestCase
         $c = $this->context();
         $r = $this->rota($c);
         $shift = $this->shift($c, $r);
-        $this->as($c, 'worker')->get(route('people.index'))->assertOk()->assertDontSee('Casual Grader')->assertDontSee('22:00');
+        $this->as($c, 'worker')->get(route('people.activity', 'weekly'))->assertOk()->assertDontSee('Casual Grader')->assertDontSee('22:00');
         $this->as($c)->post(route('people.rotas.publish', $r))->assertSessionHasNoErrors();
-        $this->as($c, 'worker')->get(route('people.index'))->assertOk()->assertSee('22:00')->assertDontSee('Casual Grader');
+        $this->as($c, 'worker')->get(route('people.activity', 'weekly'))->assertOk()->assertSee('22:00')->assertDontSee('Casual Grader');
         $this->post(route('people.register'), ['name' => 'Unauthorized staff', 'staff_code' => 'BAD', 'kind' => 'employee'])->assertForbidden();
     }
 

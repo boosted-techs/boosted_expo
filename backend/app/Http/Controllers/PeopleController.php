@@ -37,17 +37,34 @@ class PeopleController extends Controller
         $b = $request->attributes->get('activeBusiness');
         $manager = app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'staff.manage');
         abort_unless(app(BusinessPermissions::class)->allows($request->attributes->get('membership'), 'staff.clock'), 403);
+        $activities = [
+            'weekly' => ['Weekly schedule', 'Review assignments and shifts for the week.'],
+            'directory' => ['Staff directory', 'Find employees and casual workers.'],
+            'register' => ['Register a worker', 'Add a staff record and skills.'],
+            'rotas' => ['Weekly rotas', 'Manage draft rotas and publish assignments.'],
+            'rota-create' => ['Create a rota', 'Start a weekly rota or reuse a previous one.'],
+            'coverage' => ['Staffing coverage', 'Check the people and skills needed at each location.'],
+            'availability' => ['Availability & leave', 'Record approved leave and availability.'],
+            'attendance' => ['Team attendance', 'Review observed work and approve resolved time.'],
+            'attendance-record' => ['Record attendance', 'Record a completed supervisor observation.'],
+            'corrections' => ['Time corrections', 'Review proposed attendance corrections.'],
+            'tasks' => ['Assigned work', 'Review tasks and update your work.'],
+        ];
+        $activity = $request->route('activity', 'overview');
+        abort_unless($activity === 'overview' || isset($activities[$activity]), 404);
+        abort_if(! $manager && ! in_array($activity, ['overview', 'weekly', 'attendance', 'tasks'], true), 403);
+        [$activityTitle,$activityDescription] = $activities[$activity] ?? ['People & work', 'Choose the activity you want to work on.'];
         $data = $request->validate(['week' => ['nullable', 'date_format:Y-m-d']]);
         $week = Carbon::parse($data['week'] ?? today('Africa/Kampala')->toDateString(), 'Africa/Kampala')->startOfWeek();
         $end = $week->copy()->addWeek();
         $people = StaffPerson::query()->where('business_id', $b->id)->when(! $manager, fn ($q) => $q->where('user_id', $request->user()->id))->orderBy('name')->get();
         $shifts = StaffShift::query()->where('business_id', $b->id)->where('starts_at', '>=', $week->copy()->utc())->where('starts_at', '<', $end->copy()->utc())->when(! $manager, fn ($q) => $q->where('user_id', $request->user()->id)->whereNotNull('published_at'))->with('person', 'user', 'attendances')->orderBy('starts_at')->get();
-        $attendance = StaffAttendance::query()->where('business_id', $b->id)->when(! $manager, fn ($q) => $q->where('user_id', $request->user()->id))->with('person', 'user', 'shift')->orderByDesc('clocked_in_at')->paginate(25);
-        $corrections = StaffAttendanceCorrection::query()->where('business_id', $b->id)->where('status', 'pending')->when(! $manager, fn ($q) => $q->where('requested_by', $request->user()->id))->latest('id')->limit(40)->get();
+        $attendance = StaffAttendance::query()->where('business_id', $b->id)->when(! $manager, fn ($q) => $q->where('user_id', $request->user()->id))->with('person', 'user', 'shift')->orderByDesc('clocked_in_at')->workspacePaginate(25);
+        $corrections = StaffAttendanceCorrection::query()->where('business_id', $b->id)->where('status', 'pending')->when(! $manager, fn ($q) => $q->where('requested_by', $request->user()->id))->latest('id')->workspacePaginate(25, ['*'], 'corrections_page');
         $rotas = $manager ? StaffRota::query()->where('business_id', $b->id)->whereDate('week_start', $week->toDateString())->latest('id')->get() : collect();
         $members = $manager ? BusinessMembership::query()->where('business_id', $b->id)->where('active', true)->with('user')->get() : collect();
         $leaves = $manager ? StaffLeave::query()->where('business_id', $b->id)->where('ends_at', '>=', $week->copy()->utc())->where('starts_at', '<', $end->copy()->utc())->with('person')->get() : collect();
-        $tasks = OrderTask::query()->where('business_id', $b->id)->whereIn('staff_person_id', $people->modelKeys())->whereNotIn('status', ['completed', 'cancelled'])->with('person', 'order')->orderBy('due_at')->limit(50)->get();
+        $tasks = OrderTask::query()->where('business_id', $b->id)->whereIn('staff_person_id', $people->modelKeys())->whereNotIn('status', ['completed', 'cancelled'])->with('person', 'order')->orderBy('due_at')->workspacePaginate(25, ['*'], 'tasks_page');
         $breaks = StaffBreak::query()->where('business_id', $b->id)->whereIn('staff_attendance_id', $attendance->modelKeys())->get()->groupBy('staff_attendance_id');
         $coverage = [];
         if ($manager) {
@@ -58,7 +75,7 @@ class PeopleController extends Controller
         }
         $templateRotas = $manager ? StaffRota::query()->where('business_id', $b->id)->latest('week_start')->get() : collect();
 
-        return view('people.index', compact('coverage', 'templateRotas', 'b', 'manager', 'week', 'end', 'people', 'shifts', 'attendance', 'corrections', 'rotas', 'members', 'leaves', 'tasks', 'breaks'));
+        return view('people.index', compact('activity', 'activities', 'activityTitle', 'activityDescription', 'coverage', 'templateRotas', 'b', 'manager', 'week', 'end', 'people', 'shifts', 'attendance', 'corrections', 'rotas', 'members', 'leaves', 'tasks', 'breaks'));
     }
 
     public function person(Request $request): RedirectResponse

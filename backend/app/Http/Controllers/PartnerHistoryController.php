@@ -62,7 +62,7 @@ class PartnerHistoryController extends Controller
                 }fclose($out);
             }, $b->code.'-supplier-receiving.csv', ['Content-Type' => 'text/csv', 'Cache-Control' => 'private, no-store']);
         }
-        $receipts = $query->orderByDesc('received_on')->orderByDesc('id')->paginate(30)->withQueryString();
+        $receipts = $query->orderByDesc('received_on')->orderByDesc('id')->workspacePaginate(30)->withQueryString();
         $suppliers = Supplier::query()->where('business_id', $b->id)->orderBy('name')->get();
         $products = Product::query()->where('business_id', $b->id)->orderBy('name')->get();
 
@@ -94,10 +94,10 @@ class PartnerHistoryController extends Controller
         $permissions = app(BusinessPermissions::class);
         abort_unless($permissions->allows($request->attributes->get('membership'), $kind === 'supplier' ? 'suppliers.view' : 'customers.view'), 403);
         $record = ($kind === 'supplier' ? Supplier::query() : Customer::query())->where('business_id', $b->id)->findOrFail($partner);
-        $purchases = $kind === 'supplier' ? PurchaseOrder::query()->where('business_id', $b->id)->where('supplier_id', $record->id)->with('product', 'receipts')->latest('id')->paginate(20) : collect();
-        $orders = $kind === 'customer' ? SalesOrder::query()->where('business_id', $b->id)->where('customer_id', $record->id)->latest('id')->paginate(20) : collect();
+        $purchases = $kind === 'supplier' ? PurchaseOrder::query()->where('business_id', $b->id)->where('supplier_id', $record->id)->with('product', 'receipts')->latest('id')->workspacePaginate(20) : collect();
+        $orders = $kind === 'customer' ? SalesOrder::query()->where('business_id', $b->id)->where('customer_id', $record->id)->latest('id')->workspacePaginate(20) : collect();
         $canMoney = $permissions->allows($request->attributes->get('membership'), 'finance.view');
-        $bills = $canMoney ? ($kind === 'supplier' ? FinanceSupplierBill::query()->where('business_id', $b->id)->whereHas('purchase', fn ($q) => $q->where('supplier_id', $record->id))->latest('id')->paginate(20, ['*'], 'bill_page') : CommercialInvoice::query()->where('business_id', $b->id)->where('customer_id', $record->id)->latest('id')->paginate(20, ['*'], 'bill_page')) : collect();
+        $bills = $canMoney ? ($kind === 'supplier' ? FinanceSupplierBill::query()->where('business_id', $b->id)->whereHas('purchase', fn ($q) => $q->where('supplier_id', $record->id))->latest('id')->workspacePaginate(20, ['*'], 'bill_page') : CommercialInvoice::query()->where('business_id', $b->id)->where('customer_id', $record->id)->latest('id')->workspacePaginate(20, ['*'], 'bill_page')) : collect();
         $data = $request->validate(['from' => ['nullable', 'date_format:Y-m-d'], 'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from']]);
         $from = $data['from'] ?? today('Africa/Kampala')->subDays(29)->toDateString();
         $to = $data['to'] ?? today('Africa/Kampala')->toDateString();
@@ -125,7 +125,7 @@ class PartnerHistoryController extends Controller
                 }
             }
         }
-        $followups = PartnerFollowup::query()->where('business_id', $b->id)->where($kind.'_id', $record->id)->with('person')->orderBy('due_at')->paginate(15, ['*'], 'followup_page');
+        $followups = PartnerFollowup::query()->where('business_id', $b->id)->where($kind.'_id', $record->id)->with('person')->orderBy('due_at')->workspacePaginate(15, ['*'], 'followup_page');
         $people = StaffPerson::query()->where('business_id', $b->id)->where('active', true)->orderBy('name')->get();
         $canFollowup = $permissions->allows($request->attributes->get('membership'), $kind === 'supplier' ? 'purchases.create' : 'sales.manage');
 

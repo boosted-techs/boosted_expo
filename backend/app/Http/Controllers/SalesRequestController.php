@@ -24,7 +24,7 @@ class SalesRequestController extends Controller
         $this->authorizeAction($request, 'sales.view');
         $b = $request->attributes->get('activeBusiness')->id;
         $requests = SalesRequest::query()->where('business_id', $b)
-            ->with('customer')->withCount('quotations')->latest()->paginate(20);
+            ->with('customer')->withCount('quotations')->latest()->workspacePaginate(20);
         $canManage = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'sales.manage');
 

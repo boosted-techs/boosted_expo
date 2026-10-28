@@ -8,7 +8,7 @@
 @if(in_array($kind,\App\Services\FinanceOperations::CHILDREN,true))
 <label class="field"><span>Posted source to clear</span><select name="parent_id" required><option value="">Choose source</option>@foreach($parents as $parent)@if(\Brick\Math\BigDecimal::of($balances[$parent->id])->isGreaterThan(0))<option value="{{ $parent->id }}" @selected(old('parent_id')==$parent->id)>{{ $parent->reference }} · {{ $parent->description }} · {{ $parent->currency }} {{ $balances[$parent->id] }} available</option>@endif
 @endforeach</select></label>
-<p class="form-hint">The source supplies the customer, supplier, staff member and linked work. Use its currency. Pending records reserve part of the balance.</p>
+<p class="form-hint">Choose the linked document and use its currency. Pending entries reserve the amount.</p>
 @else
 @php $party=match($kind){'customer_deposit'=>'customer_id','supplier_advance'=>'supplier_id','staff_advance','market_reimbursement'=>'staff_person_id',default=>null}; @endphp
 @if($party)<label class="field"><span>{{ ucwords(str_replace('_',' ',str_replace('_id','',$party))) }}</span><select name="{{ $party }}" required><option value="">Choose</option>@foreach($lookups[$party] as $row)<option value="{{ $row->id }}" @selected(old($party)==$row->id)>{{ $row->name }}</option>@endforeach</select></label>@endif

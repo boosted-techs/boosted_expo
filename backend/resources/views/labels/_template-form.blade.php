@@ -9,7 +9,7 @@
 <label class="field"><span>Text size (mm)</span><input name="layout[font_mm]" type="number" min="1.5" max="6" step=".1" value="{{ old('layout.font_mm',$template->layout['font_mm'] ?? 2.5) }}"></label>
 <div class="field"><span>Text to print</span><div class="print-fields">@foreach($fields as $key=>$name)<label class="check-row"><input type="checkbox" name="visible_fields[]" value="{{ $key }}" @checked(in_array($key,old('visible_fields',$template->visible_fields ?? ['company','product','carton','net']),true))> {{ $name }}</label>@endforeach</div></div>
 <details><summary>Required information, layout, logo and defaults</summary>
-<p class="form-hint">Missing required values and overflowing text block printing. Blank positions use automatic layout; custom positions are measured from the media's printable top-left. Codes cannot overlap text.</p>
+<p class="form-hint">Fill required values and keep text within the label. Leave positions blank for automatic layout.</p>
 @foreach($fields as $key=>$name)
 <details style="margin:12px 0"><summary>{{ $name }}</summary>
 <label class="check-row"><input name="required_fields[]" type="checkbox" value="{{ $key }}" @checked(in_array($key,old('required_fields',$template->required_fields ?? ['carton','net']),true))> Required before printing</label>
@@ -25,6 +25,6 @@
 <div class="form-columns"><label class="field"><span>Customer restriction / default</span><select name="customer_id"><option value="">All customers</option>@foreach($customers as $customer)<option value="{{ $customer->id }}" @selected(old('customer_id',$template->customer_id ?? null)==$customer->id)>{{ $customer->name }}</option>@endforeach</select></label><label class="field"><span>Product restriction / default</span><select name="product_id"><option value="">All products</option>@foreach($products as $product)<option value="{{ $product->id }}" @selected(old('product_id',$template->product_id ?? null)==$product->id)>{{ $product->name }}</option>@endforeach</select></label></div>
 <input type="hidden" name="is_default" value="0"><label class="check-row"><input name="is_default" value="1" type="checkbox" @checked(old('is_default',$template->is_default ?? !$editing))> Prefer this template for matching work</label>
 </details>
-<p class="form-hint">Saving approves this version under your account. Preview against real cartons before printing. Original generated stickers keep their saved output.</p>
+<p class="form-hint">Preview a test label before saving. Existing stickers keep their original layout.</p>
 <button class="primary-button">{{ $editing ? 'Approve and save new version' : 'Approve and save template' }}</button>
 <script src="/assets/label-ui.js" defer></script>

@@ -23,9 +23,9 @@ class BusinessPlatformController extends Controller
         $business = $request->attributes->get('activeBusiness');
 
         return view('businesses.subscription-status', ['business' => $business, 'entitlement' => $tenancy->state($business), 'owners' => $business->memberships()->where('role', 'owner')->where('active', true)->with('user')->get(),
-            'grants' => PlatformSupportGrant::query()->where('business_id', $business->id)->latest('id')->paginate(15),
-            'cases' => PlatformCase::query()->where('business_id', $business->id)->latest('id')->paginate(15, ['*'], 'case_page'),
-            'supportEvents' => PlatformAuditEvent::query()->where('business_id', $business->id)->where('action', 'like', 'support.%')->latest('id')->paginate(20, ['*'], 'support_page')]);
+            'grants' => PlatformSupportGrant::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(15),
+            'cases' => PlatformCase::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(15, ['*'], 'case_page'),
+            'supportEvents' => PlatformAuditEvent::query()->where('business_id', $business->id)->where('action', 'like', 'support.%')->latest('id')->workspacePaginate(20, ['*'], 'support_page')]);
     }
 
     public function grant(Request $request, int $grant): RedirectResponse
@@ -65,6 +65,6 @@ class BusinessPlatformController extends Controller
         $business = $request->attributes->get('activeBusiness');
         app(PlatformAccess::class)->audit($business->id, $request->user()->id, 'business.export', $data['reason'], [], ['scope' => 'Structured operational and accounting records; see file manifest for exclusions.']);
 
-        return response()->streamDownload(fn () => $export->write($business),$business->code.'-business-records.json',['Content-Type' => 'application/json', 'Cache-Control' => 'private, no-store']);
+        return response()->streamDownload(fn () => $export->write($business), $business->code.'-business-records.json', ['Content-Type' => 'application/json', 'Cache-Control' => 'private, no-store']);
     }
 }

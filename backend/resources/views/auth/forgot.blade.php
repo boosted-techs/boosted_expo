@@ -3,7 +3,7 @@
 @section('content')
 <span class="eyebrow">ACCOUNT RECOVERY</span>
 <h1>Forgot your password?</h1>
-<p class="subhead">Enter the email address linked to your Boosted One account. If it matches an account, we will email you a secure link to set a new password.</p>
+<p class="subhead">Enter your account email to request a password reset link.</p>
 
 <form method="POST" action="{{ route('password.email') }}" class="form-stack">
   @csrf

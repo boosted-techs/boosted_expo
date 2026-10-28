@@ -27,7 +27,7 @@
 <div class="record"><strong>Confirmed value</strong><span>{{ $shipment->salesOrder->currency }} {{ $shipment->salesOrder->grand_total }}</span></div>
 <p class="form-hint">Only this shipment's assigned cartons can be invoiced. Other order quantities remain available for additional shipments.</p>
 @else
-<p class="notice-message">This shipment is not linked to a confirmed sales order. It may still be used for operational dispatch and packing documents, but not commercial invoicing.</p>
+<p class="notice-message">Link a confirmed order to issue a commercial invoice.</p>
 @if($canManage && $shipment->status==='draft')
 <a href="{{ route('sales-orders.index') }}" class="action-link">Link via confirmed sales orders</a>
 @endif
@@ -64,7 +64,7 @@
 @if($canManage && $shipment->status==='draft')
 <section class="section-card">
 <h2>Allocate packed cartons</h2>
-<p class="muted">Only cartons from completed packing jobs can be allocated. A carton cannot belong to two shipments. Adding it here does not deduct stock a second time.</p>
+<p class="muted">Add cartons from completed packing jobs. Each carton can belong to one shipment.</p>
 <form method="GET" action="{{ route('shipments.show',$shipment->id) }}" class="search-row">
 <label class="field grow"><span>Find carton by reference</span><input name="carton_search" type="search" placeholder="Enter carton code" value="{{ request('carton_search') }}"></label><button class="secondary-button">Find</button></form>
 <form method="POST" action="{{ route('shipments.allocate',$shipment->id) }}" class="form-stack">@csrf
@@ -82,7 +82,7 @@
 @include('shipments._readiness')
 <section class="section-card"><h2>Shipment control</h2>
 @if($shipment->status==='draft' && $canManage)
-<p class="muted">When all carton assignments, flight details and AWB are correct, mark this shipment ready. You can still reopen it before dispatch.</p>
+<p class="muted">Check cartons, flight details and AWB, then mark ready.</p>
 <form method="POST" action="{{ route('shipments.ready',$shipment->id) }}" class="form-actions">@csrf
 <button class="primary-button">Mark shipment ready</button></form>
 @elseif($shipment->status==='ready')
@@ -138,7 +138,7 @@
 </section>
 @if($canViewDocs)
 <section class="section-card"><h2>Export paperwork</h2>
-<p class="muted">Packing lists include buyer, carton, farmer/batch and weight details. Dispatch notes record cargo handover information without inventing customer prices or regulatory approvals.</p>
+<p class="muted">Issue a packing list or a cargo handover note.</p>
 @if($canGenerate && in_array($shipment->status,['ready','dispatched','delivered'],true))
 @if($documentTemplates->isNotEmpty())
 @foreach($documentTemplates as $template)
@@ -168,12 +168,12 @@
 <div class="record"><div><strong>{{ $shipment->commercialInvoice->reference }}</strong><small>{{ $shipment->commercialInvoice->currency }} {{ $shipment->commercialInvoice->grand_total }} · Not posted to financial ledger</small></div>
 <a class="action-link" href="{{ route('commercial-invoices.show',$shipment->commercialInvoice->id) }}">View invoice</a></div>
 @elseif($canInvoice && $shipment->sales_order_id && in_array($shipment->status,['ready','dispatched','delivered'],true))
-<p class="muted">Issue a commercial invoice using the quantities actually allocated to this shipment and the accepted sales order's unit prices. Freight and insurance are optional additions in the same currency.</p>
+<p class="muted">Invoice the allocated quantities at the agreed prices. Add freight and insurance if applicable.</p>
 <form method="POST" action="{{ route('commercial-invoices.issue',$shipment->id) }}" class="form-stack">@csrf
 <div class="form-columns"><label class="field"><span>Freight ({{ $shipment->salesOrder->currency }})</span><input name="freight_amount" type="number" min="0" step=".01" required value="0.00"></label>
 <label class="field"><span>Insurance ({{ $shipment->salesOrder->currency }})</span><input name="insurance_amount" type="number" min="0" step=".01" required value="0.00"></label></div>
 <label class="field"><span>Additional invoice note (optional)</span><textarea name="notes" rows="2" maxlength="2000"></textarea></label>
-<div class="notice"><span>●</span><div><strong>Immutable after issuance</strong><p>Review the shipment, prices, tax rate and charges carefully. The invoice cannot be edited or reissued until the future controlled amendment workflow is implemented.</p></div></div>
+<div class="notice"><span>●</span><div><strong>Immutable after issuance</strong><p>Check prices, tax and charges before issuing. Issued invoices cannot be edited or reissued here.</p></div></div>
 <button class="primary-button" data-confirm="Issue the commercial invoice now? Its contents cannot be edited afterwards.">Issue commercial invoice</button></form>
 @else<p class="form-hint">Link a confirmed customer order and mark the shipment ready before issuing a commercial invoice.</p>
 @endif
@@ -183,7 +183,7 @@
 <section class="section-card">
 <h2 id="shipment-document-evidence">Export clearance and permit references</h2>
 <div class="notice"><span>●</span><div><strong>Internal records are not government approvals</strong>
-<p>Save references from the actual issuing authority, and arrange official portal or document checks separately. The ERP does not issue a phytosanitary certificate, file a customs declaration, or claim an authority approved it. Validity, destination rules and original evidence must be verified by responsible staff.</p></div></div>
+<p>Record official permit references. Verify validity and destination requirements with the issuing authority.</p></div></div>
 @if($canGenerate && $shipment->status!=='cancelled')
 <form method="POST" action="{{ route('shipments.clearance.submit',$shipment->id) }}" enctype="multipart/form-data" class="form-stack form-narrow">@csrf
 <label class="field"><span>Document type</span><select name="document_kind" required>
@@ -223,7 +223,7 @@
 </section>
 @endif
 <section class="section-card"><h2>Carrier notifications</h2>
-<p class="muted">Only externally signed notifications from independently provisioned carrier accounts are shown. These are audit evidence; official airwaybill tracing and any manual dispatch/delivery updates still require review.</p>
+<p class="muted">Review carrier updates against the official AWB before recording dispatch or delivery.</p>
 @forelse($providerCarrierEvents as $event)
 <div class="record"><div><strong>{{ str_replace('_',' ',ucfirst($event->event_type)) }}</strong>
 <small>AWB: {{ $event->external_reference }} · {{ $event->occurred_at->format('d M Y H:i') }}</small></div>

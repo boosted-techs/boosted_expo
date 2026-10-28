@@ -52,7 +52,7 @@ class BoostedOnePasswordResetTest extends TestCase
         $this->get(route('password.request'))
             ->assertOk()
             ->assertSee('Email password reset link')
-            ->assertSee('the email address linked');
+            ->assertSee('Enter your account email');
     }
 
     public function test_password_reset_email_has_a_usable_link_to_the_new_password_form(): void

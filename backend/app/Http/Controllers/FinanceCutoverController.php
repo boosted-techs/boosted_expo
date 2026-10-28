@@ -33,8 +33,8 @@ class FinanceCutoverController extends Controller
         $business = $request->attributes->get('activeBusiness');
         $request->validate(['search' => ['nullable', 'string', 'max:120']]);
         $search = trim((string) $request->input('search'));
-        $cutovers = FinanceCutover::query()->where('business_id', $business->id)->latest('id')->paginate(10, ['*'], 'cutover_page')->withQueryString();
-        $items = FinanceOpeningItem::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->orderBy('due_on')->orderBy('id')->paginate(30, ['*'], 'item_page')->withQueryString();
+        $cutovers = FinanceCutover::query()->where('business_id', $business->id)->latest('id')->workspacePaginate(10, ['*'], 'cutover_page')->withQueryString();
+        $items = FinanceOpeningItem::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('reference', 'like', '%'.$search.'%'))->orderBy('due_on')->orderBy('id')->workspacePaginate(30, ['*'], 'item_page')->withQueryString();
         $states = $items->mapWithKeys(fn ($item) => [$item->id => $openings->position($item, true)]);
         $banks = FinanceBankProfile::query()->where('business_id', $business->id)->where('active', true)->orderBy('label')->get();
         $cash = CashCustody::query()->where('business_id', $business->id)->where('active', true)->orderBy('name')->get();
@@ -46,7 +46,7 @@ class FinanceCutoverController extends Controller
             if ($type === 'expense') {
                 $query->whereIn('kind', ['expense', 'market_reimbursement'])->whereNotNull('staff_person_id');
             }
-            $targets[$type] = $query->latest('id')->paginate(25, ['*'], $type.'_page')->withQueryString();
+            $targets[$type] = $query->latest('id')->workspacePaginate(25, ['*'], $type.'_page')->withQueryString();
         }
         $access = app(BusinessPermissions::class);
         $member = $request->attributes->get('membership');

@@ -30,6 +30,6 @@
 {{ $name }}</label>
 @endforeach
 </div></div>
-<p class="form-hint">Documents retain a full snapshot of the selected carton data and template settings when issued. Later changes to templates do not alter previously issued paperwork.</p>
+<p class="form-hint">Template changes apply to new documents. Issued documents keep their original details.</p>
 </div>
 <script src="/assets/document-template-ui.js" defer></script>

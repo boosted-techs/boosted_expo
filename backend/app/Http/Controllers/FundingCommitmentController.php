@@ -28,7 +28,7 @@ class FundingCommitmentController extends Controller
         $search = trim((string) $r->input('search'));
         $collectionPercent = $r->input('collection_percent', '100');
         $report = $funding->report($business, $collectionPercent);
-        $plans = FundingCommitment::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('purpose', 'like', '%'.$search.'%'))->latest('id')->paginate(25, ['*'], 'plan_page')->withQueryString();
+        $plans = FundingCommitment::query()->where('business_id', $business->id)->when($search !== '', fn ($q) => $q->where('purpose', 'like', '%'.$search.'%'))->latest('id')->workspacePaginate(25, ['*'], 'plan_page')->withQueryString();
         $remaining = $plans->mapWithKeys(fn ($plan) => [$plan->id => $funding->remaining($business, $plan)]);
         $sources = [];
         foreach (['expense' => FinanceOperation::class, 'payroll' => FinancePayrollRun::class, 'asset' => FinanceRegisterEntry::class] as $type => $model) {
@@ -37,7 +37,7 @@ class FundingCommitmentController extends Controller
                 $query->whereIn('kind', ['expense', 'paid_expense', 'staff_expense', 'market_reimbursement']);
             }if ($type === 'asset') {
                 $query->where('kind', 'asset_purchase');
-            }$sources[$type] = $query->latest('id')->paginate(30, ['*'], $type.'_page')->withQueryString();
+            }$sources[$type] = $query->latest('id')->workspacePaginate(30, ['*'], $type.'_page')->withQueryString();
         }
         $access = app(BusinessPermissions::class);
         $membership = $r->attributes->get('membership');
