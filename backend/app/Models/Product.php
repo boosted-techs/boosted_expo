@@ -4,19 +4,25 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
-    protected $fillable = ['business_id', 'sku', 'name', 'description', 'base_unit', 'thumbnail_key', 'active','reorder_point'];
+    protected $fillable = ['business_id', 'sku', 'name', 'description', 'base_unit', 'thumbnail_key', 'active', 'reorder_point'];
 
     protected function casts(): array
     {
         return ['active' => 'boolean'];
     }
 
-    public function images(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class);
+    }
+
+    public function codes(): HasMany
+    {
+        return $this->hasMany(ProductCode::class);
     }
 
     public function business(): BelongsTo

@@ -74,9 +74,6 @@ class LabelPrintQueue
             if (($generation->template_snapshot['profile']['protocol'] ?? 'zpl') !== 'zpl' || ($profile && $agent->media_profile_id !== $profile)) {
                 throw ValidationException::withMessages(['agent_id' => 'Choose a ZPL workstation configured for this sticker media profile. PDF-only printers use the PDF download.']);
             }
-            if (LabelPrintJob::query()->where('business_id', $business->id)->where('generation_id', $generationId)->exists() && mb_strlen(trim((string) $reason)) < 10) {
-                throw ValidationException::withMessages(['reason' => 'Explain why another print is needed and check existing physical stickers first.']);
-            }
             $zpl = (string) $generation->zpl_snapshot;
             if (! $zpl || strlen($zpl) > 1048576 || ! str_starts_with($zpl, "^XA\n")
                 || ! str_ends_with(trim($zpl), '^XZ')
@@ -221,12 +218,12 @@ class LabelPrintQueue
                 $job->update(['status' => 'transferred', 'transferred_at' => now(), 'lease_hash' => null, 'lease_until' => null]);
             } else {
                 abort_unless(in_array($job->status, ['failed', 'uncertain', 'transferred'], true), 422, 'Only failed, uncertain or transferred jobs can be reprinted.');
-                $this->enqueue($business,$job->agent_id,$job->generation_id,$key,$actor,$job->copies,$reason,$job->id);
+                $this->enqueue($business, $job->agent_id, $job->generation_id, $key, $actor, $job->copies, $reason, $job->id);
                 if ($job->status !== 'transferred') {
                     $job->update(['status' => 'resolved', 'lease_hash' => null, 'lease_until' => null]);
                 }
             }
-            app(LabelWorkflow::class)->event($business->id,$job->generation_id,$job->id,$action,$reason,$actor);
+            app(LabelWorkflow::class)->event($business->id, $job->generation_id, $job->id, $action, $reason, $actor);
         }, 3);
     }
 }

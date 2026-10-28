@@ -50,7 +50,7 @@ class ExporterDemoTest extends TestCase
         $this->assertSame(0, $demo->user('superadmin')->memberships()->count());
         $reportPath = 'demo/coverage-'.$b->id.'.json';
         $report = json_decode(Storage::disk('local')->get($reportPath), true);
-        $this->assertCount(162, $report['model_counts']);
+        $this->assertCount(163, $report['model_counts']);
         $this->assertSame([], array_keys(array_filter($report['model_counts'], fn ($n) => $n === 0)));
         $this->assertCount(2, $report['private_demo_links']);
         $integrity = app(ReleaseIntegrityInspector::class)->inspect($b);
@@ -116,6 +116,6 @@ class ExporterDemoTest extends TestCase
     {
         app()->detectEnvironment(fn () => 'production');
         $this->artisan('expo:demo-seed')->assertFailed();
-        $this->assertDatabaseCount('businesses',0);
+        $this->assertDatabaseCount('businesses', 0);
     }
 }

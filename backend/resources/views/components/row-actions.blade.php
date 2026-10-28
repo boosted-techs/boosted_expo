@@ -1,0 +1,1 @@
+<details class="row-actions"><summary aria-label="Record actions">Actions <span aria-hidden="true">⌄</span></summary><div class="row-action-menu">{{ $slot }}</div></details>

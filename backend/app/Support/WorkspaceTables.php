@@ -22,7 +22,7 @@ class WorkspaceTables
         $model = $query->getModel();
         $table = $model->getTable();
         $key = $table.'__'.$pageName;
-        $allowedNames = ['id', 'reference', 'name', 'code', 'sku', 'staff_code', 'batch_code', 'carton_code', 'asset_code', 'vendor_name', 'purpose', 'description', 'status', 'kind', 'currency', 'location', 'market_location', 'source_reference', 'received_on', 'purchased_on', 'event_on', 'due_on', 'required_on', 'starts_at', 'ends_at', 'clocked_in_at', 'clocked_out_at', 'created_at', 'quantity', 'amount', 'estimated_total', 'unit_price', 'active', 'is_quarantined'];
+        $allowedNames = ['country_code', 'city', 'email', 'phone', 'customer_code', 'business_name', 'business_email', 'base_unit', 'version', 'dpi', 'width_mm', 'height_mm', 'qr_visibility', 'due_at', 'title', 'issued_at', 'expires_at', 'delivery_status', 'grand_total', 'id', 'reference', 'name', 'code', 'sku', 'staff_code', 'batch_code', 'carton_code', 'asset_code', 'vendor_name', 'purpose', 'description', 'status', 'kind', 'currency', 'location', 'market_location', 'source_reference', 'received_on', 'purchased_on', 'event_on', 'due_on', 'required_on', 'starts_at', 'ends_at', 'clocked_in_at', 'clocked_out_at', 'created_at', 'quantity', 'amount', 'estimated_total', 'unit_price', 'active', 'is_quarantined'];
         $existing = $this->columns[$table] ??= $model->getConnection()->getSchemaBuilder()->getColumnListing($table);
         $allowed = array_values(array_intersect($allowedNames, $existing));
         if ($model instanceof StockBatch) {
@@ -43,7 +43,7 @@ class WorkspaceTables
             $input = [];
         }
         $search = is_string($input['search'] ?? null) ? mb_substr(trim($input['search']), 0, 120) : '';
-        $textFields = array_intersect($allowed, ['reference', 'name', 'code', 'sku', 'staff_code', 'batch_code', 'carton_code', 'asset_code', 'vendor_name', 'purpose', 'description', 'location', 'market_location', 'source_reference']);
+        $textFields = array_intersect($allowed, ['customer_code', 'business_name', 'business_email', 'city', 'email', 'phone', 'reference', 'name', 'code', 'sku', 'staff_code', 'batch_code', 'carton_code', 'asset_code', 'vendor_name', 'purpose', 'description', 'location', 'market_location', 'source_reference']);
         if ($search !== '' && (count($textFields) || collect(['product', 'customer', 'supplier', 'person', 'user'])->contains(fn ($relation) => method_exists($model, $relation)))) {
             $query->where(function (Builder $nested) use ($textFields, $search, $model): void {
                 foreach ($textFields as $field) {

@@ -268,7 +268,7 @@ class PhaseZeroAPrintingTest extends TestCase
         $this->assertSame($child->id, $queue->claim($agent)['job_id']);
     }
 
-    public function test_mismatched_media_and_reprint_without_reason_are_refused(): void
+    public function test_mismatched_media_is_refused_and_reprint_note_is_optional(): void
     {
         $c = $this->context();
         $batch = $this->generate($c);
@@ -278,8 +278,8 @@ class PhaseZeroAPrintingTest extends TestCase
         [$right] = app(LabelPrintQueue::class)->register($c['business'], 'Correct media printer', $c['owner']->id, $c['profile']->id);
         $data = ['agent_id' => $right->id, 'generation_id' => $label->id, 'request_key' => (string) Str::uuid()];
         $this->post(route('labels.printers.jobs'), $data)->assertSessionHasNoErrors();
-        $this->post(route('labels.printers.jobs'), [...$data, 'request_key' => (string) Str::uuid()])->assertSessionHasErrors('reason');
-        $this->assertDatabaseCount('label_print_jobs', 1);
+        $this->post(route('labels.printers.jobs'), [...$data, 'request_key' => (string) Str::uuid()])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('label_print_jobs', 2);
     }
 
     public function test_queued_job_can_be_cancelled_but_a_live_delivery_requires_acknowledgement(): void

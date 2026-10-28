@@ -36,7 +36,12 @@ class LabelWorkflow
         if ($profile && ((float) $profile->width_mm !== (float) $template->width_mm || (float) $profile->height_mm !== (float) $template->height_mm || (int) $profile->dpi !== (int) $template->dpi)) {
             throw ValidationException::withMessages(['label' => 'Template dimensions and DPI must match its media profile. Save the template against the correct profile.']);
         }
-        $values = [
+        $attachedCode = $product->codes()->where('business_id', $business->id)->where('active', true)
+            ->where(fn ($q) => $q->whereNull('customer_id')->orWhere('customer_id', $shipment?->customer_id))
+            ->where(fn ($q) => $q->whereNull('country_code')->orWhere('country_code', $shipment?->destination_country))
+            ->orderByRaw('CASE WHEN customer_id IS NULL THEN 1 ELSE 0 END')->orderByRaw('CASE WHEN country_code IS NULL THEN 1 ELSE 0 END')->orderBy('id')->first();
+        $values = ['product_code' => $attachedCode?->code ?? $product->sku, 'farmer_code' => $batch?->source_reference,
+
             'company' => $business->name, 'customer' => $shipment?->customer?->name, 'product' => $product->name, 'sku' => $product->sku,
             'carton' => $carton->carton_code, 'grade' => $carton->grade ? 'Grade: '.$carton->grade : null,
             'batch' => 'Batch: '.($batch?->batch_code ?? 'Mixed batches'),
@@ -51,7 +56,7 @@ class LabelWorkflow
         $contents = $carton->contents->sortBy('id')->map(fn ($line) => [$line->batch_id, (string) $line->quantity, $line->batch?->batch_code])->values()->all();
 
         return ['carton_id' => $carton->id, 'product_id' => $product->id, 'batch_id' => $batch?->id, 'shipment_id' => $shipment?->id,
-            'customer_id' => $shipment?->customer_id, 'values' => $values, 'contents' => $contents,
+            'customer_id' => $shipment?->customer_id, 'values' => $values, 'barcode_values' => [...$values, 'flight' => $shipment?->flight_number, 'awb' => $shipment?->air_waybill, 'batch' => $batch?->batch_code, 'origin' => $batch?->source_reference, 'grade' => $carton->grade, 'net' => $carton->net_weight_kg, 'gross' => $carton->gross_weight_kg], 'contents' => $contents,
             'profile' => $profileData, 'template_version' => $template->version];
     }
 
@@ -70,19 +75,19 @@ class LabelWorkflow
             return route('labels.scan', $scanToken);
         }
         $identity = QrIdentity::firstOrCreate(['business_id' => $template->business_id, 'level' => $template->qr_level, 'record_id' => $id], ['public_token' => (string) Str::uuid(), 'public_enabled' => false]);
-        if ($template->qr_visibility !== 'internal' && ! $identity->public_enabled) {
-            throw ValidationException::withMessages(['label' => 'This template uses a public QR. Enable the matching public page explicitly or choose private QR in the template.']);
+        if ($template->qr_visibility !== 'internal' && (! $identity->public_enabled || ($template->qr_visibility === 'protected' && ! $identity->access_pin_hash))) {
+            throw ValidationException::withMessages(['label' => 'Set the matching product or stock QR page access before printing. Protected QR requires a secret PIN.']);
         }
 
-        return route($template->qr_visibility === 'internal' ? 'labels.trace' : 'qr.public', $identity->public_token);
+        return route($template->qr_visibility === 'internal' ? 'labels.trace' : 'qr.public', ['token' => $identity->public_token, ...($template->qr_level === 'product' ? ['label' => $scanToken] : [])]);
     }
 
     public function artwork(Carton $carton, LabelTemplate $template, string $token, array $context = []): array
     {
         abort_unless(in_array($carton->status, ['packed', 'reserved', 'ready', 'shipped', 'delivered'], true) && $carton->packingJob?->status === 'completed', 422, 'Complete packing before preparing stickers.');
         $source = $this->source($carton, $template, $context);
-        if (($context['business'] ?? Business::query()->findOrFail($carton->business_id))->label_verification_required && ! $template->include_barcode && ! ($template->qr_level === 'carton' && $template->qr_visibility === 'internal')) {
-            throw ValidationException::withMessages(['label' => 'Dispatch verification needs a revision barcode or private carton QR. Select a template with one of those codes.']);
+        if (($context['business'] ?? Business::query()->findOrFail($carton->business_id))->label_verification_required && ! ($template->include_barcode && ($template->layout['barcode_field'] ?? 'revision') === 'revision') && $template->qr_level !== 'product' && ! ($template->qr_level === 'carton' && $template->qr_visibility === 'internal')) {
+            throw ValidationException::withMessages(['label' => 'Include a revision barcode or a product/carton QR code for sticker verification.']);
         }
         foreach ($template->required_fields ?? [] as $field) {
             if (! filled($source['values'][$field] ?? null)) {
@@ -103,7 +108,13 @@ class LabelWorkflow
             return true;
         }
         try {
-            return ! hash_equals($generation->source_sha256, $this->fingerprint($this->source($generation->carton, $generation->template, $context)));
+            $current = $this->source($generation->carton, $generation->template, $context);
+            if (! array_key_exists('barcode_values', $generation->source_snapshot)) {
+                unset($current['barcode_values']);
+                $current['values'] = array_intersect_key($current['values'], $generation->source_snapshot['values'] ?? []);
+            }
+
+            return ! hash_equals($generation->source_sha256, $this->fingerprint($current));
         } catch (\Throwable) {
             return true;
         }
@@ -164,7 +175,7 @@ class LabelWorkflow
             foreach ($cartons as $carton) {
                 $token = (string) Str::ulid();
                 $result = $this->artwork($carton, $template, $token, $context);
-                $templateSnapshot = [...$template->only(['name', 'width_mm', 'height_mm', 'dpi', 'qr_level', 'qr_visibility', 'include_barcode', 'visible_fields', 'required_fields', 'media_profile_id', 'layout', 'approved_by', 'approved_at']), 'profile' => $result['source']['profile']];
+                $templateSnapshot = [...$template->only(['name', 'width_mm', 'height_mm', 'dpi', 'qr_level', 'qr_visibility', 'include_barcode', 'visible_fields', 'required_fields', 'media_profile_id', 'layout', 'approved_by', 'approved_at']), 'profile' => $result['source']['profile'], 'qr_revision' => $template->qr_level === 'product'];
                 $templateSnapshot['output_sha256'] = $this->fingerprint(['template' => $templateSnapshot, 'source' => $result['source'], 'png' => hash('sha256', base64_decode($result['png'], true)), 'zpl' => hash('sha256', $result['zpl'])]);
                 $generation = LabelGeneration::create([
                     'business_id' => $business->id, 'batch_id' => $batch->id, 'carton_id' => $carton->id, 'template_id' => $template->id,
@@ -191,10 +202,17 @@ class LabelWorkflow
             Business::query()->lockForUpdate()->findOrFail($business->id);
             $label = LabelGeneration::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($id);
             $snapshot = $label->template_snapshot ?? [];
-            if (empty($snapshot['include_barcode']) && ! (($snapshot['qr_level'] ?? '') === 'carton' && ($snapshot['qr_visibility'] ?? '') === 'internal')) {
+            if ((empty($snapshot['include_barcode']) || ($snapshot['layout']['barcode_field'] ?? 'revision') !== 'revision') && empty($snapshot['qr_revision']) && ! (($snapshot['qr_level'] ?? '') === 'carton' && ($snapshot['qr_visibility'] ?? '') === 'internal')) {
                 throw ValidationException::withMessages(['scan' => 'This layout has no scannable revision identity. Use a revision barcode or private carton QR template for application verification.']);
             }
-            if (! $label->scan_token || ! in_array(trim($scan), [$label->scan_token, 'L'.$label->scan_token, route('labels.scan', $label->scan_token)], true)) {
+            $acceptedScans = [$label->scan_token, 'L'.$label->scan_token, route('labels.scan', $label->scan_token)];
+            if (! empty($snapshot['qr_revision']) && ($snapshot['qr_level'] ?? '') === 'product') {
+                $identity = QrIdentity::query()->where('business_id', $business->id)->where('level', 'product')->where('record_id', $label->source_snapshot['product_id'] ?? 0)->first();
+                if ($identity) {
+                    $acceptedScans[] = route(($snapshot['qr_visibility'] ?? 'internal') === 'internal' ? 'labels.trace' : 'qr.public', ['token' => $identity->public_token, 'label' => $label->scan_token]);
+                }
+            }
+            if (! $label->scan_token || ! in_array(trim($scan), $acceptedScans, true)) {
                 throw ValidationException::withMessages(['scan' => 'Scan the revision code printed on this sticker. A carton name alone cannot verify the label version.']);
             }
             if ($this->stale($label)) {

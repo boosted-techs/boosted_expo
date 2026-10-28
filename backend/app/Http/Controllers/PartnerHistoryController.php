@@ -12,15 +12,18 @@ use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
 use App\Models\StaffPerson;
 use App\Models\Supplier;
+use App\Services\CatalogueStatements;
 use App\Services\OrderOperations;
 use App\Services\PlatformAccess;
 use App\Services\ProcurementMath;
 use App\Support\BusinessPermissions;
 use Brick\Math\BigDecimal;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -69,7 +72,7 @@ class PartnerHistoryController extends Controller
         return view('partners.receiving', compact('b', 'filters', 'totals', 'receipts', 'suppliers', 'products'));
     }
 
-    public function followup(Request $request, string $kind, int $partner): RedirectResponse
+    public function followup(Request $request, string $kind, int $partner): RedirectResponse|JsonResponse
     {
         $b = $request->attributes->get('activeBusiness');
         $permission = $kind === 'supplier' ? 'purchases.create' : 'sales.manage';
@@ -85,7 +88,34 @@ class PartnerHistoryController extends Controller
             app(PlatformAccess::class)->audit($b->id, $request->user()->id, 'partner.followup', $data['note'], [], ['followup_id' => $followup->id, 'status' => $followup->status]);
         });
 
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Follow-up saved. Apply filters to refresh the list.']);
+        }
+
         return back()->with('status', 'Partner follow-up ownership, deadline and result recorded.');
+    }
+
+    private function activity(Request $request, string $kind, Customer|Supplier $record): View
+    {
+        $b = $request->attributes->get('activeBusiness');
+        $access = app(BusinessPermissions::class);
+        $member = $request->attributes->get('membership');
+        $filters = $request->validate(['activity' => ['nullable', Rule::in(['history', 'orders', 'documents', 'followups'])], 'from' => ['nullable', 'date_format:Y-m-d'], 'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'], 'archived' => ['nullable', 'boolean']]);
+        $activity = $filters['activity'] ?? 'history';
+        if ($activity === 'history' && $kind === 'customer') {
+            return app(CatalogueStatementController::class)->show($request, 'customer', $record->id, app(CatalogueStatements::class));
+        }
+        $canMoney = $access->allows($member, 'finance.view');
+        $canManage = $access->allows($member, $kind === 'supplier' ? 'purchases.create' : 'sales.manage');
+        abort_if($activity === 'documents' && ! $canMoney, 403);
+        abort_if($activity === 'orders' && ! $access->allows($member, 'sales.orders.view'), 403);
+        $range = fn ($q, $date) => $q->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate($date, '>=', $v))->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate($date, '<=', $v));
+        $orders = $activity === 'orders' ? $range(SalesOrder::query()->where('business_id', $b->id)->where('customer_id', $record->id)->when($request->boolean('archived'), fn ($q) => $q->whereNotNull('archived_at'), fn ($q) => $q->whereNull('archived_at')), 'created_at')->latest('id')->workspacePaginate(20) : collect();
+        $documents = $activity === 'documents' ? $range(($kind === 'supplier' ? FinanceSupplierBill::query()->whereHas('purchase', fn ($q) => $q->where('supplier_id', $record->id)) : CommercialInvoice::query()->where('customer_id', $record->id))->where('business_id', $b->id), $kind === 'supplier' ? 'created_at' : 'issued_at')->latest('id')->workspacePaginate(20) : collect();
+        $followups = $activity === 'followups' ? $range(PartnerFollowup::query()->where('business_id', $b->id)->where($kind.'_id', $record->id)->when($request->boolean('archived'), fn ($q) => $q->onlyTrashed())->with('person'), 'due_at')->orderBy('due_at')->workspacePaginate(20) : collect();
+        $people = $activity === 'followups' && $canManage ? StaffPerson::query()->where('business_id', $b->id)->where('active', true)->orderBy('name')->get() : collect();
+
+        return view('partners.activity', compact('b', 'kind', 'record', 'activity', 'filters', 'orders', 'documents', 'followups', 'people', 'canMoney', 'canManage'));
     }
 
     public function show(Request $request, string $kind, int $partner): View
@@ -94,6 +124,9 @@ class PartnerHistoryController extends Controller
         $permissions = app(BusinessPermissions::class);
         abort_unless($permissions->allows($request->attributes->get('membership'), $kind === 'supplier' ? 'suppliers.view' : 'customers.view'), 403);
         $record = ($kind === 'supplier' ? Supplier::query() : Customer::query())->where('business_id', $b->id)->findOrFail($partner);
+        if ($kind === 'customer' || $request->filled('activity')) {
+            return $this->activity($request, $kind, $record);
+        }
         $purchases = $kind === 'supplier' ? PurchaseOrder::query()->where('business_id', $b->id)->where('supplier_id', $record->id)->with('product', 'receipts')->latest('id')->workspacePaginate(20) : collect();
         $orders = $kind === 'customer' ? SalesOrder::query()->where('business_id', $b->id)->where('customer_id', $record->id)->latest('id')->workspacePaginate(20) : collect();
         $canMoney = $permissions->allows($request->attributes->get('membership'), 'finance.view');

@@ -1,8 +1,8 @@
 <?php
 
 return [
-    'products.index' => [['Product catalogue', 'products.index', 'catalogue.view', []], ['Import products', 'products.import', 'catalogue.manage', []]],
-    'customers.index' => [['Customer directory', 'customers.index', 'customers.view', []]],
+    'products.index' => [['Product catalogue', 'products.index', 'catalogue.view', []], ['Add product', 'products.create', 'catalogue.manage', []], ['Import products', 'products.import', 'catalogue.manage', []]],
+    'customers.index' => [['Customer directory', 'customers.index', 'customers.view', []], ['Add customer', 'customers.create', 'customers.manage', []]],
     'suppliers.index' => [['Supplier directory', 'suppliers.index', 'suppliers.view', []], ['Supply requests', 'supply-requests.index', 'procurement.view', []]],
     'stock.index' => [
         ['All stock', 'stock.index', 'receipts.view', []],

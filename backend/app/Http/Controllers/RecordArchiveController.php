@@ -11,13 +11,14 @@ use App\Models\StaffShift;
 use App\Models\Supplier;
 use App\Services\PlatformAccess;
 use App\Support\BusinessPermissions;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class RecordArchiveController extends Controller
 {
-    public function update(Request $request, string $type, int $record, string $action): RedirectResponse
+    public function update(Request $request, string $type, int $record, string $action): RedirectResponse|JsonResponse
     {
         $types = ['product' => [Product::class, 'catalogue.manage'], 'customer' => [Customer::class, 'customers.manage'], 'supplier' => [Supplier::class, 'suppliers.manage'], 'person' => [StaffPerson::class, 'staff.manage']];
         abort_unless(isset($types[$type]) && in_array($action, ['archive', 'restore'], true), 404);
@@ -35,6 +36,10 @@ class RecordArchiveController extends Controller
             app(PlatformAccess::class)->audit($business->id, $request->user()->id, $type.'.'.$action, $data['reason'], [], ['record_id' => $item->id]);
         });
 
-        return back()->with('status',$action === 'archive' ? 'Record archived. Existing transaction history is retained.' : 'Record restored.');
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Record updated. Refresh the directory when you are ready.']);
+        }
+
+        return back()->with('status', $action === 'archive' ? 'Record archived. Existing transaction history is retained.' : 'Record restored.');
     }
 }

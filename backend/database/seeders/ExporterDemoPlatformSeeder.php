@@ -15,6 +15,7 @@ use App\Models\PlatformHealthEvidence;
 use App\Models\PlatformLimitOverride;
 use App\Models\PlatformSupportGrant;
 use App\Models\Product;
+use App\Models\ProductCode;
 use App\Models\StaffPerson;
 use App\Models\StockLocation;
 use App\Models\Supplier;
@@ -56,6 +57,7 @@ class ExporterDemoPlatformSeeder extends Seeder
             $d->put($sku, Product::create(['business_id' => $b->id, 'sku' => 'DEMO-'.$sku, 'name' => $name, 'description' => $description.' · demonstration product', 'base_unit' => $unit, 'active' => true, 'reorder_point' => '40']));
         }
         $d->put('customer', Customer::create(['business_id' => $b->id, 'customer_code' => 'DEMO-DUBAI', 'name' => 'DEMO · Dubai Fresh Imports', 'email' => 'buyer@dubai-importer.example.test', 'country_code' => 'AE', 'currency' => 'USD', 'active' => true]));
+        ProductCode::create(['business_id' => $b->id, 'product_id' => $d->records['AVO']->id, 'customer_id' => $d->records['customer']->id, 'country_code' => 'AE', 'code' => 'DEMO-AVO-AE', 'description' => 'Demonstration destination code', 'active' => true]);
         $d->put('customer_ug', Customer::create(['business_id' => $b->id, 'customer_code' => 'DEMO-LOCAL', 'name' => 'DEMO · Regional Produce Buyer', 'email' => 'buyer@regional.example.test', 'country_code' => 'UG', 'currency' => 'UGX', 'active' => true]));
         foreach (['supplier' => ['DEMO-GROWER', 'DEMO · Mukono Growers Cooperative', 'farmer'], 'vendor' => ['DEMO-MARKET', 'DEMO · Nakasero Market Vendor', 'vendor']] as $key => [$code,$name,$kind]) {
             $d->put($key, Supplier::create(['business_id' => $b->id, 'supplier_code' => $code, 'name' => $name, 'kind' => $kind, 'market_location' => $kind === 'vendor' ? 'Nakasero, Kampala' : 'Mukono', 'email' => $key.'@growers.example.test', 'notes' => $d->note('Training partner; no real supplier contact.'), 'active' => true]));

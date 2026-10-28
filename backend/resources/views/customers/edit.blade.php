@@ -1,15 +1,14 @@
 @extends('layouts.console')
-@section('title', 'Edit Customer')
+@section('title', $customer->exists?'Edit customer':'Add customer')
 @section('content')
-<div class="page-intro"><div><span class="eyebrow">CUSTOMERS</span><h1>Edit customer</h1><p>{{ $customer->name }}</p></div></div>
-<section class="section-card form-narrow">
-<form method="POST" action="{{ route('customers.update',$customer->id) }}" class="form-stack">@csrf @method('PUT')
-<div class="form-columns"><label class="field"><span>Customer name</span><input name="name" value="{{ old('name',$customer->name) }}" required maxlength="160"></label><label class="field"><span>Customer code</span><input name="customer_code" value="{{ old('customer_code',$customer->customer_code) }}" required maxlength="50"></label></div>
-<div class="form-columns"><label class="field"><span>Country</span><input name="country_code" value="{{ old('country_code',$customer->country_code) }}" required minlength="2" maxlength="2"></label><label class="field"><span>Trading currency</span><x-currency-select :value="old('currency', $customer->currency)" :retain="$customer->currency" /></label></div>
-<label class="field"><span>City</span><input name="city" value="{{ old('city',$customer->city) }}"></label>
-<div class="form-columns"><label class="field"><span>Email</span><input type="email" name="email" value="{{ old('email',$customer->email) }}"></label><label class="field"><span>Phone</span><input name="phone" value="{{ old('phone',$customer->phone) }}"></label></div>
-<label class="field"><span>Notes</span><textarea name="notes" rows="3">{{ old('notes',$customer->notes) }}</textarea></label>
-<input name="active" type="hidden" value="0"><label class="check-row"><input type="checkbox" name="active" value="1" @checked(old('active',$customer->active))> Active customer</label>
-<div class="form-actions"><button class="primary-button">Save changes</button><a class="secondary-button" href="{{ route('customers.index') }}">Cancel</a></div>
+<div class="page-intro"><div><span class="eyebrow">CUSTOMERS</span><h1>{{ $customer->exists?'Edit customer':'Add customer' }}</h1></div></div>
+<section class="section-card"><form method="POST" action="{{ $customer->exists?route('customers.update',$customer->id):route('customers.store') }}" class="form-stack" data-background-form>@csrf @if($customer->exists)@method('PUT')@endif
+<div class="form-columns"><label class="field"><span>Customer name</span><input name="name" value="{{ old('name',$customer->name) }}" required maxlength="160" placeholder="Customer full name"></label><label class="field"><span>Customer code</span><input name="customer_code" value="{{ old('customer_code',$customer->customer_code) }}" required maxlength="50" placeholder="BUYER-001"></label></div>
+<div class="form-columns"><label class="field"><span>Business name (optional)</span><input name="business_name" maxlength="160" value="{{ old('business_name',$customer->business_name) }}" placeholder="Company represented by this customer"></label><label class="field"><span>Business email (optional)</span><input name="business_email" type="email" maxlength="255" value="{{ old('business_email',$customer->business_email) }}" placeholder="accounts@example.com"></label></div>
+<div class="form-columns"><label class="field"><span>Country</span><x-country-select :value="old('country_code',$customer->country_code)" required /></label><label class="field"><span>Trading currency</span><x-currency-select :value="old('currency',$customer->currency)" :retain="$customer->currency" /></label></div>
+<div class="form-columns"><label class="field"><span>City (optional)</span><input name="city" maxlength="100" value="{{ old('city',$customer->city) }}" placeholder="City or town"></label><label class="field"><span>Detailed location (optional)</span><input name="location" maxlength="500" value="{{ old('location',$customer->location) }}" placeholder="Street, building, district or delivery directions"></label></div>
+<div class="form-columns"><label class="field"><span>Email</span><input name="email" type="email" value="{{ old('email',$customer->email) }}" placeholder="name@example.com"></label><label class="field"><span>Telephone</span><input name="phone" value="{{ old('phone',$customer->phone) }}" placeholder="+256 700 000 000" maxlength="50"></label></div>
+<label class="field"><span>Description / notes</span><textarea name="notes" maxlength="2000" placeholder="Customer details and preferences">{{ old('notes',$customer->notes) }}</textarea></label>
+@if($customer->exists)<input type="hidden" name="active" value="0"><label class="check-row"><input name="active" type="checkbox" value="1" @checked(old('active',$customer->active))> Active customer</label>@endif<div class="form-actions"><button class="primary-button">{{ $customer->exists?'Save changes':'Add customer' }}</button></div>
 </form></section>
 @endsection

@@ -8,6 +8,7 @@ use App\Http\Controllers\BusinessSelectionController;
 use App\Http\Controllers\BusinessSettingsController;
 use App\Http\Controllers\BuyerOrderPortalController;
 use App\Http\Controllers\CartonController;
+use App\Http\Controllers\CatalogueStatementController;
 use App\Http\Controllers\CommercialInvoiceController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerOrderingController;
@@ -129,6 +130,7 @@ Route::post('/print-agent/{agent}/jobs/{job}/ack',
     [LabelPrintAgentController::class, 'ack'])->whereNumber('agent')
     ->whereNumber('job')->middleware('throttle:120,1')->name('print-agent.ack');
 
+Route::post('/q/{token}/unlock', [PublicQrController::class, 'unlock'])->middleware('throttle:10,1')->name('qr.unlock');
 Route::get('/q/{token}', [PublicQrController::class, 'show'])->middleware('throttle:120,1')->name('qr.public');
 Route::get('/q/{token}/photo', [PublicQrController::class, 'photo'])->middleware('throttle:120,1')->name('qr.photo');
 Route::get('/buyer-order/{token}', [BuyerOrderPortalController::class, 'show'])
@@ -574,6 +576,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/commercial-invoices/{invoice}/pdf', [CommercialInvoiceController::class, 'pdf'])
             ->whereNumber('invoice')->name('commercial-invoices.pdf');
 
+        Route::get('/customers/new', [CustomerController::class, 'create'])->name('customers.create');
+        Route::get('/customers/{customer}/invitations', [CustomerController::class, 'invitations'])->whereNumber('customer')->name('customers.invitations');
+        Route::get('/statements/{kind}/{record}', [CatalogueStatementController::class, 'show'])->whereIn('kind', ['customer', 'product'])->whereNumber('record')->name('catalogue.statement');
+        Route::post('/sales-orders/{order}/archive', [CatalogueStatementController::class, 'archiveOrder'])->whereNumber('order')->name('sales-orders.archive');
+        Route::put('/statement-week', [CatalogueStatementController::class, 'week'])->name('statements.week');
+        Route::post('/partners/{kind}/{partner}/followups/{followup}/archive', [CatalogueStatementController::class, 'archiveFollowup'])->whereIn('kind', ['customer', 'supplier'])->whereNumber(['partner', 'followup'])->name('partners.followup.archive');
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::get('/customers/{customer}/edit', [CustomerController::class, 'edit'])->whereNumber('customer')->name('customers.edit');
@@ -723,6 +731,9 @@ Route::middleware('auth')->group(function () {
         })->name('workspace');
 
         Route::post('/records/{type}/{record}/{action}', [RecordArchiveController::class, 'update'])->whereNumber('record')->whereIn('type', ['product', 'customer', 'supplier', 'person'])->whereIn('action', ['archive', 'restore'])->name('records.archive');
+        Route::get('/products/new', [ProductController::class, 'create'])->name('products.create');
+        Route::get('/products/{product}/codes', [ProductController::class, 'codes'])->whereNumber('product')->name('products.codes');
+        Route::post('/products/{product}/codes', [ProductController::class, 'saveCode'])->whereNumber('product')->name('products.codes.store');
         Route::get('/products', [ProductController::class, 'index'])->name('products.index');
         Route::post('/products', [ProductController::class, 'store'])->name('products.store');
         Route::get('/products/import', [ProductImportController::class, 'index'])->name('products.import');

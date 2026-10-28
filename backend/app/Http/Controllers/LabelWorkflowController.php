@@ -106,7 +106,7 @@ class LabelWorkflowController extends Controller
     public function index(Request $request): View
     {
         $business = $this->business($request);
-        $filters = $request->validate(['search' => ['nullable', 'string', 'max:100'], 'carton' => ['nullable', 'integer', 'min:1'], 'packing' => ['nullable', 'integer', 'min:1'], 'shipment' => ['nullable', 'integer', 'min:1'], 'order' => ['nullable', 'integer', 'min:1']]);
+        $filters = $request->validate(['template' => ['nullable', 'integer', Rule::exists('label_templates', 'id')->where('business_id', $business->id)], 'search' => ['nullable', 'string', 'max:100'], 'carton' => ['nullable', 'integer', 'min:1'], 'packing' => ['nullable', 'integer', 'min:1'], 'shipment' => ['nullable', 'integer', 'min:1'], 'order' => ['nullable', 'integer', 'min:1']]);
         foreach (['carton' => Carton::class, 'packing' => PackingJob::class, 'shipment' => ExportShipment::class, 'order' => SalesOrder::class] as $key => $model) {
             if (! empty($filters[$key])) {
                 $model::query()->where('business_id', $business->id)->findOrFail($filters[$key]);
@@ -122,6 +122,10 @@ class LabelWorkflowController extends Controller
         $templates = LabelTemplate::query()->where('business_id', $business->id)->where('active', true)->orderByDesc('is_default')->orderBy('name')->get();
         $first = $cartons->first();
         $recommended = $templates->filter(fn ($t) => (! $t->product_id || $t->product_id === $first?->packingJob?->product_id) && (! $t->customer_id || $t->customer_id === $first?->shipmentAllocation?->shipment?->customer_id))->sortByDesc(fn ($t) => ($t->customer_id ? 4 : 0) + ($t->product_id ? 2 : 0) + ($t->is_default ? 1 : 0))->first()?->id;
+
+        if ($request->filled('template')) {
+            $recommended = $templates->firstWhere('id', $request->integer('template'))?->id ?? $recommended;
+        }
 
         return view('labels.print', compact('cartons', 'templates', 'recommended'));
     }
@@ -155,7 +159,7 @@ class LabelWorkflowController extends Controller
     public function queue(Request $request, int $batch, LabelPrintQueue $queue): RedirectResponse
     {
         $batch = $this->batch($request, $batch);
-        $data = $request->validate(['agent_id' => ['required', 'integer'], 'request_key' => ['required', 'uuid'], 'reason' => ['nullable', 'string', 'min:10', 'max:1000']]);
+        $data = $request->validate(['agent_id' => ['required', 'integer'], 'request_key' => ['required', 'uuid'], 'reason' => ['nullable', 'string', 'max:1000']]);
         DB::transaction(function () use ($batch, $queue, $data, $request) {
             foreach ($batch->generations as $g) {
                 $key = (string) Uuid::uuid5(Uuid::NAMESPACE_URL, $data['request_key'].':'.$g->id);
@@ -182,7 +186,7 @@ class LabelWorkflowController extends Controller
         if ($workflow->staleMany($batch->generations)->contains(true)) {
             throw ValidationException::withMessages(['label' => 'This batch contains stale stickers. Generate a replacement before printing.']);
         }
-        $data = $request->validate(['format' => ['required', Rule::in(['pdf', 'zpl'])], 'columns' => ['nullable', 'integer', 'between:1,5'], 'rows' => ['nullable', 'integer', 'between:1,10'], 'sheet_width' => ['nullable', 'numeric', 'between:25,420'], 'sheet_height' => ['nullable', 'numeric', 'between:15,594'], 'gap_x' => ['nullable', 'numeric', 'between:0,20'], 'gap_y' => ['nullable', 'numeric', 'between:0,20'], 'offset_x' => ['nullable', 'numeric', 'between:0,50'], 'offset_y' => ['nullable', 'numeric', 'between:0,50'], 'reason' => ['required', 'string', 'min:10', 'max:1000']]);
+        $data = $request->validate(['format' => ['required', Rule::in(['pdf', 'zpl'])], 'columns' => ['nullable', 'integer', 'between:1,5'], 'rows' => ['nullable', 'integer', 'between:1,10'], 'sheet_width' => ['nullable', 'numeric', 'between:25,420'], 'sheet_height' => ['nullable', 'numeric', 'between:15,594'], 'gap_x' => ['nullable', 'numeric', 'between:0,20'], 'gap_y' => ['nullable', 'numeric', 'between:0,20'], 'offset_x' => ['nullable', 'numeric', 'between:0,50'], 'offset_y' => ['nullable', 'numeric', 'between:0,50'], 'reason' => ['nullable', 'string', 'max:1000'], 'disposition' => ['nullable', Rule::in(['inline', 'attachment'])]]);
         if ($data['format'] === 'zpl') {
             foreach ($batch->generations as $g) {
                 abort_unless(($g->template_snapshot['profile']['protocol'] ?? 'zpl') === 'zpl', 422, 'Use PDF output for this printer profile.');
@@ -230,10 +234,10 @@ class LabelWorkflowController extends Controller
             $type = 'application/pdf';
         }
         foreach ($batch->generations as $label) {
-            $workflow->event($batch->business_id, $label->id, null, 'output_downloaded', $data['reason'].'; '.$data['format'].'; '.$batch->copies.' copies. Paper output unconfirmed.', $request->user()->id);
+            $workflow->event($batch->business_id, $label->id, null, 'output_downloaded', ($data['reason'] ?? 'Print requested').'; '.$data['format'].'; '.$batch->copies.' copies. Paper output unconfirmed.', $request->user()->id);
         }
 
-        return response($body, 200, ['Content-Type' => $type, 'Content-Disposition' => 'attachment; filename="sticker-batch-'.$batch->id.'.'.$data['format'].'"', 'Cache-Control' => 'private, no-store']);
+        return response($body, 200, ['Content-Type' => $type, 'Content-Disposition' => (($data['disposition'] ?? 'attachment') === 'inline' && $data['format'] === 'pdf' ? 'inline' : 'attachment').'; filename="sticker-batch-'.$batch->id.'.'.$data['format'].'"', 'Cache-Control' => 'private, no-store']);
     }
 
     public function scan(Request $request, string $token, LabelWorkflow $workflow): View

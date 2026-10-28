@@ -252,11 +252,15 @@ class OrderWorkspaceController extends Controller
         return back()->with('status', 'Work progress recorded. Completion is a staff report; stock and shipment quantities remain source-derived.');
     }
 
-    public function close(Request $request, int $order, OrderOperations $operations): RedirectResponse
+    public function close(Request $request, int $order, OrderOperations $operations): RedirectResponse|JsonResponse
     {
         $o = $this->own($request, $order, 'sales.manage');
         $data = $request->validate(['action' => ['required', Rule::in(['cancel', 'close_remainder', 'complete'])], 'reason' => ['required', 'string', 'min:20', 'max:1000']]);
         $operations->close($o, $data['action'], $data['reason'], $request->user()->id);
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Order updated. Reservations and dependent work have been reconciled. Apply filters to refresh.']);
+        }
 
         return back()->with('status', 'Order closure recorded without deleting fulfilment or financial history.');
     }

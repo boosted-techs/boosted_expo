@@ -27,7 +27,7 @@ class SalesOrderController extends Controller
     public function index(Request $request): View
     {
         $this->check($request, 'sales.orders.view');
-        $orders = SalesOrder::query()->where('business_id', $request->attributes
+        $orders = SalesOrder::query()->whereNull('archived_at')->where('business_id', $request->attributes
             ->get('activeBusiness')->id)->with('customer')
             ->withCount('shipments')->latest()->workspacePaginate(20);
 

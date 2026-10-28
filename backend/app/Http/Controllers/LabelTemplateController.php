@@ -54,12 +54,13 @@ class LabelTemplateController extends Controller
             'visible_fields' => ['present', 'array', 'max:'.count(ZebraLabelRenderer::FIELD_LABELS)],
             'visible_fields.*' => ['string', 'distinct', Rule::in($fields)],
             'required_fields' => ['nullable', 'array'], 'required_fields.*' => ['string', 'distinct', Rule::in($fields)],
-            'qr_visibility' => ['sometimes', Rule::in(['internal', 'public'])],
+            'qr_visibility' => ['sometimes', Rule::in(['internal', 'public', 'protected'])],
             'media_profile_id' => ['nullable', 'integer', Rule::exists('label_media_profiles', 'id')->where('business_id', $id)],
             'customer_id' => ['nullable', 'integer', Rule::exists('customers', 'id')->where('business_id', $id)],
             'product_id' => ['nullable', 'integer', Rule::exists('products', 'id')->where('business_id', $id)],
             'is_default' => ['sometimes', 'boolean'],
-            'layout' => ['sometimes', 'array:mode,font_mm,fields'],
+            'layout' => ['sometimes', 'array:mode,font_mm,fields,barcode_field'],
+            'layout.barcode_field' => ['nullable', Rule::in(['revision', ...$fields])],
             'layout.mode' => ['required_with:layout', Rule::in(['bitmap'])],
             'layout.font_mm' => ['nullable', 'numeric', 'between:1.5,6'],
             'layout.fields' => ['nullable', 'array:'.implode(',', $fields)],
@@ -71,7 +72,7 @@ class LabelTemplateController extends Controller
             'layout.fields.*.lines' => ['nullable', 'integer', 'between:1,5'],
             'layout.fields.*.align' => ['nullable', Rule::in(['left', 'center', 'right'])],
             'layout.fields.*.order' => ['nullable', 'integer', 'between:1,50'],
-            'logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:150', 'dimensions:max_width=1200,max_height=600'],
+            'logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:8192'],
             'remove_logo' => ['sometimes', 'boolean'],
         ]);
         if (count($input['visible_fields']) === 0 && $input['qr_level'] === 'none' && ! $input['include_barcode']) {
@@ -84,6 +85,9 @@ class LabelTemplateController extends Controller
             throw ValidationException::withMessages(['required_fields' => 'Every required text field must also be selected for printing.']);
         }
         $input['qr_visibility'] ??= 'internal';
+        if ($input['qr_visibility'] === 'protected' && $input['qr_level'] !== 'product') {
+            throw ValidationException::withMessages(['qr_level' => 'Choose Product for a PIN-protected QR page.']);
+        }
         $input['is_default'] ??= false;
         if (! empty($input['media_profile_id'])) {
             $profile = LabelMediaProfile::query()->where('business_id', $id)->findOrFail($input['media_profile_id']);
@@ -99,11 +103,28 @@ class LabelTemplateController extends Controller
                 $logo = null;
             }
             if ($request->hasFile('logo')) {
-                $image = imagecreatefromstring(file_get_contents($request->file('logo')->getRealPath()));
+                $path = $request->file('logo')->getRealPath();
+                $size = getimagesize($path);
+                if (! $size || $size[0] * $size[1] > 16000000) {
+                    throw ValidationException::withMessages(['logo' => 'Choose a logo with at most 16 million pixels.']);
+                }
+                $image = imagecreatefromstring(file_get_contents($path));
+                $canvas = imagecreatetruecolor(600, 240);
+                $white = imagecolorallocate($canvas, 255, 255, 255);
+                imagefill($canvas, 0, 0, $white);
+                $scale = min(600 / $size[0], 240 / $size[1]);
+                $w = max(1, (int) round($size[0] * $scale));
+                $h = max(1, (int) round($size[1] * $scale));
+                imagecopyresampled($canvas, $image, (int) ((600 - $w) / 2), (int) ((240 - $h) / 2), 0, 0, $w, $h, $size[0], $size[1]);
                 ob_start();
-                imagepng($image);
-                $logo = base64_encode(ob_get_clean());
+                imagepng($canvas, null, 9);
+                $compressed = ob_get_clean();
                 imagedestroy($image);
+                imagedestroy($canvas);
+                if (strlen($compressed) > 524288) {
+                    throw ValidationException::withMessages(['logo' => 'The cropped logo must be within 512 KB after compression.']);
+                }
+                $logo = base64_encode($compressed);
             }
             if ($logo) {
                 $input['layout']['logo_png'] = $logo;
@@ -120,7 +141,7 @@ class LabelTemplateController extends Controller
     {
         $this->check($request, 'labels.view');
         $businessId = $request->attributes->get('activeBusiness')->id;
-        $templates = LabelTemplate::query()->where('business_id', $businessId)->orderBy('name')->get();
+        $templates = LabelTemplate::query()->where('business_id', $businessId)->orderBy('name')->workspacePaginate(25);
         $canManage = app(BusinessPermissions::class)->allows(
             $request->attributes->get('membership'), 'labels.manage'
         );

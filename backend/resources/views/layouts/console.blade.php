@@ -90,4 +90,5 @@ $sections = config('expo.sections');
 <script src="/assets/console-ui.js?v={{ filemtime(public_path('assets/console-ui.js')) }}" defer></script>
 @stack('scripts')
 <script src="/assets/workspace-tools.js?v={{ filemtime(public_path('assets/workspace-tools.js')) }}" defer></script>
+<script src="/assets/catalogue-ui.js?v={{ filemtime(public_path('assets/catalogue-ui.js')) }}" defer></script>
 </body></html>

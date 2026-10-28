@@ -147,13 +147,18 @@ class LabelArtwork
             $by = $bottom - (int) round(13 * $unit);
             $bh = (int) round(8 * $unit);
             $occupy($left, $by, $right - $left, (int) round(13 * $unit));
-            $this->barcode($image, 'L'.$token, $left, $by, $right - $left, $bh, $black, (int) round($unit / 4));
-            $caption = $source['values']['carton'];
+            $barcodeField = $template->layout['barcode_field'] ?? 'revision';
+            $barcodeValue = $barcodeField === 'revision' ? 'L'.$token : trim((string) ($source['barcode_values'][$barcodeField] ?? $source['values'][$barcodeField] ?? ''));
+            if ($barcodeValue === '') {
+                $this->fail('The selected barcode field has no value for this carton. Complete it or choose another field.');
+            }
+            $this->barcode($image, $barcodeValue, $left, $by, $right - $left, $bh, $black, (int) round($unit / 4));
+            $caption = $barcodeField === 'revision' ? $source['values']['carton'] : $barcodeValue;
             $fs = 1.9 * $unit * .75;
             if ($this->textWidth($caption, $fs) > $right - $left) {
                 $this->fail('Carton reference is too long for the barcode caption.');
             }
-            imagettftext($image, $fs, 0, $left, $bottom - (int) round(1 * $unit), $black, $this->font(), $caption);
+            imagettftext($image, $fs, 0, $left + (int) (($right - $left - $this->textWidth($caption, $fs)) / 2), $bottom - (int) round(1 * $unit), $black, $this->font(), $caption);
         }
         if ((int) ($profile['orientation'] ?? 0) === 180) {
             $rotated = imagerotate($image, 180, $white);

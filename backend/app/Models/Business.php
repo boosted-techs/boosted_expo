@@ -12,7 +12,7 @@ class Business extends Model
         'name', 'code', 'country_code', 'base_currency', 'timezone',
         'default_qr_level', 'is_active',
         'enabled_currencies',
-        'label_verification_required',
+        'label_verification_required', 'statement_week_start',
     ];
 
     protected function casts(): array

@@ -2,7 +2,6 @@
 @section('title','Printer setup')
 @section('content')
 <div class="page-intro"><div><h1>Printer setup</h1><p>Start with your GK888t and 100 × 50 mm stickers. Save other printers and paper as separate profiles.</p></div></div>
-@include('labels._nav')
 <section class="section-card"><h2>Connect the GK888t</h2>
 <ol><li>Install the printer in Windows or macOS and load 100 × 50 mm media. Use the printer's own feed/calibration routine and matching ribbon/thermal settings.</li><li>Save the profile below, then save a sticker template using that profile.</li><li>Preview one real carton. Download its 100 × 50 mm PDF and print at actual size / 100%, with no fit-to-page scaling or browser headers.</li><li>For repeatable Zebra output, register a workstation under Queue & recovery. Run the local helper on the Windows PC or Mac connected to the printer. Android can send jobs to that workstation.</li><li>Print, measure and scan a test sticker. Record the result against the profile below.</li></ol>
 <p><a class="action-link" href="https://docs.zebra.com/us/en/printers/desktop/gk888t-desktop-thermal-printer-user-guide.html" target="_blank" rel="noopener noreferrer">Zebra GK888t loading and calibration guide ↗</a></p>

@@ -70,7 +70,7 @@ class LabelPrintAgentController extends Controller
         $data = $request->validate([
             'agent_id' => ['required', 'integer'],
             'generation_id' => ['required', 'integer'],
-            'request_key' => ['required', 'uuid'], 'copies' => ['sometimes', 'integer', 'between:1,10'], 'reason' => ['nullable', 'string', 'min:10', 'max:1000'],
+            'request_key' => ['required', 'uuid'], 'copies' => ['sometimes', 'integer', 'between:1,10'], 'reason' => ['nullable', 'string', 'max:1000'],
         ]);
         $queue->enqueue($request->attributes->get('activeBusiness'),
             $data['agent_id'], $data['generation_id'],
